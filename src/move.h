@@ -23,6 +23,7 @@ private:
     }
 
 public:
+    Move() : data{0} {}             // Default constructor
     explicit Move(uint16_t value) : // Bit Constructor
         data{value} {}
 
