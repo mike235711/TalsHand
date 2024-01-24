@@ -10,6 +10,11 @@ void printMove(const Move &move)
     // Assuming you have a way to convert 'Move' to a string or standard notation
     std::cout << move.toString() << ": ";
 }
+void printMove(const Capture &move)
+{
+    // Assuming you have a way to convert 'Move' to a string or standard notation
+    std::cout << move.toString() << ": ";
+}
 
 unsigned long long runPerftTest(BitPosition position, int depth, int currentDepth = 0)
 {
@@ -17,7 +22,7 @@ unsigned long long runPerftTest(BitPosition position, int depth, int currentDept
     if (depth == 0)
         return 1;
 
-    std::vector<Move> captures;
+    std::vector<Capture> captures;
     std::vector<Move> non_captures;
     if (position.isCheck())
     {
@@ -33,16 +38,16 @@ unsigned long long runPerftTest(BitPosition position, int depth, int currentDept
     }
 
     unsigned long long moveCount = 0;
-    for (const Move &move : captures)
+    for (const Capture &move : captures)
     {
         if (currentDepth == 0)
         {
             printMove(move);
         }
-        position.makeMove(move);
+        position.makeCapture(move);
 
         unsigned long long subCount = runPerftTest(position, depth - 1, currentDepth + 1);
-        
+
         position.unmakeMove();
 
         if (currentDepth == 0)
