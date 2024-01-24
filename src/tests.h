@@ -27,12 +27,14 @@ unsigned long long runPerftTest(BitPosition position, int depth, int currentDept
     if (position.isCheck())
     {
         position.setChecksAndPinsBits();
+        position.setAttackedSquaresAfterMove();
         captures = position.inCheckCaptures();
         non_captures = position.inCheckMoves();
     }
     else
     {
         position.setPinsBits();
+        position.setAttackedSquaresAfterMove();
         captures = position.captureMoves();
         non_captures = position.nonCaptureMoves();
     }

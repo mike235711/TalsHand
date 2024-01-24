@@ -93,6 +93,8 @@ private:
     uint64_t m_squares_attacked_by_white_pieces{};
     uint64_t m_squares_attacked_by_black_pieces{};
 
+    unsigned short m_moved_piece{};
+
 public: // I define the short member functions here, the rest are defined in bitposition.cpp
     // Member function declarations (defined in bitposition.cpp)
     BitPosition(uint64_t white_pawns_bit, uint64_t white_knights_bit, uint64_t white_bishops_bit,
@@ -116,6 +118,8 @@ public: // I define the short member functions here, the rest are defined in bit
     void setBlackPawnsAttackedSquares();
     void setWhiteKingAttackedSquares();
     void setBlackKingAttackedSquares();
+    void setSliderAttackedSquares();
+    void setAttackedSquaresAfterMove();
     bool kingIsSafeAfterPassant(unsigned short removed_square_1, unsigned short removed_square_2) const;
     bool ksquareIsSafe(unsigned short square) const;
     std::vector<Capture> inCheckCaptures() const;

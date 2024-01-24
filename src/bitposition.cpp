@@ -1408,6 +1408,7 @@ void BitPosition::makeMove(Move move)
     uint64_t origin_bit{precomputed_moves::one_one_bits[origin_square]};
     unsigned short destination_square{move.getDestinationSquare()};
     uint64_t destination_bit{precomputed_moves::one_one_bits[destination_square]};
+    m_moved_piece = move.movingPiece();
 
     if (m_turn) // White's move
     {
@@ -1423,111 +1424,41 @@ void BitPosition::makeMove(Move move)
         if (destination_square == 56) // If we capture rook
             m_black_queenside_castling = false;
 
-        unsigned short moving_piece{move.movingPiece()};
         // 1) Knight moves
-        if (moving_piece == 1)
+        if (m_moved_piece == 1)
         {
             m_white_knights_bit &= ~origin_bit;
             m_white_knights_bit |= destination_bit;
-            m_psquare = 0;
-            BitPosition::setWhiteKnightsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_queens) != 0)
-                BitPosition::setBlackQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_queens) != 0)
-                BitPosition::setWhiteQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_bishops) != 0)
-                BitPosition::setBlackBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_bishops) != 0)
-                BitPosition::setWhiteBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_rooks) != 0)
-                BitPosition::setBlackRooksAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_rooks) != 0)
-                BitPosition::setWhiteRooksAttackedSquares();
-            m_squares_attacked_by_white_pieces = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_king | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens;
-            m_squares_attacked_by_black_pieces = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_king | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens;
+            m_psquare = 0;   
         }
         // 2) Bishop moves
-        else if (moving_piece == 2)
+        else if (m_moved_piece == 2)
         {
             m_white_bishops_bit &= ~origin_bit;
             m_white_bishops_bit |= destination_bit;
             m_psquare = 0;
-            BitPosition::setWhiteBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_queens) != 0)
-                BitPosition::setBlackQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_queens) != 0)
-                BitPosition::setWhiteQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_bishops) != 0)
-                BitPosition::setBlackBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_rooks) != 0)
-                BitPosition::setBlackRooksAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_rooks) != 0)
-                BitPosition::setWhiteRooksAttackedSquares();
-            m_squares_attacked_by_white_pieces = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_king | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens;
-            m_squares_attacked_by_black_pieces = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_king | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens;
         }
         // 3) Rook moves
-        else if (moving_piece == 3)
+        else if (m_moved_piece == 3)
         {
             m_white_rooks_bit &= ~origin_bit;
             m_white_rooks_bit |= destination_bit;
             m_psquare = 0;
-            BitPosition::setWhiteRooksAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_queens) != 0)
-                BitPosition::setBlackQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_queens) != 0)
-                BitPosition::setWhiteQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_bishops) != 0)
-                BitPosition::setBlackBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_bishops) != 0)
-                BitPosition::setWhiteBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_rooks) != 0)
-                BitPosition::setBlackRooksAttackedSquares();
-            m_squares_attacked_by_white_pieces = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_king | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens;
-            m_squares_attacked_by_black_pieces = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_king | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens;
         }
         // 4) Queen moves
-        else if (moving_piece == 4)
+        else if (m_moved_piece == 4)
         {
             m_white_queens_bit &= ~origin_bit;
             m_white_queens_bit |= destination_bit;
             m_psquare = 0;
-            BitPosition::setWhiteQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_queens) != 0)
-                BitPosition::setBlackQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_bishops) != 0)
-                BitPosition::setBlackBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_bishops) != 0)
-                BitPosition::setWhiteBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_rooks) != 0)
-                BitPosition::setBlackRooksAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_rooks) != 0)
-                BitPosition::setWhiteRooksAttackedSquares();
-            m_squares_attacked_by_white_pieces = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_king | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens;
-            m_squares_attacked_by_black_pieces = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_king | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens;
         }
         // 5) Pawn moves
-        else if (moving_piece == 0)
+        else if (m_moved_piece == 0)
         {
             m_white_pawns_bit &= ~origin_bit;
             m_white_pawns_bit |= destination_bit;
             if ((destination_square - origin_square) == 16) // Double pawn moves
                 m_psquare = origin_square + 8;
-            BitPosition::setWhitePawnsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_queens) != 0)
-                BitPosition::setBlackQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_queens) != 0)
-                BitPosition::setWhiteQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_bishops) != 0)
-                BitPosition::setBlackBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_bishops) != 0)
-                BitPosition::setWhiteBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_rooks) != 0)
-                BitPosition::setBlackRooksAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_rooks) != 0)
-                BitPosition::setWhiteRooksAttackedSquares();
-            m_squares_attacked_by_white_pieces = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_king | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens;
-            m_squares_attacked_by_black_pieces = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_king | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens;
         }
         // 6) King Moves
         else
@@ -1549,21 +1480,6 @@ void BitPosition::makeMove(Move move)
                 m_white_rooks_bit &= ~1;
                 m_white_rooks_bit |= 8;
             }
-            BitPosition::setWhiteKingAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_queens) != 0)
-                BitPosition::setBlackQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_queens) != 0)
-                BitPosition::setWhiteQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_bishops) != 0)
-                BitPosition::setBlackBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_bishops) != 0)
-                BitPosition::setWhiteBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_rooks) != 0)
-                BitPosition::setBlackRooksAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_rooks) != 0)
-                BitPosition::setWhiteRooksAttackedSquares();
-            m_squares_attacked_by_white_pieces = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_king | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens;
-            m_squares_attacked_by_black_pieces = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_king | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens;
         }
     }
     else // Black's move
@@ -1580,111 +1496,41 @@ void BitPosition::makeMove(Move move)
         if (destination_square == 0) // If we capture rook
             m_white_queenside_castling = false;
 
-        unsigned short moving_piece{move.movingPiece()};
         // 1) Knight moves
-        if (moving_piece == 1)
+        if (m_moved_piece == 1)
         {
             m_black_knights_bit &= ~origin_bit;
             m_black_knights_bit |= destination_bit;
             m_psquare = 0;
-            BitPosition::setBlackKnightsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_queens) != 0)
-                BitPosition::setBlackQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_queens) != 0)
-                BitPosition::setWhiteQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_bishops) != 0)
-                BitPosition::setBlackBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_bishops) != 0)
-                BitPosition::setWhiteBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_rooks) != 0)
-                BitPosition::setBlackRooksAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_rooks) != 0)
-                BitPosition::setWhiteRooksAttackedSquares();
-            m_squares_attacked_by_white_pieces = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_king | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens;
-            m_squares_attacked_by_black_pieces = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_king | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens;
         }
         // 2) Bishop moves
-        else if (moving_piece == 2)
+        else if (m_moved_piece == 2)
         {
             m_black_bishops_bit &= ~origin_bit;
             m_black_bishops_bit |= destination_bit;
             m_psquare = 0;
-            BitPosition::setBlackBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_queens) != 0)
-                BitPosition::setBlackQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_queens) != 0)
-                BitPosition::setWhiteQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_bishops) != 0)
-                BitPosition::setWhiteBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_rooks) != 0)
-                BitPosition::setBlackRooksAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_rooks) != 0)
-                BitPosition::setWhiteRooksAttackedSquares();
-            m_squares_attacked_by_white_pieces = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_king | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens;
-            m_squares_attacked_by_black_pieces = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_king | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens;
         }
         // 3) Rook moves
-        else if (moving_piece == 3)
+        else if (m_moved_piece == 3)
         {
             m_black_rooks_bit &= ~origin_bit;
             m_black_rooks_bit |= destination_bit;
             m_psquare = 0;
-            BitPosition::setBlackRooksAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_queens) != 0)
-                BitPosition::setBlackQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_queens) != 0)
-                BitPosition::setWhiteQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_bishops) != 0)
-                BitPosition::setBlackBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_bishops) != 0)
-                BitPosition::setWhiteBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_rooks) != 0)
-                BitPosition::setWhiteRooksAttackedSquares();
-            m_squares_attacked_by_white_pieces = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_king | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens;
-            m_squares_attacked_by_black_pieces = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_king | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens;
         }
         // 4) Queen moves
-        else if (moving_piece == 4)
+        else if (m_moved_piece == 4)
         {
             m_black_queens_bit &= ~origin_bit;
             m_black_queens_bit |= destination_bit;
             m_psquare = 0;
-            BitPosition::setBlackQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_queens) != 0)
-                BitPosition::setWhiteQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_bishops) != 0)
-                BitPosition::setBlackBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_bishops) != 0)
-                BitPosition::setWhiteBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_rooks) != 0)
-                BitPosition::setBlackRooksAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_rooks) != 0)
-                BitPosition::setWhiteRooksAttackedSquares();
-            m_squares_attacked_by_white_pieces = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_king | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens;
-            m_squares_attacked_by_black_pieces = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_king | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens;
         }
         // 5) Pawn moves
-        else if (moving_piece == 0)
+        else if (m_moved_piece == 0)
         {
             m_black_pawns_bit &= ~origin_bit;
             m_black_pawns_bit |= destination_bit;
             if ((origin_square - destination_square) == 16) // Double pawn moves
                 m_psquare = destination_square + 8;
-            BitPosition::setBlackPawnsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_queens) != 0)
-                BitPosition::setBlackQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_queens) != 0)
-                BitPosition::setWhiteQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_bishops) != 0)
-                BitPosition::setBlackBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_bishops) != 0)
-                BitPosition::setWhiteBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_rooks) != 0)
-                BitPosition::setBlackRooksAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_rooks) != 0)
-                BitPosition::setWhiteRooksAttackedSquares();
-            m_squares_attacked_by_white_pieces = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_king | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens;
-            m_squares_attacked_by_black_pieces = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_king | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens;
         }
         // 6) King Moves
         else
@@ -1706,21 +1552,6 @@ void BitPosition::makeMove(Move move)
                 m_black_rooks_bit &= ~72057594037927936ULL;
                 m_black_rooks_bit |= 576460752303423488ULL;
             }
-            BitPosition::setBlackKingAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_queens) != 0)
-                BitPosition::setBlackQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_queens) != 0)
-                BitPosition::setWhiteQueensAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_bishops) != 0)
-                BitPosition::setBlackBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_bishops) != 0)
-                BitPosition::setWhiteBishopsAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_black_rooks) != 0)
-                BitPosition::setBlackRooksAttackedSquares();
-            if ((destination_bit & m_squares_attacked_by_white_rooks) != 0)
-                BitPosition::setWhiteRooksAttackedSquares();
-            m_squares_attacked_by_white_pieces = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_king | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens;
-            m_squares_attacked_by_black_pieces = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_king | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens;
         }
     }
     m_turn = not m_turn;
@@ -1772,4 +1603,80 @@ void BitPosition::unmakeMove()
     BitPosition::setAllPiecesBits();
 
     m_turn = not m_turn;
+}
+void BitPosition::setSliderAttackedSquares()
+{
+    for (short int origin_square : getBitIndices(m_white_bishops_bit))
+    {
+        m_squares_attacked_by_white_bishops |= precomputed_moves::precomputedBishopMovesTable[origin_square][m_all_pieces_bit & precomputed_moves::bishop_unfull_rays[origin_square]];
+    }
+    for (short int origin_square : getBitIndices(m_black_bishops_bit))
+    {
+        m_squares_attacked_by_black_bishops |= precomputed_moves::precomputedBishopMovesTable[origin_square][m_all_pieces_bit & precomputed_moves::bishop_unfull_rays[origin_square]];
+    }
+    for (short int origin_square : getBitIndices(m_white_rooks_bit))
+    {
+        m_squares_attacked_by_white_rooks |= precomputed_moves::precomputedRookMovesTable[origin_square][m_all_pieces_bit & precomputed_moves::rook_unfull_rays[origin_square]];
+    }
+    for (short int origin_square : getBitIndices(m_black_rooks_bit))
+    {
+        m_squares_attacked_by_black_rooks |= precomputed_moves::precomputedRookMovesTable[origin_square][m_all_pieces_bit & precomputed_moves::rook_unfull_rays[origin_square]];
+    }
+    for (short int origin_square : getBitIndices(m_white_queens_bit))
+    {
+        m_squares_attacked_by_white_queens |= precomputed_moves::precomputedBishopMovesTable[origin_square][m_all_pieces_bit & precomputed_moves::bishop_unfull_rays[origin_square]];
+        m_squares_attacked_by_white_queens |= precomputed_moves::precomputedRookMovesTable[origin_square][m_all_pieces_bit & precomputed_moves::rook_unfull_rays[origin_square]];
+    }
+    for (short int origin_square : getBitIndices(m_black_queens_bit))
+    {
+        m_squares_attacked_by_black_queens |= precomputed_moves::precomputedBishopMovesTable[origin_square][m_all_pieces_bit & precomputed_moves::bishop_unfull_rays[origin_square]];
+        m_squares_attacked_by_black_queens |= precomputed_moves::precomputedRookMovesTable[origin_square][m_all_pieces_bit & precomputed_moves::rook_unfull_rays[origin_square]];
+    }
+}
+void BitPosition::setAttackedSquaresAfterMove()
+{
+    if (m_moved_piece == 0 && m_turn) // Moving white pawn (Dont need to update black pawns, white/black knights or kings)
+    {        
+        for (short int origin_square : getBitIndices(m_white_pawns_bit))
+        {
+            m_squares_attacked_by_white_pawns |= precomputed_moves::white_pawn_attacks[origin_square];
+            BitPosition::setSliderAttackedSquares();
+        }
+    }
+    else if (m_moved_piece == 0 && not m_turn) // Moving black pawn (Dont need to update white pawns, white/black knights or kings)
+    {
+        for (short int origin_square : getBitIndices(m_black_pawns_bit))
+        {
+            m_squares_attacked_by_black_pawns |= precomputed_moves::black_pawn_attacks[origin_square];
+            BitPosition::setSliderAttackedSquares();
+        }
+    }
+    else if (m_moved_piece == 1 && m_turn) // Moving white knight (Dont need to update black knights, white/black pawns or kings)
+    {
+        for (short int origin_square : getBitIndices(m_white_knights_bit))
+        {
+            m_squares_attacked_by_white_knights |= precomputed_moves::knight_moves[origin_square];
+            BitPosition::setSliderAttackedSquares();
+        }
+    }
+    else if (m_moved_piece == 1 && not m_turn) // Moving black knight (Dont need to update white knights, white/black pawns or kings)
+    {
+        for (short int origin_square : getBitIndices(m_black_knights_bit))
+        {
+            m_squares_attacked_by_black_knights |= precomputed_moves::knight_moves[origin_square];
+            BitPosition::setSliderAttackedSquares();
+        }
+    }
+    else if (m_moved_piece == 5 && m_turn) // Moving white king (Dont need to update black king, white/black pawns or knights)
+    {
+        m_squares_attacked_by_white_king = precomputed_moves::king_moves[m_white_king_position];
+        BitPosition::setSliderAttackedSquares();
+    }
+    else if (m_moved_piece == 5 && not m_turn) // Moving black king (Dont need to update black king, white/black pawns or knights)
+    {
+        m_squares_attacked_by_black_king = precomputed_moves::king_moves[m_black_king_position];
+        BitPosition::setSliderAttackedSquares();
+    }
+    else
+        BitPosition::setSliderAttackedSquares();
 }
