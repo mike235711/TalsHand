@@ -58,8 +58,17 @@ public:
     }
     std::string toString() const
     {
-        return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare());
-    }
+        if ((data & 0b1100000000000000) != 0b0100000000000000) // Non promotions
+            return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare());
+        else if ((data & 0b0011000000000000) == 0b0011000000000000) // Queen promotions
+            return squareToAlgebraic(getOriginSquare()) + 'q' + squareToAlgebraic(getDestinationSquare());
+        else if ((data & 0b0011000000000000) == 0b0010000000000000) // Rook promotions
+            return squareToAlgebraic(getOriginSquare()) + 'r' + squareToAlgebraic(getDestinationSquare());
+        else if ((data & 0b0011000000000000) == 0b0001000000000000) // Bishop promotions
+            return squareToAlgebraic(getOriginSquare()) + 'b' + squareToAlgebraic(getDestinationSquare());
+        else // Knight promotions
+            return squareToAlgebraic(getOriginSquare()) + 'n' + squareToAlgebraic(getDestinationSquare());
+    }         
 };
 
 #endif

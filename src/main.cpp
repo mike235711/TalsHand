@@ -6,13 +6,15 @@
 #include "bitposition.h"
 #include "tests.h"
 #include <chrono>
+#include "magicmoves.h"
 
 // We have to declare them since they where made extern in precomputed_moves.h
+/*
 namespace precomputed_moves{
     std::vector<std::map<uint64_t, uint64_t>> precomputedBishopMovesTable;
     std::vector<std::map<uint64_t, uint64_t>> precomputedRookMovesTable;
 }
-
+*/
 // Function to convert a FEN string to a BitPosition object
 BitPosition fenToBitPosition(const std::string &fen)
 {
@@ -101,9 +103,12 @@ BitPosition fenToBitPosition(const std::string &fen)
 
 int main()
 {
+    initmagicmoves();
     // Initializing precomputed data
+    /*
     precomputed_moves::precomputedBishopMovesTable = getBishopLongPrecomputedTable();
     precomputed_moves::precomputedRookMovesTable = getRookLongPrecomputedTable();
+    */
 
     // Initialize position
     std::string inputLine;
@@ -112,6 +117,7 @@ int main()
     // Simple loop to read commands from the Python GUI
     while (std::getline(std::cin, inputLine))
     {
+        BitPosition position{fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
         // Process input from GUI
         if (inputLine == "uci")
         {
@@ -127,28 +133,28 @@ int main()
         {
             break;
         }
-        else if (inputLine.substr(0, 8) == "position")
+        if (inputLine.substr(0, 8) == "position")
         {
             // Extract and store the FEN string from the command
-            if (inputLine.substr(9, 8) == "startpos") // reading: position startpos moves e2e4
+            std::string fen;
+            if (inputLine.substr(9, 8) == "startpos")
             {
-                BitPosition position{fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
-                std::cout << "starting from start position\n";
+                fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
             }
-            else // reading: position fen fen_string
+            else
             {
-                BitPosition position{fenToBitPosition(inputLine.substr(13))};
-                std::cout << "starting from fen " << inputLine.substr(9) << "\n";
+                fen = inputLine.substr(13);
             }
+            position = fenToBitPosition(fen);
         }
         else if (inputLine == "go")
         {
             // The previous command contained the position in FEN format
             // Now you can use lastFen to get the board position
             // and start calculating the move
-            
-            //uci_move = search(position);
-            //std::cout << "best move " << uci_move << "\n";
+            Move uci_move{};
+            uci_move = position.nonCaptureMoves()[0];
+            std::cout << "best move " << uci_move.toString() << "\n";
         }
         else if (inputLine == "perftTests")
         {

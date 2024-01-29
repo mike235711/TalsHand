@@ -5,6 +5,7 @@
 #include "bitposition.h" // Where the BitPosition class is defined
 #include "bit_utils.h" // Bit utility functions
 #include "move.h"
+#include "magicmoves.h"
 
 std::array<Move, 4> castling_moves{Move(16772), Move(16516), Move(20412), Move(20156)}; // WKS, WQS, BKS, BQS
 std::array<Move, 16> double_moves{Move(34864), Move(34929), Move(34994), Move(35059), // Black double pawn moves (a-h)
@@ -47,8 +48,7 @@ bool BitPosition::isCheck() const
         // Black Queens
         if (m_black_queens_bit != 0)
         {
-            if (((precomputed_moves::precomputedRookMovesTable[m_king_position][precomputed_moves::rook_unfull_rays[m_king_position] & m_all_pieces_bit]
-            | precomputed_moves::precomputedBishopMovesTable[m_king_position][precomputed_moves::bishop_unfull_rays[m_king_position] & m_all_pieces_bit]) & m_black_queens_bit) != 0)
+            if (((RmagicNOMASK(m_king_position, precomputed_moves::rook_unfull_rays[m_king_position] & m_all_pieces_bit) | BmagicNOMASK(m_king_position, precomputed_moves::bishop_unfull_rays[m_king_position] & m_all_pieces_bit)) & m_black_queens_bit) != 0)
             {
                 return true;
             }
@@ -56,7 +56,7 @@ bool BitPosition::isCheck() const
         // Black Bishops
         if (m_black_bishops_bit != 0)
         {
-            if (((precomputed_moves::precomputedBishopMovesTable[m_king_position][precomputed_moves::bishop_unfull_rays[m_king_position] & m_all_pieces_bit]) & m_black_bishops_bit) != 0)
+            if ((BmagicNOMASK(m_king_position, precomputed_moves::bishop_unfull_rays[m_king_position] & m_all_pieces_bit) & m_black_bishops_bit) != 0)
             {
                 return true;
             }
@@ -64,7 +64,7 @@ bool BitPosition::isCheck() const
         // Black Rooks
         if (m_black_rooks_bit != 0)
         {
-            if (((precomputed_moves::precomputedRookMovesTable[m_king_position][precomputed_moves::rook_unfull_rays[m_king_position] & m_all_pieces_bit]) & m_black_rooks_bit) != 0)
+            if ((RmagicNOMASK(m_king_position, precomputed_moves::rook_unfull_rays[m_king_position] & m_all_pieces_bit) & m_black_rooks_bit) != 0)
             {
                 return true;
             }
@@ -89,8 +89,7 @@ bool BitPosition::isCheck() const
         // White Queens
         if (m_white_queens_bit != 0)
         {
-            if (((precomputed_moves::precomputedRookMovesTable[m_king_position][precomputed_moves::rook_unfull_rays[m_king_position] & m_all_pieces_bit] 
-            | precomputed_moves::precomputedBishopMovesTable[m_king_position][precomputed_moves::bishop_unfull_rays[m_king_position] & m_all_pieces_bit]) & m_white_queens_bit) != 0)
+            if (((BmagicNOMASK(m_king_position, precomputed_moves::bishop_unfull_rays[m_king_position] & m_all_pieces_bit) | RmagicNOMASK(m_king_position, precomputed_moves::rook_unfull_rays[m_king_position] & m_all_pieces_bit)) & m_white_queens_bit) != 0)
             {
                 return true;
             }
@@ -98,7 +97,7 @@ bool BitPosition::isCheck() const
         // White Bishops
         if (m_white_bishops_bit != 0)
         {
-            if (((precomputed_moves::precomputedBishopMovesTable[m_king_position][precomputed_moves::bishop_unfull_rays[m_king_position] & m_all_pieces_bit]) & m_white_bishops_bit) != 0)
+            if ((BmagicNOMASK(m_king_position, precomputed_moves::bishop_unfull_rays[m_king_position] & m_all_pieces_bit) & m_white_bishops_bit) != 0)
             {
                 return true;
             }
@@ -106,7 +105,7 @@ bool BitPosition::isCheck() const
         // White Rooks
         if (m_white_rooks_bit != 0)
         {
-            if (((precomputed_moves::precomputedRookMovesTable[m_king_position][precomputed_moves::rook_unfull_rays[m_king_position] & m_all_pieces_bit]) & m_white_rooks_bit) != 0)
+            if ((RmagicNOMASK(m_king_position, precomputed_moves::rook_unfull_rays[m_king_position] & m_all_pieces_bit) & m_white_rooks_bit) != 0)
             {
                 return true;
             }
@@ -390,21 +389,21 @@ bool BitPosition::kingIsSafeAfterPassant(unsigned short removed_square_1, unsign
     if (m_turn) // White's turn
     {
         // Black bishops and queens
-        if ((precomputed_moves::precomputedBishopMovesTable[m_king_position][precomputed_moves::bishop_unfull_rays[m_king_position] & (m_all_pieces_bit & ~(precomputed_moves::one_one_bits[removed_square_1] | precomputed_moves::one_one_bits[removed_square_2]))] & (m_black_bishops_bit | m_black_queens_bit)) != 0)
+        if ((BmagicNOMASK(m_king_position, precomputed_moves::bishop_unfull_rays[m_king_position] & (m_all_pieces_bit & ~(precomputed_moves::one_one_bits[removed_square_1] | precomputed_moves::one_one_bits[removed_square_2]))) & (m_black_bishops_bit | m_black_queens_bit)) != 0)
             return false;
 
         // Black rooks and queens
-        if ((precomputed_moves::precomputedRookMovesTable[m_king_position][precomputed_moves::rook_unfull_rays[m_king_position] & (m_all_pieces_bit & ~(precomputed_moves::one_one_bits[removed_square_1] | precomputed_moves::one_one_bits[removed_square_2]))] & (m_black_rooks_bit | m_black_queens_bit)) != 0)
+        if ((RmagicNOMASK(m_king_position, precomputed_moves::rook_unfull_rays[m_king_position] & (m_all_pieces_bit & ~(precomputed_moves::one_one_bits[removed_square_1] | precomputed_moves::one_one_bits[removed_square_2]))) & (m_black_rooks_bit | m_black_queens_bit)) != 0)
             return false;
     }
     else // Black's turn
     {
         // White bishops and queens
-        if ((precomputed_moves::precomputedBishopMovesTable[m_king_position][precomputed_moves::bishop_unfull_rays[m_king_position] & (m_all_pieces_bit & ~(precomputed_moves::one_one_bits[removed_square_1] | precomputed_moves::one_one_bits[removed_square_2]))] & (m_white_bishops_bit | m_white_queens_bit)) != 0)
+        if ((BmagicNOMASK(m_king_position, precomputed_moves::bishop_unfull_rays[m_king_position] & (m_all_pieces_bit & ~(precomputed_moves::one_one_bits[removed_square_1] | precomputed_moves::one_one_bits[removed_square_2]))) & (m_white_bishops_bit | m_white_queens_bit)) != 0)
             return false;
 
-        // White rooks and queens
-        if ((precomputed_moves::precomputedRookMovesTable[m_king_position][precomputed_moves::rook_unfull_rays[m_king_position] & (m_all_pieces_bit & ~(precomputed_moves::one_one_bits[removed_square_1] | precomputed_moves::one_one_bits[removed_square_2]))] & (m_white_rooks_bit | m_white_queens_bit)) != 0)
+        // Black rooks and queens
+        if ((RmagicNOMASK(m_king_position, precomputed_moves::rook_unfull_rays[m_king_position] & (m_all_pieces_bit & ~(precomputed_moves::one_one_bits[removed_square_1] | precomputed_moves::one_one_bits[removed_square_2]))) & (m_white_rooks_bit | m_white_queens_bit)) != 0)
             return false;
     }
     return true;
@@ -421,10 +420,10 @@ bool BitPosition::kingIsSafe(unsigned short king_square) const
         if ((precomputed_moves::white_pawn_attacks[king_square] & m_black_pawns_bit) != 0)
             return false;
         // Black bishops and queens
-        if ((precomputed_moves::precomputedBishopMovesTable[king_square][precomputed_moves::bishop_unfull_rays[king_square] & m_all_pieces_bit] & (m_black_bishops_bit | m_black_queens_bit)) != 0)
+        if ((BmagicNOMASK(king_square, precomputed_moves::bishop_unfull_rays[king_square] & (m_all_pieces_bit & ~m_white_king_bit)) & (m_black_bishops_bit | m_black_queens_bit)) != 0)
             return false;
         // Black rooks and queens
-        if ((precomputed_moves::precomputedRookMovesTable[king_square][precomputed_moves::rook_unfull_rays[king_square] & m_all_pieces_bit] & (m_black_rooks_bit | m_black_queens_bit)) != 0)
+        if ((RmagicNOMASK(king_square, precomputed_moves::rook_unfull_rays[king_square] & (m_all_pieces_bit & ~m_white_king_bit)) & (m_black_rooks_bit | m_black_queens_bit)) != 0)
             return false;
         // Black king
         if ((precomputed_moves::king_moves[king_square] & m_black_king_bit) != 0)
@@ -439,11 +438,10 @@ bool BitPosition::kingIsSafe(unsigned short king_square) const
         if ((precomputed_moves::black_pawn_attacks[king_square] & m_white_pawns_bit) != 0)
             return false;
         // White bishops and queens
-        if ((precomputed_moves::precomputedBishopMovesTable[king_square][precomputed_moves::bishop_unfull_rays[king_square] & m_all_pieces_bit] & (m_white_bishops_bit | m_white_queens_bit)) != 0)
+        if ((BmagicNOMASK(king_square, precomputed_moves::bishop_unfull_rays[king_square] & (m_all_pieces_bit& ~m_black_king_bit)) & (m_white_bishops_bit | m_white_queens_bit)) != 0)
             return false;
-
-        // White rooks and queens
-        if ((precomputed_moves::precomputedRookMovesTable[king_square][precomputed_moves::rook_unfull_rays[king_square] & m_all_pieces_bit] & (m_white_rooks_bit | m_white_queens_bit)) != 0)
+        // Black rooks and queens
+        if ((RmagicNOMASK(king_square, precomputed_moves::rook_unfull_rays[king_square] & (m_all_pieces_bit& ~m_black_king_bit)) & (m_white_rooks_bit | m_white_queens_bit)) != 0)
             return false;
 
         // White king
@@ -497,7 +495,7 @@ std::vector<Move> BitPosition::inCheckMoves() const
                 // Blocking with rooks
                 for (unsigned short origin_square : getBitIndices(m_white_rooks_bit & ~m_all_pins))
                 {
-                    for (unsigned short destination_square : getBitIndices(precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] & m_check_rays))
+                    for (unsigned short destination_square : getBitIndices(RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & m_check_rays))
                     {
                         moves.emplace_back(origin_square, destination_square);
                     }
@@ -505,7 +503,7 @@ std::vector<Move> BitPosition::inCheckMoves() const
                 // Blocking with bishops
                 for (unsigned short origin_square : getBitIndices(m_white_bishops_bit & ~m_all_pins))
                 {
-                    for (unsigned short destination_square : getBitIndices(precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] & m_check_rays))
+                    for (unsigned short destination_square : getBitIndices(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & m_check_rays))
                     {
                         moves.emplace_back(origin_square, destination_square);
                     }
@@ -513,7 +511,7 @@ std::vector<Move> BitPosition::inCheckMoves() const
                 // Blocking with queens
                 for (unsigned short origin_square : getBitIndices(m_white_queens_bit & ~m_all_pins))
                 {
-                    for (unsigned short destination_square : getBitIndices((precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] | precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit]) & m_check_rays))
+                    for (unsigned short destination_square : getBitIndices((BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) | RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit)) & m_check_rays))
                     {
                         moves.emplace_back(origin_square, destination_square);
                     }
@@ -564,7 +562,7 @@ std::vector<Move> BitPosition::inCheckMoves() const
             // Blocking with rooks
             for (unsigned short origin_square : getBitIndices(m_black_rooks_bit & ~m_all_pins))
             {
-                for (unsigned short destination_square : getBitIndices(precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] & m_check_rays))
+                for (unsigned short destination_square : getBitIndices(RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & m_check_rays))
                 {
                     moves.emplace_back(origin_square, destination_square);
                 }
@@ -572,7 +570,7 @@ std::vector<Move> BitPosition::inCheckMoves() const
             // Blocking with bishops
             for (unsigned short origin_square : getBitIndices(m_black_bishops_bit & ~m_all_pins))
             {
-                for (unsigned short destination_square : getBitIndices(precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] & m_check_rays))
+                for (unsigned short destination_square : getBitIndices(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & m_check_rays))
                 {
                     moves.emplace_back(origin_square, destination_square);
                 }
@@ -580,7 +578,7 @@ std::vector<Move> BitPosition::inCheckMoves() const
             // Blocking with queens
             for (unsigned short origin_square : getBitIndices(m_black_queens_bit & ~m_all_pins))
             {
-                for (unsigned short destination_square : getBitIndices((precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] | precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit]) & m_check_rays))
+                for (unsigned short destination_square : getBitIndices((BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) | RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit)) & m_check_rays))
                 {
                     moves.emplace_back(origin_square, destination_square);
                 }
@@ -611,19 +609,19 @@ std::vector<Move> BitPosition::nonCaptureMoves() const
         // Bishops
         for (unsigned short origin_square : getBitIndices(m_white_bishops_bit & ~m_all_pins))
         {
-            for (unsigned short destination_square : getBitIndices(precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] & ~m_all_pieces_bit))
+            for (unsigned short destination_square : getBitIndices(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & ~m_all_pieces_bit))
                 moves.emplace_back(origin_square, destination_square);
         }
         // Rooks
         for (unsigned short origin_square : getBitIndices(m_white_rooks_bit & ~m_all_pins))
         {
-            for (unsigned short destination_square : getBitIndices(precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] & ~m_all_pieces_bit))
+            for (unsigned short destination_square : getBitIndices(RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & ~m_all_pieces_bit))
                 moves.emplace_back(origin_square, destination_square);
         }
         // Queens
         for (unsigned short origin_square : getBitIndices(m_white_queens_bit & ~m_all_pins))
         {
-            for (unsigned short destination_square : getBitIndices((precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] | precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit]) & ~m_all_pieces_bit))
+            for (unsigned short destination_square : getBitIndices((BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) | RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit)) & ~m_all_pieces_bit))
                 moves.emplace_back(origin_square, destination_square);
         }
         // Pawns
@@ -631,7 +629,7 @@ std::vector<Move> BitPosition::nonCaptureMoves() const
         {
             for (unsigned short destination_square : getBitIndices(precomputed_moves::white_pawn_moves[origin_square] & ~m_all_pieces_bit))
             {
-                if (destination_square > 55) 
+                if (destination_square > 55)
                 // Promotions
                 {
                     moves.push_back(Move::promotingMove(origin_square, destination_square, 1));
@@ -668,21 +666,21 @@ std::vector<Move> BitPosition::nonCaptureMoves() const
         // Pinned Bishops
         for (unsigned short origin_square : getBitIndices(m_white_bishops_bit & m_diagonal_pins))
         {
-            for (unsigned short destination_square : getBitIndices(precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] & ~m_all_pieces_bit & m_diagonal_pins))
+            for (unsigned short destination_square : getBitIndices(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & ~m_all_pieces_bit & m_diagonal_pins))
                 moves.emplace_back(origin_square, destination_square);
         }
         // Pinned Rooks
         for (unsigned short origin_square : getBitIndices(m_white_rooks_bit & m_straight_pins))
         {
-            for (unsigned short destination_square : getBitIndices(precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] & ~m_all_pieces_bit & m_straight_pins))
+            for (unsigned short destination_square : getBitIndices(RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & ~m_all_pieces_bit & m_straight_pins))
                 moves.emplace_back(origin_square, destination_square);
         }
         // Pinned Queens
         for (unsigned short origin_square : getBitIndices(m_white_queens_bit & m_all_pins))
         {
-            for (unsigned short destination_square : getBitIndices(precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] & ~m_all_pieces_bit & m_diagonal_pins))
+            for (unsigned short destination_square : getBitIndices(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & ~m_all_pieces_bit & m_diagonal_pins))
                 moves.emplace_back(origin_square, destination_square);
-            for (unsigned short destination_square : getBitIndices(precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] & ~m_all_pieces_bit & m_straight_pins))
+            for (unsigned short destination_square : getBitIndices(RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & ~m_all_pieces_bit & m_straight_pins))
                 moves.emplace_back(origin_square, destination_square);
         }
         // Pinned Pawns
@@ -709,19 +707,19 @@ std::vector<Move> BitPosition::nonCaptureMoves() const
         // Bishops
         for (unsigned short origin_square : getBitIndices(m_black_bishops_bit & ~m_all_pins))
         {
-            for (unsigned short destination_square : getBitIndices(precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] & ~m_all_pieces_bit))
+            for (unsigned short destination_square : getBitIndices(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & ~m_all_pieces_bit))
                 moves.emplace_back(origin_square, destination_square);
         }
         // Rooks
         for (unsigned short origin_square : getBitIndices(m_black_rooks_bit & ~m_all_pins))
         {
-            for (unsigned short destination_square : getBitIndices(precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] & ~m_all_pieces_bit))
+            for (unsigned short destination_square : getBitIndices(RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & ~m_all_pieces_bit))
                 moves.emplace_back(origin_square, destination_square);
         }
         // Queens
         for (unsigned short origin_square : getBitIndices(m_black_queens_bit & ~m_all_pins))
         {
-            for (unsigned short destination_square : getBitIndices((precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] | precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit]) & ~m_all_pieces_bit))
+            for (unsigned short destination_square : getBitIndices((BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) | RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit)) & ~m_all_pieces_bit))
                 moves.emplace_back(origin_square, destination_square);
         }
         // Pawns
@@ -766,21 +764,21 @@ std::vector<Move> BitPosition::nonCaptureMoves() const
         // Pinned Bishops
         for (unsigned short origin_square : getBitIndices(m_black_bishops_bit & m_diagonal_pins))
         {
-            for (unsigned short destination_square : getBitIndices(precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] & ~m_all_pieces_bit & m_diagonal_pins))
+            for (unsigned short destination_square : getBitIndices(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & ~m_all_pieces_bit & m_diagonal_pins))
                 moves.emplace_back(origin_square, destination_square);
         }
         // Pinned Rooks
         for (unsigned short origin_square : getBitIndices(m_black_rooks_bit & m_straight_pins))
         {
-            for (unsigned short destination_square : getBitIndices(precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] & ~m_all_pieces_bit & m_straight_pins))
+            for (unsigned short destination_square : getBitIndices(RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & ~m_all_pieces_bit & m_straight_pins))
                 moves.emplace_back(origin_square, destination_square);
         }
         // Pinned Queens
         for (unsigned short origin_square : getBitIndices(m_black_queens_bit & m_all_pins))
         {
-            for (unsigned short destination_square : getBitIndices(precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] & ~m_all_pieces_bit & m_diagonal_pins))
+            for (unsigned short destination_square : getBitIndices(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & ~m_all_pieces_bit & m_diagonal_pins))
                 moves.emplace_back(origin_square, destination_square);
-            for (unsigned short destination_square : getBitIndices(precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] & ~m_all_pieces_bit & m_straight_pins))
+            for (unsigned short destination_square : getBitIndices(RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & ~m_all_pieces_bit & m_straight_pins))
                 moves.emplace_back(origin_square, destination_square);
         }
         // Pinned Pawns
@@ -860,7 +858,7 @@ std::vector<Move> BitPosition::inCheckCaptures() const
             {
                 for (unsigned short i = 0; i <= 4; ++i)
                 {
-                    uint64_t moveable_squares{precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] & checks_array[i]};
+                    uint64_t moveable_squares{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & checks_array[i]};
                     if (moveable_squares != 0)
                         captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), i + 1);
                 }
@@ -870,7 +868,7 @@ std::vector<Move> BitPosition::inCheckCaptures() const
             {
                 for (unsigned short i = 0; i <= 4; ++i)
                 {
-                    uint64_t moveable_squares{precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] & checks_array[i]};
+                    uint64_t moveable_squares{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & checks_array[i]};
                     if (moveable_squares != 0)
                         captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), i + 1);
                 }
@@ -880,7 +878,7 @@ std::vector<Move> BitPosition::inCheckCaptures() const
             {
                 for (unsigned short i = 0; i <= 4; ++i)
                 {
-                    uint64_t moveable_squares{(precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] | precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit]) & checks_array[i]};
+                    uint64_t moveable_squares{(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) | RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit)) & checks_array[i]};
                     if (moveable_squares !=0)
                         captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), i + 1);
                 }
@@ -945,7 +943,7 @@ std::vector<Move> BitPosition::inCheckCaptures() const
             {
                 for (unsigned short i = 0; i <= 4; ++i)
                 {
-                    uint64_t moveable_squares{precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] & checks_array[i]};
+                    uint64_t moveable_squares{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & checks_array[i]};
                     if (moveable_squares != 0)
                         captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), i + 1);
                 }
@@ -955,7 +953,7 @@ std::vector<Move> BitPosition::inCheckCaptures() const
             {
                 for (unsigned short i = 0; i <= 4; ++i)
                 {
-                    uint64_t moveable_squares{precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] & checks_array[i]};
+                    uint64_t moveable_squares{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & checks_array[i]};
                     if (moveable_squares != 0)
                         captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), i + 1);
                 }
@@ -965,7 +963,7 @@ std::vector<Move> BitPosition::inCheckCaptures() const
             {
                 for (unsigned short i = 0; i <= 4; ++i)
                 {
-                    uint64_t moveable_squares{(precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] | precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit]) & checks_array[i]};
+                    uint64_t moveable_squares{(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) | RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit)) & checks_array[i]};
                     if (moveable_squares != 0)
                         captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), i + 1);
                 }
@@ -1005,7 +1003,7 @@ std::vector<Move> BitPosition::captureMoves() const
         {
             for (unsigned short i = 0; i <= 4; ++i)
             {
-                for (unsigned short destination_square : (getBitIndices(precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] & pieces_array[i])))
+                for (unsigned short destination_square : (getBitIndices(RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i])))
                     captures.emplace_back(origin_square, destination_square, i + 1);
             }
         }
@@ -1014,7 +1012,7 @@ std::vector<Move> BitPosition::captureMoves() const
         {
             for (unsigned short i = 0; i <= 4; ++i)
             {
-                for (unsigned short destination_square : (getBitIndices(precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] & pieces_array[i])))
+                for (unsigned short destination_square : (getBitIndices(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i])))
                     captures.emplace_back(origin_square, destination_square, i + 1);
             }
         }
@@ -1023,7 +1021,7 @@ std::vector<Move> BitPosition::captureMoves() const
         {
             for (unsigned short i = 0; i <= 4; ++i)
             {
-                for (unsigned short destination_square : (getBitIndices((precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] | precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit]) & pieces_array[i])))
+                for (unsigned short destination_square : (getBitIndices((BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) | RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit)) & pieces_array[i])))
                     captures.emplace_back(origin_square, destination_square, i + 1);
             }
         }
@@ -1058,7 +1056,7 @@ std::vector<Move> BitPosition::captureMoves() const
         {
             for (unsigned short i = 0; i <= 4; ++i)
             {
-                uint64_t destination_bit{precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] & pieces_array[i] & m_diagonal_pins};
+                uint64_t destination_bit{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_diagonal_pins};
                 if (destination_bit != 0)
                     captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), i + 1);
             }
@@ -1068,7 +1066,7 @@ std::vector<Move> BitPosition::captureMoves() const
         {
             for (unsigned short i = 0; i <= 4; ++i)
             {
-                uint64_t destination_bit{precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] & pieces_array[i] & m_straight_pins};
+                uint64_t destination_bit{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_straight_pins};
                 if (destination_bit != 0)
                     captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), i + 1);
             }
@@ -1079,7 +1077,7 @@ std::vector<Move> BitPosition::captureMoves() const
             for (unsigned short i = 0; i <= 4; ++i)
                 // Diagonal moves
             {
-                uint64_t destination_bit{precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] & pieces_array[i] & m_diagonal_pins};
+                uint64_t destination_bit{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_diagonal_pins};
                 if (destination_bit != 0)
                     captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), i + 1);
             }
@@ -1089,7 +1087,7 @@ std::vector<Move> BitPosition::captureMoves() const
             for (unsigned short i = 0; i <= 4; ++i)
                 // Straight moves
             {
-                uint64_t destination_bit{precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] & pieces_array[i] & m_straight_pins};
+                uint64_t destination_bit{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_straight_pins};
                 if (destination_bit != 0)
                     captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), i + 1);
             }
@@ -1139,7 +1137,7 @@ std::vector<Move> BitPosition::captureMoves() const
         {
             for (unsigned short i = 0; i <= 4; ++i)
             {
-                for (unsigned short destination_square : (getBitIndices(precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] & pieces_array[i])))
+                for (unsigned short destination_square : (getBitIndices(RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i])))
                     captures.emplace_back(origin_square, destination_square, i + 1);
             }
         }
@@ -1148,7 +1146,7 @@ std::vector<Move> BitPosition::captureMoves() const
         {
             for (unsigned short i = 0; i <= 4; ++i)
             {
-                for (unsigned short destination_square : (getBitIndices(precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] & pieces_array[i])))
+                for (unsigned short destination_square : (getBitIndices(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i])))
                     captures.emplace_back(origin_square, destination_square, i + 1);
             }
         }
@@ -1157,7 +1155,7 @@ std::vector<Move> BitPosition::captureMoves() const
         {
             for (unsigned short i = 0; i <= 4; ++i)
             {
-                for (unsigned short destination_square : (getBitIndices((precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] | precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit]) & pieces_array[i])))
+                for (unsigned short destination_square : (getBitIndices((BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) | RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit)) & pieces_array[i])))
                     captures.emplace_back(origin_square, destination_square, i + 1);
             }
         }
@@ -1191,7 +1189,7 @@ std::vector<Move> BitPosition::captureMoves() const
         {
             for (unsigned short i = 0; i <= 4; ++i)
             {
-                uint64_t destination_bit{precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] & pieces_array[i] & m_diagonal_pins};
+                uint64_t destination_bit{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_diagonal_pins};
                 if (destination_bit != 0)
                     captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), i + 1);
             }
@@ -1201,7 +1199,7 @@ std::vector<Move> BitPosition::captureMoves() const
         {
             for (unsigned short i = 0; i <= 4; ++i)
             {
-                uint64_t destination_bit{precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] & pieces_array[i] & m_straight_pins};
+                uint64_t destination_bit{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_straight_pins};
                 if (destination_bit != 0)
                     captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), i + 1);
             }
@@ -1212,7 +1210,7 @@ std::vector<Move> BitPosition::captureMoves() const
             for (unsigned short i = 0; i <= 4; ++i)
             // Diagonal moves
             {
-                uint64_t destination_bit{precomputed_moves::precomputedBishopMovesTable[origin_square][precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit] & pieces_array[i] & m_diagonal_pins};
+                uint64_t destination_bit{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_diagonal_pins};
                 if (destination_bit != 0)
                     captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), i + 1);
             }
@@ -1222,7 +1220,7 @@ std::vector<Move> BitPosition::captureMoves() const
             for (unsigned short i = 0; i <= 4; ++i)
             // Straight moves
             {
-                uint64_t destination_bit{precomputed_moves::precomputedRookMovesTable[origin_square][precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit] & pieces_array[i] & m_straight_pins};
+                uint64_t destination_bit{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_straight_pins};
                 if (destination_bit != 0)
                     captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), i + 1);
             }

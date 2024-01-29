@@ -13,6 +13,7 @@
                 "engine.cpp",
                 "bitposition.cpp",
                 "magics.cpp",
+                "magicmoves.cpp",
                 "-o",
                 "${fileDirname}/${fileBasenameNoExtension}",
                 "-I/source/includes",

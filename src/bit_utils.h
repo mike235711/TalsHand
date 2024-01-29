@@ -5,6 +5,8 @@
 // Here we use inline because this permits the compiler copy inline the function
 // definitions whenever the functions name appears in the project.
 
+
+
 inline unsigned short getLeastSignificantBitIndex(uint64_t bitboard) // Works
 // Give a bitboard get the index of the first 1 appearing in the bit
 {
@@ -17,40 +19,34 @@ inline unsigned short getLeastSignificantBitIndex(uint64_t bitboard) // Works
     return index;
 }
 
-inline std::vector<unsigned short> getBitIndices(uint64_t bitboard) // Works
-// Given a bitboard get the indices of all the 1's in the bitboard
+inline std::vector<unsigned short> getBitIndices(uint64_t bitboard)
 {
     if (bitboard == 0)
     {
-        return std::vector<unsigned short>{};
+        return {};
     }
-    std::vector<unsigned short> indices{};
-    unsigned short index{0};
-    while (index < 64)
+
+    std::vector<unsigned short> indices;
+    indices.reserve(32); // Optimize this value based on your use case
+
+    while (bitboard)
     {
-        if ((bitboard & 1) == 1)
-        {
-            indices.push_back(index);
-        }
-        bitboard >>= 1;
-        ++index;
+        // Use your lsb function to get the index of the least significant bit
+        unsigned short lsbi = getLeastSignificantBitIndex(bitboard);
+        indices.push_back(lsbi);
+
+        // Remove the least significant bit from the bitboard
+        bitboard &= bitboard - 1;
     }
+
     return indices;
 }
 
-inline bool hasOneOne(uint64_t bitboard)
+inline bool hasOneOne(uint64_t bitboard) // Works
 // Given a bitboard determine if bit has one one or not (for pins)
 {
-    if (bitboard == 0)
-    {
-        return false;
-    }
-
-    // Turn off the rightmost 1-bit
-    uint64_t turnedOffBitboard = bitboard & (bitboard - 1);
-
     // If the result is zero, it had only one 1-bit
-    return turnedOffBitboard == 0;
+    return (bitboard & (bitboard - 1)) == 0;
 }
 
 inline std::vector<std::vector<unsigned short>> generateSubvectors(const std::vector<unsigned short> &vec) // Works
