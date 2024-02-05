@@ -35,9 +35,11 @@ BitPosition::BitPosition(uint64_t white_pawns_bit, uint64_t white_knights_bit, u
       m_turn{turn}, m_white_kingside_castling{white_kingside_castling}, m_white_queenside_castling{white_queenside_castling}, m_black_kingside_castling{black_kingside_castling}, m_black_queenside_castling{black_queenside_castling},
       m_white_pieces_bit{m_white_pawns_bit | m_white_knights_bit | m_white_bishops_bit | m_white_rooks_bit | m_white_queens_bit | white_king_bit}, m_black_pieces_bit{m_black_pawns_bit | m_black_knights_bit | m_black_bishops_bit | m_black_rooks_bit | m_black_queens_bit | black_king_bit},
       m_all_pieces_bit{m_white_pieces_bit | m_black_pieces_bit}, m_all_pieces_bit_without_white_king{m_all_pieces_bit & ~m_white_king_bit}, m_all_pieces_bit_without_black_king{m_all_pieces_bit & ~m_black_king_bit}
-{}
+{
+    BitPosition::setKingPosition();
+}
 
-bool BitPosition::isCheck() const
+bool BitPosition::isCheck()
 // Return if we are in check or not
 // This member function is faster than setChecksAndPinsBits
 // We are going to check for checks more efficiently from the kings position and assuming it can move as any piece.
@@ -48,37 +50,42 @@ bool BitPosition::isCheck() const
         // Black Queens
         if (m_black_queens_bit != 0)
         {
-            if (((RmagicNOMASK(m_king_position, precomputed_moves::rook_unfull_rays[m_king_position] & m_all_pieces_bit) | BmagicNOMASK(m_king_position, precomputed_moves::bishop_unfull_rays[m_king_position] & m_all_pieces_bit)) & m_black_queens_bit) != 0)
+            if (((RmagicNOMASK(m_white_king_position, precomputed_moves::rook_unfull_rays[m_white_king_position] & m_all_pieces_bit) | BmagicNOMASK(m_white_king_position, precomputed_moves::bishop_unfull_rays[m_white_king_position] & m_all_pieces_bit)) & m_black_queens_bit) != 0)
             {
+                m_is_check = true;
                 return true;
             }
         }
         // Black Bishops
         if (m_black_bishops_bit != 0)
         {
-            if ((BmagicNOMASK(m_king_position, precomputed_moves::bishop_unfull_rays[m_king_position] & m_all_pieces_bit) & m_black_bishops_bit) != 0)
+            if ((BmagicNOMASK(m_white_king_position, precomputed_moves::bishop_unfull_rays[m_white_king_position] & m_all_pieces_bit) & m_black_bishops_bit) != 0)
             {
+                m_is_check = true;
                 return true;
             }
         }
         // Black Rooks
         if (m_black_rooks_bit != 0)
         {
-            if ((RmagicNOMASK(m_king_position, precomputed_moves::rook_unfull_rays[m_king_position] & m_all_pieces_bit) & m_black_rooks_bit) != 0)
+            if ((RmagicNOMASK(m_white_king_position, precomputed_moves::rook_unfull_rays[m_white_king_position] & m_all_pieces_bit) & m_black_rooks_bit) != 0)
             {
+                m_is_check = true;
                 return true;
             }
         }
         // Black Pawns (We dont check if bit is empty because pawns rarely are all captured)
-        if ((precomputed_moves::white_pawn_attacks[m_king_position] & m_black_pawns_bit)!=0)
+        if ((precomputed_moves::white_pawn_attacks[m_white_king_position] & m_black_pawns_bit)!=0)
         {
+            m_is_check = true;
             return true;
         }
         // Black Knights
         if (m_black_knights_bit != 0)
         {
-            if ((precomputed_moves::knight_moves[m_king_position] & m_black_knights_bit) != 0)
+            if ((precomputed_moves::knight_moves[m_white_king_position] & m_black_knights_bit) != 0)
             {
+                m_is_check = true;
                 return true;
             }
         }
@@ -89,41 +96,47 @@ bool BitPosition::isCheck() const
         // White Queens
         if (m_white_queens_bit != 0)
         {
-            if (((BmagicNOMASK(m_king_position, precomputed_moves::bishop_unfull_rays[m_king_position] & m_all_pieces_bit) | RmagicNOMASK(m_king_position, precomputed_moves::rook_unfull_rays[m_king_position] & m_all_pieces_bit)) & m_white_queens_bit) != 0)
+            if (((BmagicNOMASK(m_black_king_position, precomputed_moves::bishop_unfull_rays[m_black_king_position] & m_all_pieces_bit) | RmagicNOMASK(m_black_king_position, precomputed_moves::rook_unfull_rays[m_black_king_position] & m_all_pieces_bit)) & m_white_queens_bit) != 0)
             {
+                m_is_check = true;
                 return true;
             }
         }
         // White Bishops
         if (m_white_bishops_bit != 0)
         {
-            if ((BmagicNOMASK(m_king_position, precomputed_moves::bishop_unfull_rays[m_king_position] & m_all_pieces_bit) & m_white_bishops_bit) != 0)
+            if ((BmagicNOMASK(m_black_king_position, precomputed_moves::bishop_unfull_rays[m_black_king_position] & m_all_pieces_bit) & m_white_bishops_bit) != 0)
             {
+                m_is_check = true;
                 return true;
             }
         }
         // White Rooks
         if (m_white_rooks_bit != 0)
         {
-            if ((RmagicNOMASK(m_king_position, precomputed_moves::rook_unfull_rays[m_king_position] & m_all_pieces_bit) & m_white_rooks_bit) != 0)
+            if ((RmagicNOMASK(m_black_king_position, precomputed_moves::rook_unfull_rays[m_black_king_position] & m_all_pieces_bit) & m_white_rooks_bit) != 0)
             {
+                m_is_check = true;
                 return true;
             }
         }
         // White Pawns (We dont check if bit is empty because pawns rarely are all captured)
-        if ((precomputed_moves::black_pawn_attacks[m_king_position] & m_white_pawns_bit) != 0)
+        if ((precomputed_moves::black_pawn_attacks[m_black_king_position] & m_white_pawns_bit) != 0)
         {
+            m_is_check = true;
             return true;
         }
         // White Knights
         if (m_white_knights_bit != 0)
         {
-            if ((precomputed_moves::knight_moves[m_king_position] & m_white_knights_bit) != 0)
+            if ((precomputed_moves::knight_moves[m_black_king_position] & m_white_knights_bit) != 0)
             {
+                m_is_check = true;
                 return true;
             }
         }
     }
+    m_is_check = false;
     return false; // No checks
 }
 
@@ -136,39 +149,39 @@ void BitPosition::setPinsBits()
     if (m_turn) // White's turn
     {
         // Pins by black bishops
-        for (short int square : getBitIndices(m_black_bishops_bit & precomputed_moves::bishop_full_rays[m_king_position]))
+        for (short int square : getBitIndices(m_black_bishops_bit & precomputed_moves::bishop_full_rays[m_white_king_position]))
         // For each square corresponding to black bishop raying white king
         {
-            uint64_t bishop_ray{precomputed_moves::precomputedBishopMovesTableOneBlocker[square][m_king_position]};
+            uint64_t bishop_ray{precomputed_moves::precomputedBishopMovesTableOneBlocker[square][m_white_king_position]};
             if (hasOneOne(bishop_ray & m_white_pieces_bit) && hasOneOne(bishop_ray & m_black_pieces_bit))
             {
                 m_diagonal_pins |= bishop_ray;
             }
         }
         // Pins by black rooks
-        for (short int square : getBitIndices(m_black_rooks_bit & precomputed_moves::rook_full_rays[m_king_position]))
+        for (short int square : getBitIndices(m_black_rooks_bit & precomputed_moves::rook_full_rays[m_white_king_position]))
         // For each square corresponding to black rook raying white king
         {
-            uint64_t rook_ray{precomputed_moves::precomputedRookMovesTableOneBlocker[square][m_king_position]};
+            uint64_t rook_ray{precomputed_moves::precomputedRookMovesTableOneBlocker[square][m_white_king_position]};
             if (hasOneOne(rook_ray & m_white_pieces_bit) && hasOneOne(rook_ray & m_black_pieces_bit))
             {
                 m_straight_pins |= rook_ray;
             }
         }
         // Pins by black queens
-        for (short int square : getBitIndices(m_black_queens_bit & precomputed_moves::bishop_full_rays[m_king_position]))
+        for (short int square : getBitIndices(m_black_queens_bit & precomputed_moves::bishop_full_rays[m_white_king_position]))
         // For each square corresponding to black queen raying white king diagonally
         {
-            uint64_t bishop_ray{precomputed_moves::precomputedBishopMovesTableOneBlocker[square][m_king_position]};
+            uint64_t bishop_ray{precomputed_moves::precomputedBishopMovesTableOneBlocker[square][m_white_king_position]};
             if (hasOneOne(bishop_ray & m_white_pieces_bit) && hasOneOne(bishop_ray & m_black_pieces_bit))
             {
                 m_diagonal_pins |= bishop_ray;
             }
         }
-        for (short int square : getBitIndices(m_black_queens_bit & precomputed_moves::rook_full_rays[m_king_position]))
+        for (short int square : getBitIndices(m_black_queens_bit & precomputed_moves::rook_full_rays[m_white_king_position]))
         // For each square corresponding to black queen raying white king straight
         {
-            uint64_t rook_ray{precomputed_moves::precomputedRookMovesTableOneBlocker[square][m_king_position]};
+            uint64_t rook_ray{precomputed_moves::precomputedRookMovesTableOneBlocker[square][m_white_king_position]};
             if (hasOneOne(rook_ray & m_white_pieces_bit) && hasOneOne(rook_ray & m_black_pieces_bit))
             {
                 m_straight_pins |= rook_ray;
@@ -178,39 +191,39 @@ void BitPosition::setPinsBits()
     else // Black's turn
     {
         // Pins by white bishops
-        for (short int square : getBitIndices(m_white_bishops_bit & precomputed_moves::bishop_full_rays[m_king_position]))
+        for (short int square : getBitIndices(m_white_bishops_bit & precomputed_moves::bishop_full_rays[m_black_king_position]))
         // For each square corresponding to white bishop raying white king
         {
-            uint64_t bishop_ray{precomputed_moves::precomputedBishopMovesTableOneBlocker[square][m_king_position]};
+            uint64_t bishop_ray{precomputed_moves::precomputedBishopMovesTableOneBlocker[square][m_black_king_position]};
             if (hasOneOne(bishop_ray & m_white_pieces_bit) && hasOneOne(bishop_ray & m_black_pieces_bit))
             {
                 m_diagonal_pins |= bishop_ray;
             }
         }
         // Pins by white rooks
-        for (short int square : getBitIndices(m_white_rooks_bit & precomputed_moves::rook_full_rays[m_king_position]))
+        for (short int square : getBitIndices(m_white_rooks_bit & precomputed_moves::rook_full_rays[m_black_king_position]))
         // For each square corresponding to white rook raying white king
         {
-            uint64_t rook_ray{precomputed_moves::precomputedRookMovesTableOneBlocker[square][m_king_position]};
+            uint64_t rook_ray{precomputed_moves::precomputedRookMovesTableOneBlocker[square][m_black_king_position]};
             if (hasOneOne(rook_ray & m_white_pieces_bit) && hasOneOne(rook_ray & m_black_pieces_bit))
             {
                 m_straight_pins |= rook_ray;
             }
         }
         // Pins by white queens
-        for (short int square : getBitIndices(m_white_queens_bit & precomputed_moves::bishop_full_rays[m_king_position]))
+        for (short int square : getBitIndices(m_white_queens_bit & precomputed_moves::bishop_full_rays[m_black_king_position]))
         // For each square corresponding to white queen raying white king diagonally
         {
-            uint64_t bishop_ray{precomputed_moves::precomputedBishopMovesTableOneBlocker[square][m_king_position]};
+            uint64_t bishop_ray{precomputed_moves::precomputedBishopMovesTableOneBlocker[square][m_black_king_position]};
             if (hasOneOne(bishop_ray & m_white_pieces_bit) && hasOneOne(bishop_ray & m_black_pieces_bit))
             {
                 m_diagonal_pins |= bishop_ray;
             }
         }
-        for (short int square : getBitIndices(m_white_queens_bit & precomputed_moves::rook_full_rays[m_king_position]))
+        for (short int square : getBitIndices(m_white_queens_bit & precomputed_moves::rook_full_rays[m_black_king_position]))
         // For each square corresponding to white queen raying white king straight
         {
-            uint64_t rook_ray{precomputed_moves::precomputedRookMovesTableOneBlocker[square][m_king_position]};
+            uint64_t rook_ray{precomputed_moves::precomputedRookMovesTableOneBlocker[square][m_black_king_position]};
             if (hasOneOne(rook_ray & m_white_pieces_bit) && hasOneOne(rook_ray & m_black_pieces_bit))
             {
                 m_straight_pins |= rook_ray;
@@ -229,7 +242,7 @@ void BitPosition::setChecksAndPinsBits()
     {
         // Black pawns (Note we can only give check with one pawn at a time)
         {
-        uint64_t attacking_squares{precomputed_moves::white_pawn_attacks[m_king_position]};
+        uint64_t attacking_squares{precomputed_moves::white_pawn_attacks[m_white_king_position]};
         // Maybe use reference or pointer instead of creating new variable attacking_squares??
         if ((attacking_squares & m_black_pawns_bit) != 0)
         {
@@ -240,7 +253,7 @@ void BitPosition::setChecksAndPinsBits()
         // We use blocks so that attacking_squares variables dont conflict between each
         {
         // Black knights (Note we can only give check with one knight at a time)
-        uint64_t attacking_squares{precomputed_moves::knight_moves[m_king_position]};
+        uint64_t attacking_squares{precomputed_moves::knight_moves[m_white_king_position]};
         if ((attacking_squares & m_black_knights_bit) != 0)
         {
             m_knight_checks |= (attacking_squares & m_black_knights_bit);
@@ -248,10 +261,10 @@ void BitPosition::setChecksAndPinsBits()
         }
         }
         // Black bishops
-        for (short int square : getBitIndices(m_black_bishops_bit & precomputed_moves::bishop_full_rays[m_king_position]))
+        for (short int square : getBitIndices(m_black_bishops_bit & precomputed_moves::bishop_full_rays[m_white_king_position]))
         {
             // Ray from square where bishop is to king, including opponents bishop square, excluding king square
-            uint64_t bishop_ray{precomputed_moves::precomputedBishopMovesTableOneBlocker[square][m_king_position]};
+            uint64_t bishop_ray{precomputed_moves::precomputedBishopMovesTableOneBlocker[square][m_white_king_position]};
             if (hasOneOne(bishop_ray & m_all_pieces_bit)) // Check
             {
                 m_bishop_checks |= (bishop_ray & m_black_bishops_bit);
@@ -262,10 +275,10 @@ void BitPosition::setChecksAndPinsBits()
                 m_diagonal_pins |= bishop_ray;
         }
         // Black rooks
-        for (short int square : getBitIndices(m_black_rooks_bit & precomputed_moves::rook_full_rays[m_king_position]))
+        for (short int square : getBitIndices(m_black_rooks_bit & precomputed_moves::rook_full_rays[m_white_king_position]))
         {
             // Ray from square where rook is to king, including opponents rook square, excluding king square
-            uint64_t rook_ray{precomputed_moves::precomputedRookMovesTableOneBlocker[square][m_king_position]};
+            uint64_t rook_ray{precomputed_moves::precomputedRookMovesTableOneBlocker[square][m_white_king_position]};
             if (hasOneOne(rook_ray & m_all_pieces_bit)) // Check
             {
                 m_rook_checks |= (rook_ray & m_black_rooks_bit);
@@ -276,10 +289,10 @@ void BitPosition::setChecksAndPinsBits()
                 m_straight_pins |= rook_ray;
         }
         // Black queens
-        for (short int square : getBitIndices(m_black_queens_bit & precomputed_moves::bishop_full_rays[m_king_position]))
+        for (short int square : getBitIndices(m_black_queens_bit & precomputed_moves::bishop_full_rays[m_white_king_position]))
         {
             // Ray from square where queen is to king, including opponents queen square, excluding king square
-            uint64_t diagonal_ray{precomputed_moves::precomputedBishopMovesTableOneBlocker[square][m_king_position]};
+            uint64_t diagonal_ray{precomputed_moves::precomputedBishopMovesTableOneBlocker[square][m_white_king_position]};
             if (hasOneOne(diagonal_ray & m_all_pieces_bit)) // Check
             {
                 m_queen_checks |= (diagonal_ray & m_black_queens_bit);
@@ -289,10 +302,10 @@ void BitPosition::setChecksAndPinsBits()
             else if (hasOneOne(diagonal_ray & m_white_pieces_bit) && hasOneOne(diagonal_ray & m_black_pieces_bit)) // Pin
                 m_diagonal_pins |= diagonal_ray;
         }
-        for (short int square : getBitIndices(m_black_queens_bit & precomputed_moves::rook_full_rays[m_king_position]))
+        for (short int square : getBitIndices(m_black_queens_bit & precomputed_moves::rook_full_rays[m_white_king_position]))
         {
             // Ray from square where queen is to king, including opponents queen square, excluding king square
-            uint64_t straight_ray{precomputed_moves::precomputedRookMovesTableOneBlocker[square][m_king_position]};
+            uint64_t straight_ray{precomputed_moves::precomputedRookMovesTableOneBlocker[square][m_white_king_position]};
             if (hasOneOne(straight_ray & m_all_pieces_bit)) // Check
             {
                 m_queen_checks |= (straight_ray & m_black_queens_bit);
@@ -307,7 +320,7 @@ void BitPosition::setChecksAndPinsBits()
     {
         // White pawns (Note we can only give check with one pawn at a time)
         {
-            uint64_t attacking_squares{precomputed_moves::black_pawn_attacks[m_king_position]};
+            uint64_t attacking_squares{precomputed_moves::black_pawn_attacks[m_black_king_position]};
             // Maybe use reference or pointer instead of creating new variable attacking_squares??
             if ((attacking_squares & m_white_pawns_bit) != 0)
             {
@@ -318,7 +331,7 @@ void BitPosition::setChecksAndPinsBits()
         // We use blocks so that attacking_squares variables dont conflict between each
         {
             // Black knights (Note we can only give check with one knight at a time)
-            uint64_t attacking_squares{precomputed_moves::knight_moves[m_king_position]};
+            uint64_t attacking_squares{precomputed_moves::knight_moves[m_black_king_position]};
             if ((attacking_squares & m_white_knights_bit) != 0)
             {
                 m_knight_checks |= (attacking_squares & m_white_knights_bit);
@@ -326,10 +339,10 @@ void BitPosition::setChecksAndPinsBits()
             }
         }
         // White bishops
-        for (short int square : getBitIndices(m_white_bishops_bit & precomputed_moves::bishop_full_rays[m_king_position]))
+        for (short int square : getBitIndices(m_white_bishops_bit & precomputed_moves::bishop_full_rays[m_black_king_position]))
         {
             // Ray from square where bishop is to king, including opponents bishop square, excluding king square
-            uint64_t bishop_ray{precomputed_moves::precomputedBishopMovesTableOneBlocker[square][m_king_position]};
+            uint64_t bishop_ray{precomputed_moves::precomputedBishopMovesTableOneBlocker[square][m_black_king_position]};
             if (hasOneOne(bishop_ray & m_all_pieces_bit)) // Check
             {
                 m_bishop_checks |= (bishop_ray & m_white_bishops_bit);
@@ -340,10 +353,10 @@ void BitPosition::setChecksAndPinsBits()
                 m_diagonal_pins |= bishop_ray;
         }
         // White rooks
-        for (short int square : getBitIndices(m_white_rooks_bit & precomputed_moves::rook_full_rays[m_king_position]))
+        for (short int square : getBitIndices(m_white_rooks_bit & precomputed_moves::rook_full_rays[m_black_king_position]))
         {
             // Ray from square where rook is to king, including opponents rook square, excluding king square
-            uint64_t rook_ray{precomputed_moves::precomputedRookMovesTableOneBlocker[square][m_king_position]};
+            uint64_t rook_ray{precomputed_moves::precomputedRookMovesTableOneBlocker[square][m_black_king_position]};
             if (hasOneOne(rook_ray & m_all_pieces_bit)) // Check
             {
                 m_rook_checks |= (rook_ray & m_white_rooks_bit);
@@ -354,10 +367,10 @@ void BitPosition::setChecksAndPinsBits()
                 m_straight_pins |= rook_ray;
         }
         // White queens
-        for (short int square : getBitIndices(m_white_queens_bit & precomputed_moves::bishop_full_rays[m_king_position]))
+        for (short int square : getBitIndices(m_white_queens_bit & precomputed_moves::bishop_full_rays[m_black_king_position]))
         {
             // Ray from square where queen is to king, including opponents queen square, excluding king square
-            uint64_t diagonal_ray{precomputed_moves::precomputedBishopMovesTableOneBlocker[square][m_king_position]};
+            uint64_t diagonal_ray{precomputed_moves::precomputedBishopMovesTableOneBlocker[square][m_black_king_position]};
             if (hasOneOne(diagonal_ray & m_all_pieces_bit)) // Check
             {
                 m_queen_checks |= (diagonal_ray & m_white_queens_bit);
@@ -367,10 +380,10 @@ void BitPosition::setChecksAndPinsBits()
             else if (hasOneOne(diagonal_ray & m_white_pieces_bit) && hasOneOne(diagonal_ray & m_black_pieces_bit)) // Pin
                 m_diagonal_pins |= diagonal_ray;
         }
-        for (short int square : getBitIndices(m_white_queens_bit & precomputed_moves::rook_full_rays[m_king_position]))
+        for (short int square : getBitIndices(m_white_queens_bit & precomputed_moves::rook_full_rays[m_black_king_position]))
         {
             // Ray from square where queen is to king, including opponents queen square, excluding king square
-            uint64_t straight_ray{precomputed_moves::precomputedRookMovesTableOneBlocker[square][m_king_position]};
+            uint64_t straight_ray{precomputed_moves::precomputedRookMovesTableOneBlocker[square][m_black_king_position]};
             if (hasOneOne(straight_ray & m_all_pieces_bit)) // Check
             {
                 m_queen_checks |= (straight_ray & m_white_queens_bit);
@@ -389,21 +402,21 @@ bool BitPosition::kingIsSafeAfterPassant(unsigned short removed_square_1, unsign
     if (m_turn) // White's turn
     {
         // Black bishops and queens
-        if ((BmagicNOMASK(m_king_position, precomputed_moves::bishop_unfull_rays[m_king_position] & (m_all_pieces_bit & ~(precomputed_moves::one_one_bits[removed_square_1] | precomputed_moves::one_one_bits[removed_square_2]))) & (m_black_bishops_bit | m_black_queens_bit)) != 0)
+        if ((BmagicNOMASK(m_white_king_position, precomputed_moves::bishop_unfull_rays[m_white_king_position] & (m_all_pieces_bit & ~(precomputed_moves::one_one_bits[removed_square_1] | precomputed_moves::one_one_bits[removed_square_2]))) & (m_black_bishops_bit | m_black_queens_bit)) != 0)
             return false;
 
         // Black rooks and queens
-        if ((RmagicNOMASK(m_king_position, precomputed_moves::rook_unfull_rays[m_king_position] & (m_all_pieces_bit & ~(precomputed_moves::one_one_bits[removed_square_1] | precomputed_moves::one_one_bits[removed_square_2]))) & (m_black_rooks_bit | m_black_queens_bit)) != 0)
+        if ((RmagicNOMASK(m_white_king_position, precomputed_moves::rook_unfull_rays[m_white_king_position] & (m_all_pieces_bit & ~(precomputed_moves::one_one_bits[removed_square_1] | precomputed_moves::one_one_bits[removed_square_2]))) & (m_black_rooks_bit | m_black_queens_bit)) != 0)
             return false;
     }
     else // Black's turn
     {
         // White bishops and queens
-        if ((BmagicNOMASK(m_king_position, precomputed_moves::bishop_unfull_rays[m_king_position] & (m_all_pieces_bit & ~(precomputed_moves::one_one_bits[removed_square_1] | precomputed_moves::one_one_bits[removed_square_2]))) & (m_white_bishops_bit | m_white_queens_bit)) != 0)
+        if ((BmagicNOMASK(m_black_king_position, precomputed_moves::bishop_unfull_rays[m_black_king_position] & (m_all_pieces_bit & ~(precomputed_moves::one_one_bits[removed_square_1] | precomputed_moves::one_one_bits[removed_square_2]))) & (m_white_bishops_bit | m_white_queens_bit)) != 0)
             return false;
 
         // Black rooks and queens
-        if ((RmagicNOMASK(m_king_position, precomputed_moves::rook_unfull_rays[m_king_position] & (m_all_pieces_bit & ~(precomputed_moves::one_one_bits[removed_square_1] | precomputed_moves::one_one_bits[removed_square_2]))) & (m_white_rooks_bit | m_white_queens_bit)) != 0)
+        if ((RmagicNOMASK(m_black_king_position, precomputed_moves::rook_unfull_rays[m_black_king_position] & (m_all_pieces_bit & ~(precomputed_moves::one_one_bits[removed_square_1] | precomputed_moves::one_one_bits[removed_square_2]))) & (m_white_rooks_bit | m_white_queens_bit)) != 0)
             return false;
     }
     return true;
@@ -518,9 +531,9 @@ std::vector<Move> BitPosition::inCheckMoves() const
                 }
             }
             // Move king
-            for (unsigned short destination_square : getBitIndices(precomputed_moves::king_moves[m_king_position] & ~(m_all_pieces_bit | m_check_rays)))
+            for (unsigned short destination_square : getBitIndices(precomputed_moves::king_moves[m_white_king_position] & ~(m_all_pieces_bit | m_check_rays)))
                 if (BitPosition::kingIsSafe(destination_square))
-                    moves.emplace_back(m_king_position, destination_square);
+                    moves.emplace_back(m_white_king_position, destination_square);
         }
     else // Black's turn
     {
@@ -585,9 +598,9 @@ std::vector<Move> BitPosition::inCheckMoves() const
             }
         }
         // Move king
-        for (unsigned short destination_square : getBitIndices(precomputed_moves::king_moves[m_king_position] & ~(m_all_pieces_bit | m_check_rays)))
+        for (unsigned short destination_square : getBitIndices(precomputed_moves::king_moves[m_black_king_position] & ~(m_all_pieces_bit | m_check_rays)))
             if (BitPosition::kingIsSafe(destination_square))
-                moves.emplace_back(m_king_position, destination_square);
+                moves.emplace_back(m_black_king_position, destination_square);
     }
     return moves;
 }
@@ -656,10 +669,10 @@ std::vector<Move> BitPosition::nonCaptureMoves() const
         if (m_white_queenside_castling && (m_all_pieces_bit & 14) == 0 && BitPosition::kingIsSafe(2) && BitPosition::kingIsSafe(3))
             moves.push_back(castling_moves[1]);
         // Normal king moves
-        for (unsigned short destination_square : getBitIndices(precomputed_moves::king_moves[m_king_position] & ~m_all_pieces_bit))
+        for (unsigned short destination_square : getBitIndices(precomputed_moves::king_moves[m_white_king_position] & ~m_all_pieces_bit))
         {
             if (kingIsSafe(destination_square))
-                moves.emplace_back(m_king_position, destination_square);
+                moves.emplace_back(m_white_king_position, destination_square);
         }
 
         // Moving pinned pieces (Note knights cannot be moved if pinned and kings cannot be pinned)
@@ -754,10 +767,10 @@ std::vector<Move> BitPosition::nonCaptureMoves() const
         if (m_black_queenside_castling && (m_all_pieces_bit & 1008806316530991104) == 0 && BitPosition::kingIsSafe(59) && BitPosition::kingIsSafe(58))
                 moves.push_back(castling_moves[3]);
         // Normal king moves
-        for (unsigned short destination_square : getBitIndices(precomputed_moves::king_moves[m_king_position] & ~m_all_pieces_bit))
+        for (unsigned short destination_square : getBitIndices(precomputed_moves::king_moves[m_black_king_position] & ~m_all_pieces_bit))
         {
             if (kingIsSafe(destination_square))
-                moves.emplace_back(m_king_position, destination_square);
+                moves.emplace_back(m_black_king_position, destination_square);
         }
 
         // Moving pinned pieces (Note knights cannot be moved if pinned and kings cannot be pinned)
@@ -806,10 +819,10 @@ std::vector<Move> BitPosition::inCheckCaptures() const
         // Capturing with king
         for (unsigned short i = 0; i <= 4; ++i)
         {
-            for (unsigned short destination_square : getBitIndices(precomputed_moves::king_moves[m_king_position] & pieces_array[i]))
+            for (unsigned short destination_square : getBitIndices(precomputed_moves::king_moves[m_white_king_position] & pieces_array[i]))
             {
                 if (kingIsSafe(destination_square))
-                    captures.emplace_back(m_king_position, destination_square, i + 1);
+                    captures.emplace_back(m_white_king_position, destination_square, i + 1);
             }
         }
         if (m_num_checks == 1)
@@ -891,10 +904,10 @@ std::vector<Move> BitPosition::inCheckCaptures() const
         // Capturing with king
         for (unsigned short i = 0; i <= 4; ++i)
         {
-            for (unsigned short destination_square : getBitIndices(precomputed_moves::king_moves[m_king_position] & pieces_array[i]))
+            for (unsigned short destination_square : getBitIndices(precomputed_moves::king_moves[m_black_king_position] & pieces_array[i]))
             {
                 if (kingIsSafe(destination_square))
-                    captures.emplace_back(m_king_position, destination_square, i + 1);
+                    captures.emplace_back(m_black_king_position, destination_square, i + 1);
             }
         }
         if (m_num_checks == 1)
@@ -994,9 +1007,9 @@ std::vector<Move> BitPosition::captureMoves() const
         // Capturing with king
         for (unsigned short i = 0; i <= 4; ++i)
         {
-            for (unsigned short destination_square : (getBitIndices(precomputed_moves::king_moves[m_king_position] & pieces_array[i])))
+            for (unsigned short destination_square : (getBitIndices(precomputed_moves::king_moves[m_white_king_position] & pieces_array[i])))
                 if (kingIsSafe(destination_square))
-                    captures.emplace_back(m_king_position, destination_square, i + 1);
+                    captures.emplace_back(m_white_king_position, destination_square, i + 1);
         }
         // Capturing with rooks that arent pinned
         for (unsigned short origin_square : getBitIndices(m_white_rooks_bit & ~m_all_pins))
@@ -1128,9 +1141,9 @@ std::vector<Move> BitPosition::captureMoves() const
         // Capturing with king
         for (unsigned short i = 0; i <= 4; ++i)
         {
-            for (unsigned short destination_square : (getBitIndices(precomputed_moves::king_moves[m_king_position] & pieces_array[i])))
+            for (unsigned short destination_square : (getBitIndices(precomputed_moves::king_moves[m_black_king_position] & pieces_array[i])))
                 if (kingIsSafe(destination_square))
-                    captures.emplace_back(m_king_position, destination_square, i + 1);
+                    captures.emplace_back(m_black_king_position, destination_square, i + 1);
         }
         // Capturing with rooks that arent pinned
         for (unsigned short origin_square : getBitIndices(m_black_rooks_bit & ~m_all_pins))
@@ -1333,6 +1346,7 @@ void BitPosition::storePlyInfo()
     m_psquare_array[m_ply] = m_psquare;
     m_diagonal_pins_array[m_ply] = m_diagonal_pins;
     m_straight_pins_array[m_ply] = m_straight_pins;
+    m_is_check_array[m_ply] = m_is_check;
 
     m_white_pawns_bits_array[m_ply] = m_white_pawns_bit;
     m_white_knights_bits_array[m_ply] = m_white_knights_bit;
@@ -1346,6 +1360,9 @@ void BitPosition::storePlyInfo()
     m_black_rooks_bits_array[m_ply] = m_black_rooks_bit;
     m_black_queens_bits_array[m_ply] = m_black_queens_bit;
     m_black_king_bits_array[m_ply] = m_black_king_bit;
+
+    m_white_king_positions_array[m_ply] = m_white_king_position;
+    m_black_king_positions_array[m_ply] = m_black_king_position;
 }
 
 void BitPosition::makeMove(Move move)
@@ -1365,6 +1382,7 @@ void BitPosition::makeMove(Move move)
         {
             m_white_kingside_castling = false;
             m_white_queenside_castling = false;
+            m_white_king_position = destination_square;
         }
         if (origin_square == 7) // If we move rook
             m_white_kingside_castling = false;
@@ -1449,6 +1467,7 @@ void BitPosition::makeMove(Move move)
         {
             m_black_kingside_castling = false;
             m_black_queenside_castling = false;
+            m_black_king_position = destination_square;
         }
         if (origin_square == 63) // If we move rook
             m_black_kingside_castling = false;
@@ -1541,8 +1560,6 @@ void BitPosition::makeMove(Move move)
     m_ply++;
 
     BitPosition::setAllPiecesBits();
-
-    BitPosition::setKingPosition();
 }
 void BitPosition::unmakeMove()
 // Takes a move and undoes the move accordingly, updating all position attributes. When the engine transverses the tree of moves it will keep
@@ -1558,6 +1575,7 @@ void BitPosition::unmakeMove()
     m_psquare = m_psquare_array[m_ply];
     m_diagonal_pins = m_diagonal_pins_array[m_ply];
     m_straight_pins = m_straight_pins_array[m_ply];
+    m_is_check = m_is_check_array[m_ply];
 
     m_white_pawns_bit = m_white_pawns_bits_array[m_ply];
     m_white_knights_bit = m_white_knights_bits_array[m_ply];
@@ -1572,7 +1590,10 @@ void BitPosition::unmakeMove()
     m_black_queens_bit = m_black_queens_bits_array[m_ply];
     m_black_king_bit = m_black_king_bits_array[m_ply];
 
-    BitPosition::setAllPiecesBits();
-
     m_turn = not m_turn;
+
+    m_white_king_position = m_white_king_positions_array[m_ply];
+    m_black_king_position = m_black_king_positions_array[m_ply];
+
+    BitPosition::setAllPiecesBits();
 }

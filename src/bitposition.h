@@ -42,6 +42,7 @@ private:
     uint64_t m_queen_checks{};
     uint64_t m_check_rays{};
     unsigned short m_num_checks{};
+    bool m_is_check{};
     // bits to represent all pieces of each player
     uint64_t m_white_pieces_bit{m_white_pawns_bit | m_white_knights_bit | m_white_bishops_bit | m_white_rooks_bit | m_white_queens_bit | m_white_king_bit};
     uint64_t m_black_pieces_bit{m_black_pawns_bit | m_black_knights_bit | m_black_bishops_bit | m_black_rooks_bit | m_black_queens_bit | m_black_king_bit};
@@ -49,33 +50,39 @@ private:
     uint64_t m_all_pieces_bit_without_white_king{m_all_pieces_bit & ~m_white_king_bit};
     uint64_t m_all_pieces_bit_without_black_king{m_all_pieces_bit & ~m_black_king_bit};
     // unsigned short representing kings position
-    unsigned short m_king_position{};
+    unsigned short m_white_king_position{};
+    unsigned short m_black_king_position{};
     // ply number
     // WE HAVE TO MAKE SURE WE RESET IT TO 0 AFTER THE ENGINE GIVES A MOVE.
     unsigned short m_ply{};
     // ply info arrays (these is the info used on non capture moves, 
     // since captured moves will all have already benn generated before unmaking move)
-    std::array<bool, 64> m_wkcastling_array{};
-    std::array<bool, 64> m_wqcastling_array{};
-    std::array<bool, 64> m_bkcastling_array{};
-    std::array<bool, 64> m_bqcastling_array{};
-    std::array<unsigned short, 64> m_psquare_array{};
-    std::array<uint64_t, 64> m_diagonal_pins_array{};
-    std::array<uint64_t, 64> m_straight_pins_array{};
+    std::array<bool, 100> m_wkcastling_array{};
+    std::array<bool, 100> m_wqcastling_array{};
+    std::array<bool, 100> m_bkcastling_array{};
+    std::array<bool, 100> m_bqcastling_array{};
+    std::array<unsigned short, 100> m_psquare_array{};
+    std::array<uint64_t, 100> m_diagonal_pins_array{};
+    std::array<uint64_t, 100> m_straight_pins_array{};
 
-    std::array<uint64_t, 64> m_white_pawns_bits_array{};
-    std::array<uint64_t, 64> m_white_knights_bits_array{};
-    std::array<uint64_t, 64> m_white_bishops_bits_array{};
-    std::array<uint64_t, 64> m_white_rooks_bits_array{};
-    std::array<uint64_t, 64> m_white_queens_bits_array{};
-    std::array<uint64_t, 64> m_white_king_bits_array{};
+    std::array<uint64_t, 100> m_white_pawns_bits_array{};
+    std::array<uint64_t, 100> m_white_knights_bits_array{};
+    std::array<uint64_t, 100> m_white_bishops_bits_array{};
+    std::array<uint64_t, 100> m_white_rooks_bits_array{};
+    std::array<uint64_t, 100> m_white_queens_bits_array{};
+    std::array<uint64_t, 100> m_white_king_bits_array{};
 
-    std::array<uint64_t, 64> m_black_pawns_bits_array{};
-    std::array<uint64_t, 64> m_black_knights_bits_array{};
-    std::array<uint64_t, 64> m_black_bishops_bits_array{};
-    std::array<uint64_t, 64> m_black_rooks_bits_array{};
-    std::array<uint64_t, 64> m_black_queens_bits_array{};
-    std::array<uint64_t, 64> m_black_king_bits_array{};
+    std::array<uint64_t, 100> m_black_pawns_bits_array{};
+    std::array<uint64_t, 100> m_black_knights_bits_array{};
+    std::array<uint64_t, 100> m_black_bishops_bits_array{};
+    std::array<uint64_t, 100> m_black_rooks_bits_array{};
+    std::array<uint64_t, 100> m_black_queens_bits_array{};
+    std::array<uint64_t, 100> m_black_king_bits_array{};
+
+    std::array<bool, 100> m_is_check_array{};
+
+    std::array<unsigned short, 100> m_white_king_positions_array{};
+    std::array<unsigned short, 100> m_black_king_positions_array{};
     // Double pawn moves
 
     // 10 00 011000 001000 - 0 0 24 8
@@ -96,7 +103,8 @@ private:
     // 10 00 100110 110110 - 0 0 38 54
     // 10 00 100111 110111 - 0 0 39 55
 
-public: // I define the short member functions here, the rest are defined in bitposition.cpp
+public:
+    // I define the short member functions here, the rest are defined in bitposition.cpp
     // Member function declarations (defined in bitposition.cpp)
     BitPosition(uint64_t white_pawns_bit, uint64_t white_knights_bit, uint64_t white_bishops_bit,
                 uint64_t white_rooks_bit, uint64_t white_queens_bit, uint64_t white_king_bit,
@@ -104,7 +112,7 @@ public: // I define the short member functions here, the rest are defined in bit
                 uint64_t black_rooks_bit, uint64_t black_queens_bit, uint64_t black_king_bit, 
                 bool turn, bool white_kingside_castling, bool white_queenside_castling, 
                 bool black_kingside_castling, bool black_queenside_castling);
-    bool isCheck() const;
+    bool isCheck();
     void setPinsBits();
     void setChecksAndPinsBits();
     bool kingIsSafeAfterPassant(unsigned short removed_square_1, unsigned short removed_square_2) const;
@@ -123,10 +131,8 @@ public: // I define the short member functions here, the rest are defined in bit
     void setKingPosition()
     // Set the index of the king in the board.
     {
-        if (m_turn == true)
-            m_king_position = getLeastSignificantBitIndex(m_white_king_bit);
-        else
-            m_king_position = getLeastSignificantBitIndex(m_black_king_bit);
+        m_white_king_position = getLeastSignificantBitIndex(m_white_king_bit);
+        m_black_king_position = getLeastSignificantBitIndex(m_black_king_bit);
     }
 
     void setAllPiecesBits()
@@ -141,7 +147,7 @@ public: // I define the short member functions here, the rest are defined in bit
 
     bool getTurn() const { return m_turn; }
 
-    bool getIsCheck() const { return (m_num_checks != 0); }
+    bool getIsCheck() const { return (m_is_check); }
 
     void printBitboards() const
     {
@@ -161,5 +167,18 @@ public: // I define the short member functions here, the rest are defined in bit
 
         std::cout << "psquare " << m_psquare;
     }
+    uint64_t getWhitePawnsBits() const { return m_white_pawns_bit; }
+    uint64_t getWhiteKnightsBits() const { return m_white_knights_bit; }
+    uint64_t getWhiteBishopsBits() const { return m_white_bishops_bit; }
+    uint64_t getWhiteRooksBits() const { return m_white_rooks_bit; }
+    uint64_t getWhiteQueensBits() const { return m_white_queens_bit; }
+    uint64_t getWhiteKingBits() const { return m_white_king_bit; }
+
+    uint64_t getBlackPawnsBits() const { return m_black_pawns_bit; }
+    uint64_t getBlackKnightsBits() const { return m_black_knights_bit; }
+    uint64_t getBlackBishopsBits() const { return m_black_bishops_bit; }
+    uint64_t getBlackRooksBits() const { return m_black_rooks_bit; }
+    uint64_t getBlackQueensBits() const { return m_black_queens_bit; }
+    uint64_t getBlackKingBits() const { return m_black_king_bit; }
 };
 #endif

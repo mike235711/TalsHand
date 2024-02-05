@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "C++ Launch (LLDB)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/main",
+            "args": [], // Any arguments the program needs
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "C/C++: clang++ compilar archivo activo",
+        }
+    ]
+}

@@ -7,6 +7,7 @@
 #include "tests.h"
 #include <chrono>
 #include "magicmoves.h"
+#include "engine.h"
 
 // We have to declare them since they where made extern in precomputed_moves.h
 /*
@@ -101,6 +102,47 @@ BitPosition fenToBitPosition(const std::string &fen)
     return position;
 }
 
+Move findMoveFromString(std::string moveString, BitPosition position)
+{
+    if (position.isCheck())
+    {
+        position.setChecksAndPinsBits();
+        for (Move move : position.inCheckMoves())
+        {
+            if (move.toString() == moveString)
+            {
+                return move;
+            }
+        }
+        for (Move move : position.inCheckCaptures())
+        {
+            if (move.toString() == moveString)
+            {
+                return move;
+            }
+        }
+    }
+    else
+    {
+        position.setPinsBits();
+        for (Move move : position.nonCaptureMoves())
+        {
+            if (move.toString() == moveString)
+            {
+                return move;
+            }
+        }
+        for (Move move : position.captureMoves())
+        {
+            if (move.toString() == moveString)
+            {
+                return move;
+            }
+        }
+    }
+    return Move(0);
+}
+
 int main()
 {
     initmagicmoves();
@@ -113,48 +155,77 @@ int main()
     // Initialize position
     std::string inputLine;
     std::string lastFen; // Variable to store the last FEN string
+    BitPosition position {fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
+    bool position_initialized{false};
 
     // Simple loop to read commands from the Python GUI
     while (std::getline(std::cin, inputLine))
     {
-        BitPosition position{fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
+        std::istringstream iss(inputLine);
+        std::string command;
+        iss >> command;
         // Process input from GUI
-        if (inputLine == "uci")
+        if (command == "uci")
         {
-            std::cout << "id name La_Mano_de_Tahl\n";
-            std::cout << "id author Miguel_Cordoba\n";
-            std::cout << "uciok\n";
+            std::cout << "id name La_Mano_de_Tahl\n" << std::flush;
+            std::cout << "id author Miguel_Cordoba\n" << std::flush;
+            std::cout << "uciok\n" << std::flush;
         }
-        else if (inputLine == "isready")
+        else if (command == "isready")
         {
             std::cout << "readyok\n";
         }
-        else if (inputLine == "quit")
+        else if (command == "quit")
         {
             break;
         }
-        if (inputLine.substr(0, 8) == "position")
+        else if (command == "position" && position_initialized == false)
         {
-            // Extract and store the FEN string from the command
+            iss >> command;
             std::string fen;
-            if (inputLine.substr(9, 8) == "startpos")
+            if (command == "startpos")
             {
                 fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+                iss >> command; // Consume the 'moves' token if it's there
+                position_initialized = true;
             }
-            else
+            else if (command == "fen")
             {
-                fen = inputLine.substr(13);
+                getline(iss, fen);   // Read the rest of the line as the FEN string
+                fen = fen.substr(1); // Remove the leading space
+                position_initialized = true;
             }
+
             position = fenToBitPosition(fen);
+            std::string moveUci;
+            while (iss >> command)
+            {
+                // Apply each move in the moves list
+                moveUci = command;
+            }
+            Move move{findMoveFromString(moveUci, position)};
+            if (move.getData() != 0)
+                position.makeMove(move);
         }
-        else if (inputLine == "go")
+        else if (command == "position" && position_initialized == true)
+        // Get the last move and make it (move made from other player)
         {
-            // The previous command contained the position in FEN format
-            // Now you can use lastFen to get the board position
-            // and start calculating the move
-            Move uci_move{};
-            uci_move = position.nonCaptureMoves()[0];
-            std::cout << "best move " << uci_move.toString() << "\n";
+            std::string moveUci;
+            while (iss >> command)
+            {
+                moveUci = command;
+            }
+            Move move{findMoveFromString(moveUci, position)};
+            if (move.getData() != 0)
+                position.makeMove(move);
+        }
+        else if (inputLine.substr(0,2) == "go")
+        {
+            // Implement your move generation and evaluation logic here
+            // Placeholder for first non-capture move
+            Move bestMove = iterativeSearch(position,  800);
+            position.makeMove(bestMove);
+            std::cout << "bestmove " << bestMove.toString() << "\n" << std::flush;
         }
         else if (inputLine == "perftTests")
         {
@@ -166,12 +237,18 @@ int main()
             {
                 // It's important to output the results of the tests to verify correctness
                 std::cout << "Depth " << depth << ":\n";
-                std::cout << "Position 1: \n"<< runPerftTest(fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"), depth) << " moves\n";
-                std::cout << "Position 2: \n"<< runPerftTest(fenToBitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"), depth) << " moves\n";
-                std::cout << "Position 3: \n"<< runPerftTest(fenToBitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"), depth) << " moves\n";
-                std::cout << "Position 4: \n"<< runPerftTest(fenToBitPosition("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1"), depth) << " moves\n";
-                std::cout << "Position 5: \n"<< runPerftTest(fenToBitPosition("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8"), depth) << " moves\n";
-                std::cout << "Position 6: \n"<< runPerftTest(fenToBitPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 "), depth) << " moves\n";
+                std::cout << "Position 1: \n"
+                            << runPerftTest(fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"), depth) << " moves\n";
+                std::cout << "Position 2: \n"
+                            << runPerftTest(fenToBitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"), depth) << " moves\n";
+                std::cout << "Position 3: \n"
+                            << runPerftTest(fenToBitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"), depth) << " moves\n";
+                std::cout << "Position 4: \n"
+                            << runPerftTest(fenToBitPosition("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1"), depth) << " moves\n";
+                std::cout << "Position 5: \n"
+                            << runPerftTest(fenToBitPosition("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8"), depth) << " moves\n";
+                std::cout << "Position 6: \n"
+                            << runPerftTest(fenToBitPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 "), depth) << " moves\n";
             }
 
             auto end = std::chrono::high_resolution_clock::now(); // End timing
@@ -179,7 +256,6 @@ int main()
 
             std::cout << "Time taken: " << duration.count() << " seconds\n";
         }
-    }
-
+        }
     return 0;
 }

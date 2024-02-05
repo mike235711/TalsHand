@@ -27,11 +27,11 @@ inline std::vector<unsigned short> getBitIndices(uint64_t bitboard)
     }
 
     std::vector<unsigned short> indices;
-    indices.reserve(32); // Optimize this value based on your use case
+    indices.reserve(32); 
 
     while (bitboard)
     {
-        // Use your lsb function to get the index of the least significant bit
+        // Get the index of the least significant bit
         unsigned short lsbi = getLeastSignificantBitIndex(bitboard);
         indices.push_back(lsbi);
 
