@@ -57,51 +57,32 @@ private:
     unsigned short m_ply{};
     // ply info arrays (these is the info used on non capture moves, 
     // since captured moves will all have already benn generated before unmaking move)
-    std::array<bool, 100> m_wkcastling_array{};
-    std::array<bool, 100> m_wqcastling_array{};
-    std::array<bool, 100> m_bkcastling_array{};
-    std::array<bool, 100> m_bqcastling_array{};
-    std::array<unsigned short, 100> m_psquare_array{};
-    std::array<uint64_t, 100> m_diagonal_pins_array{};
-    std::array<uint64_t, 100> m_straight_pins_array{};
+    std::array<bool, 150> m_wkcastling_array{};
+    std::array<bool, 150> m_wqcastling_array{};
+    std::array<bool, 150> m_bkcastling_array{};
+    std::array<bool, 150> m_bqcastling_array{};
+    std::array<unsigned short, 150> m_psquare_array{};
+    std::array<uint64_t, 150> m_diagonal_pins_array{};
+    std::array<uint64_t, 150> m_straight_pins_array{};
 
-    std::array<uint64_t, 100> m_white_pawns_bits_array{};
-    std::array<uint64_t, 100> m_white_knights_bits_array{};
-    std::array<uint64_t, 100> m_white_bishops_bits_array{};
-    std::array<uint64_t, 100> m_white_rooks_bits_array{};
-    std::array<uint64_t, 100> m_white_queens_bits_array{};
-    std::array<uint64_t, 100> m_white_king_bits_array{};
+    std::array<uint64_t, 150> m_white_pawns_bits_array{};
+    std::array<uint64_t, 150> m_white_knights_bits_array{};
+    std::array<uint64_t, 150> m_white_bishops_bits_array{};
+    std::array<uint64_t, 150> m_white_rooks_bits_array{};
+    std::array<uint64_t, 150> m_white_queens_bits_array{};
+    std::array<uint64_t, 150> m_white_king_bits_array{};
 
-    std::array<uint64_t, 100> m_black_pawns_bits_array{};
-    std::array<uint64_t, 100> m_black_knights_bits_array{};
-    std::array<uint64_t, 100> m_black_bishops_bits_array{};
-    std::array<uint64_t, 100> m_black_rooks_bits_array{};
-    std::array<uint64_t, 100> m_black_queens_bits_array{};
-    std::array<uint64_t, 100> m_black_king_bits_array{};
+    std::array<uint64_t, 150> m_black_pawns_bits_array{};
+    std::array<uint64_t, 150> m_black_knights_bits_array{};
+    std::array<uint64_t, 150> m_black_bishops_bits_array{};
+    std::array<uint64_t, 150> m_black_rooks_bits_array{};
+    std::array<uint64_t, 150> m_black_queens_bits_array{};
+    std::array<uint64_t, 150> m_black_king_bits_array{};
 
-    std::array<bool, 100> m_is_check_array{};
+    std::array<bool, 150> m_is_check_array{};
 
-    std::array<unsigned short, 100> m_white_king_positions_array{};
-    std::array<unsigned short, 100> m_black_king_positions_array{};
-    // Double pawn moves
-
-    // 10 00 011000 001000 - 0 0 24 8
-    // 10 00 011001 001001 - 0 0 25 9
-    // 10 00 011010 001010 - 0 0 26 10
-    // 10 00 011011 001011 - 0 0 27 11
-    // 10 00 011100 001100 - 0 0 28 12
-    // 10 00 011101 001101 - 0 0 29 13
-    // 10 00 011110 001110 - 0 0 30 14
-    // 10 00 011111 001111 - 0 0 31 15
-
-    // 10 00 100000 110000 - 0 0 32 48
-    // 10 00 100001 110001 - 0 0 33 49
-    // 10 00 100010 110010 - 0 0 34 50
-    // 10 00 100011 110011 - 0 0 35 51
-    // 10 00 100100 110100 - 0 0 36 52
-    // 10 00 100101 110101 - 0 0 37 53
-    // 10 00 100110 110110 - 0 0 38 54
-    // 10 00 100111 110111 - 0 0 39 55
+    std::array<unsigned short, 150> m_white_king_positions_array{};
+    std::array<unsigned short, 150> m_black_king_positions_array{};
 
 public:
     // I define the short member functions here, the rest are defined in bitposition.cpp
@@ -113,6 +94,7 @@ public:
                 bool turn, bool white_kingside_castling, bool white_queenside_castling, 
                 bool black_kingside_castling, bool black_queenside_castling);
     bool isCheck();
+    bool isMate();
     void setPinsBits();
     void setChecksAndPinsBits();
     bool kingIsSafeAfterPassant(unsigned short removed_square_1, unsigned short removed_square_2) const;

@@ -11,7 +11,7 @@ void printMove(const Move &move)
     std::cout << move.toString() << ": ";
 }
 
-unsigned long long runPerftTest(BitPosition position, int depth, int currentDepth = 0)
+unsigned long long runPerftTest(BitPosition& position, int depth, int currentDepth = 0)
 {
 
     if (depth == 0)

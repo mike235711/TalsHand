@@ -291,7 +291,7 @@ int simpleEvaluationFunctionBlack(BitPosition position)
     return totalEval;
 }
 // Main evaluation function
-int evaluationFunction(const BitPosition &position)
+int evaluationFunction(const BitPosition& position)
 {
     if (ENGINEISWHITE)
     {
@@ -303,7 +303,7 @@ int evaluationFunction(const BitPosition &position)
     }
 }
 
-std::pair<Move, int> quiesenceSearch(BitPosition position, int alpha, int beta, bool our_turn)
+std::pair<Move, int> quiesenceSearch(BitPosition& position, int alpha, int beta, bool our_turn)
 // This search is done when depth is less than or equal to 0 and considers only captures and promotions
 {
     std::vector<Move> moves;
@@ -318,8 +318,18 @@ std::pair<Move, int> quiesenceSearch(BitPosition position, int alpha, int beta, 
         moves = position.captureMoves();
     }
     // If we have reached quisence search and there are no captures
-    if (moves.size() == 0) // if length(moves)==0
-        return std::pair<Move, int>(0, evaluationFunction(position));
+    if (moves.size() == 0)
+    {
+        if (not position.getIsCheck())
+            return std::pair<Move, int>(0, evaluationFunction(position));
+        else if (position.inCheckMoves().size() == 0) // Mate
+        {
+            if (our_turn)
+                return std::pair<Move, int>(0, -100003);
+            else
+                return std::pair<Move, int>(0, 100003);
+        }
+    }
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
     int value{evaluationFunction(position)};
     Move best_move;
@@ -361,7 +371,7 @@ std::pair<Move, int> quiesenceSearch(BitPosition position, int alpha, int beta, 
     return std::pair<Move, int>(best_move, value);
 }
 
-std::pair<Move, int> alphaBetaSearch(BitPosition position, int depth, int alpha, int beta, bool our_turn)
+std::pair<Move, int> alphaBetaSearch(BitPosition &position, int depth, int alpha, int beta, bool our_turn)
 // This search is done when depth is more than 0 and considers all moves
 {
     if (depth <= 0)
@@ -440,9 +450,9 @@ std::pair<Move, int> alphaBetaSearch(BitPosition position, int depth, int alpha,
         if (not position.getIsCheck())              // Stalemate
             return std::pair<Move, int>(0, 0);
         else if (our_turn)                          // Checkmate against us
-            return std::pair<Move, int>(0, -1000003);
+            return std::pair<Move, int>(0, -100003);
         else                                        // Checkmate against opponent
-            return std::pair<Move, int>(0, 1000003);
+            return std::pair<Move, int>(0, 100003);
     }
     if (our_turn)
     {

@@ -39,6 +39,30 @@ BitPosition::BitPosition(uint64_t white_pawns_bit, uint64_t white_knights_bit, u
     BitPosition::setKingPosition();
 }
 
+
+
+bool BitPosition::isMate()
+// Return if we are in mate or not. This is donde after seeing if we are in check.
+{
+    if (m_turn == true)
+    {
+        for (unsigned short destination_square : getBitIndices(precomputed_moves::king_moves[m_white_king_position] & ~m_all_pieces_bit))
+        {
+            if (kingIsSafe(destination_square))
+                return false;
+        }
+        return true;
+    }
+    else
+    {
+        for (unsigned short destination_square : getBitIndices(precomputed_moves::king_moves[m_black_king_position] & ~m_all_pieces_bit))
+        {
+            if (kingIsSafe(destination_square))
+                return false;
+        }
+        return true;
+    }
+}
 bool BitPosition::isCheck()
 // Return if we are in check or not
 // This member function is faster than setChecksAndPinsBits
