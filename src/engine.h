@@ -307,6 +307,7 @@ std::pair<Move, int> quiesenceSearch(BitPosition& position, int alpha, int beta,
 // This search is done when depth is less than or equal to 0 and considers only captures and promotions
 {
     std::vector<Move> moves;
+    position.setAttackedSquaresAfterMove();
     if (position.isCheck())
     {
         position.setChecksAndPinsBits();
@@ -320,9 +321,9 @@ std::pair<Move, int> quiesenceSearch(BitPosition& position, int alpha, int beta,
     // If we have reached quisence search and there are no captures
     if (moves.size() == 0)
     {
-        if (not position.getIsCheck())
+        if (not position.isCheck())
             return std::pair<Move, int>(0, evaluationFunction(position));
-        else if (position.inCheckMoves().size() == 0) // Mate
+        else if (position.inCheckAllMoves().size() == 0) // Mate
         {
             if (our_turn)
                 return std::pair<Move, int>(0, -100003);
@@ -378,16 +379,26 @@ std::pair<Move, int> alphaBetaSearch(BitPosition &position, int depth, int alpha
     {
         return quiesenceSearch(position, alpha, beta, our_turn);
     }
-    std::vector<Move> good_moves;
+    position.setAttackedSquaresAfterMove();
+    std::vector<Move> moves;
     if (position.isCheck())
     {
         position.setChecksAndPinsBits();
-        good_moves = position.inCheckCaptures();
+        moves = position.inCheckAllMoves();
     }
     else
     {
         position.setPinsBits();
-        good_moves = position.captureMoves();
+        moves = position.allMoves();
+    }
+    if (moves.size() == 0)
+    {
+        if (not position.isCheck()) // Stalemate
+            return std::pair<Move, int>(0, 0);
+        else if (our_turn) // Checkmate against us
+            return std::pair<Move, int>(0, -100003);
+        else // Checkmate against opponent
+            return std::pair<Move, int>(0, 100003);
     }
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
     int value{our_turn ? -1000004 : 1000004};
@@ -395,9 +406,9 @@ std::pair<Move, int> alphaBetaSearch(BitPosition &position, int depth, int alpha
     bool found_break{false};
     if (our_turn) // Maximize
     {
-        for (Move move : good_moves)
+        for (Move move : moves)
         {
-            position.makeMove(move);
+            position.makeNormalMove(move);
             int child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false).second};
             if (child_value > value)
             {
@@ -415,9 +426,9 @@ std::pair<Move, int> alphaBetaSearch(BitPosition &position, int depth, int alpha
     }
     else // Minimize
     {
-        for (Move move : good_moves)
+        for (Move move : moves)
         {
-            position.makeMove(move);
+            position.makeNormalMove(move);
             int child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true).second};
             if (child_value < value)
             {
@@ -430,61 +441,6 @@ std::pair<Move, int> alphaBetaSearch(BitPosition &position, int depth, int alpha
                 found_break = true;
                 break;
             }
-            beta = std::min(beta, value);
-        }
-    }
-    if (found_break) // alpha beta break at good_moves
-    {
-        found_break = false;
-        return std::pair<Move, int>(best_move, value);
-    }
-
-    std::vector<Move> bad_moves;
-    if (position.getIsCheck())
-        bad_moves = position.inCheckMoves();
-    else
-        bad_moves = position.nonCaptureMoves();
-    // If we have reached a position where game has ended
-    if (good_moves.size() == 0 && bad_moves.size() == 0)
-    {
-        if (not position.getIsCheck())              // Stalemate
-            return std::pair<Move, int>(0, 0);
-        else if (our_turn)                          // Checkmate against us
-            return std::pair<Move, int>(0, -100003);
-        else                                        // Checkmate against opponent
-            return std::pair<Move, int>(0, 100003);
-    }
-    if (our_turn)
-    {
-        for (Move move : bad_moves)
-        {
-            position.makeMove(move);
-            int child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false).second};
-            if (child_value > value)
-            {
-                value = child_value;
-                best_move = move;
-            }
-            position.unmakeMove();
-            if (value >= beta)
-                break;
-            alpha = std::max(alpha, value);
-        }
-    }
-    else
-    {
-        for (Move move : bad_moves)
-        {
-            position.makeMove(move);
-            int child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true).second};
-            if (child_value < value)
-            {
-                value = child_value;
-                best_move = move;
-            }
-            position.unmakeMove();
-            if (value <= alpha)
-                break;
             beta = std::min(beta, value);
         }
     }

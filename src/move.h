@@ -95,13 +95,13 @@ public:
         else if ((data & 0b1100000000000000) != 0b0100000000000000) // Non promotions
             return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare());
         else if ((data & 0b0011000000000000) == 0b0011000000000000) // Queen promotions
-            return squareToAlgebraic(getOriginSquare()) + 'q' + squareToAlgebraic(getDestinationSquare());
+            return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare()) + 'q';
         else if ((data & 0b0011000000000000) == 0b0010000000000000) // Rook promotions
-            return squareToAlgebraic(getOriginSquare()) + 'r' + squareToAlgebraic(getDestinationSquare());
+            return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare()) + 'r';
         else if ((data & 0b0011000000000000) == 0b0001000000000000) // Bishop promotions
-            return squareToAlgebraic(getOriginSquare()) + 'b' + squareToAlgebraic(getDestinationSquare());
+            return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare()) + 'b';
         else // Knight promotions
-            return squareToAlgebraic(getOriginSquare()) + 'n' + squareToAlgebraic(getDestinationSquare());
+            return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare()) + 'n';
     }
 };
 

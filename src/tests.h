@@ -11,7 +11,7 @@ void printMove(const Move &move)
     std::cout << move.toString() << ": ";
 }
 
-unsigned long long runPerftTest(BitPosition& position, int depth, int currentDepth = 0)
+unsigned long long runCapturesPerftTest(BitPosition& position, int depth, int currentDepth = 0)
 {
 
     if (depth == 0)
@@ -19,6 +19,7 @@ unsigned long long runPerftTest(BitPosition& position, int depth, int currentDep
 
     std::vector<Move> captures;
     std::vector<Move> non_captures;
+    position.setAttackedSquaresAfterMove();
     if (position.isCheck())
     {
         position.setChecksAndPinsBits();
@@ -41,7 +42,7 @@ unsigned long long runPerftTest(BitPosition& position, int depth, int currentDep
         }
         position.makeMove(move);
 
-        unsigned long long subCount = runPerftTest(position, depth - 1, currentDepth + 1);
+        unsigned long long subCount = runCapturesPerftTest(position, depth - 1, currentDepth + 1);
         
         position.unmakeMove();
 
@@ -60,7 +61,7 @@ unsigned long long runPerftTest(BitPosition& position, int depth, int currentDep
         }
         position.makeMove(move);
 
-        unsigned long long subCount = runPerftTest(position, depth - 1, currentDepth + 1);
+        unsigned long long subCount = runCapturesPerftTest(position, depth - 1, currentDepth + 1);
 
         position.unmakeMove();
 
@@ -73,5 +74,45 @@ unsigned long long runPerftTest(BitPosition& position, int depth, int currentDep
     }
     return moveCount;
 }
+unsigned long long runNormalPerftTest(BitPosition &position, int depth, int currentDepth = 0)
+{
 
+    if (depth == 0)
+        return 1;
+
+    std::vector<Move> moves;
+    position.setAttackedSquaresAfterMove();
+    if (position.isCheck())
+    {
+        position.setChecksAndPinsBits();
+        moves = position.inCheckAllMoves();
+    }
+    else
+    {
+        position.setPinsBits();
+        moves = position.allMoves();
+    }
+
+    unsigned long long moveCount = 0;
+    for (const Move &move : moves)
+    {
+        if (currentDepth == 0)
+        {
+            printMove(move);
+        }
+        position.makeNormalMove(move);
+
+        unsigned long long subCount = runNormalPerftTest(position, depth - 1, currentDepth + 1);
+
+        position.unmakeMove();
+
+        if (currentDepth == 0)
+        {
+            std::cout << subCount << std::endl; // Print the number of moves leading from this move
+        }
+
+        moveCount += subCount;
+    }
+    return moveCount;
+}
 #endif
