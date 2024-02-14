@@ -122,19 +122,11 @@ void BitPosition::setBlackKnightsAttackedSquares()
 }
 void BitPosition::setWhitePawnsAttackedSquares()
 {
-    m_squares_attacked_by_white_pawns = 0;
-    for (short int origin_square : getBitIndices(m_white_pawns_bit))
-    {
-        m_squares_attacked_by_white_pawns |= precomputed_moves::white_pawn_attacks[origin_square];
-    }
+    m_squares_attacked_by_white_pawns = (((m_white_pawns_bit & 0b0111111101111111011111110111111101111111011111110111111101111111) << 9) | (((m_white_pawns_bit & 0b1111111011111110111111101111111011111110111111101111111011111110) << 7)));
 }
 void BitPosition::setBlackPawnsAttackedSquares()
 {
-    m_squares_attacked_by_black_pawns = 0;
-    for (short int origin_square : getBitIndices(m_black_pawns_bit))
-    {
-        m_squares_attacked_by_black_pawns |= precomputed_moves::black_pawn_attacks[origin_square];
-    }
+    m_squares_attacked_by_black_pawns = (((m_black_pawns_bit & 0b0111111101111111011111110111111101111111011111110111111101111111) >> 7) | (((m_black_pawns_bit & 0b1111111011111110111111101111111011111110111111101111111011111110) >> 9)));
 }
 void BitPosition::setWhiteKingAttackedSquares()
 {
@@ -418,24 +410,17 @@ void BitPosition::setChecksAndPinsBits()
     if (m_turn) // White's turn
     {
         // Black pawns (Note we can only give check with one pawn at a time)
+        if ((m_squares_attacked_by_black_pawns & m_white_king_bit) != 0)
         {
-        uint64_t attacking_squares{precomputed_moves::white_pawn_attacks[m_white_king_position]};
-        // Maybe use reference or pointer instead of creating new variable attacking_squares??
-        if ((attacking_squares & m_black_pawns_bit) != 0)
-        {
-            m_pawn_checks |= (attacking_squares & m_black_pawns_bit);
+            m_pawn_checks |= (precomputed_moves::white_pawn_attacks[m_white_king_position] & m_black_pawns_bit);
             ++m_num_checks;
-        }
         }
         // We use blocks so that attacking_squares variables dont conflict between each
-        {
         // Black knights (Note we can only give check with one knight at a time)
-        uint64_t attacking_squares{precomputed_moves::knight_moves[m_white_king_position]};
-        if ((attacking_squares & m_black_knights_bit) != 0)
+        if ((m_squares_attacked_by_black_knights & m_white_king_bit) != 0)
         {
-            m_knight_checks |= (attacking_squares & m_black_knights_bit);
+            m_knight_checks |= (precomputed_moves::knight_moves[m_white_king_position] & m_black_knights_bit);
             ++m_num_checks;
-        }
         }
         // Black bishops
         for (short int square : getBitIndices(m_black_bishops_bit & precomputed_moves::bishop_full_rays[m_white_king_position]))
@@ -496,24 +481,16 @@ void BitPosition::setChecksAndPinsBits()
     else // Black's turn
     {
         // White pawns (Note we can only give check with one pawn at a time)
+        if ((m_squares_attacked_by_white_pawns & m_black_king_bit) != 0)
         {
-            uint64_t attacking_squares{precomputed_moves::black_pawn_attacks[m_black_king_position]};
-            // Maybe use reference or pointer instead of creating new variable attacking_squares??
-            if ((attacking_squares & m_white_pawns_bit) != 0)
-            {
-                m_pawn_checks |= (attacking_squares & m_white_pawns_bit);
-                ++m_num_checks;
-            }
+            m_pawn_checks |= (precomputed_moves::black_pawn_attacks[m_black_king_position] & m_white_pawns_bit);
+            ++m_num_checks;
         }
-        // We use blocks so that attacking_squares variables dont conflict between each
+        // White knights (Note we can only give check with one knight at a time)
+        if ((m_squares_attacked_by_white_knights & m_black_king_bit) != 0)
         {
-            // Black knights (Note we can only give check with one knight at a time)
-            uint64_t attacking_squares{precomputed_moves::knight_moves[m_black_king_position]};
-            if ((attacking_squares & m_white_knights_bit) != 0)
-            {
-                m_knight_checks |= (attacking_squares & m_white_knights_bit);
-                ++m_num_checks;
-            }
+            m_knight_checks |= (precomputed_moves::knight_moves[m_black_king_position] & m_white_knights_bit);
+            ++m_num_checks;
         }
         // White bishops
         for (short int square : getBitIndices(m_white_bishops_bit & precomputed_moves::bishop_full_rays[m_black_king_position]))
@@ -599,10 +576,12 @@ bool BitPosition::kingIsSafeAfterPassant(unsigned short removed_square_1, unsign
     return true;
 }
 
-std::vector<Move> BitPosition::inCheckCaptures() const
+std::vector<Move> BitPosition::inCheckOrderedCaptures() const
 {
     std::vector<Move> captures;
+    std::vector<unsigned short> scores;
     captures.reserve(20);
+    scores.reserve(20);
     std::array<uint64_t, 5> checks_array{m_pawn_checks, m_knight_checks, m_bishop_checks, m_rook_checks, m_queen_checks};
     if (m_turn) // White's turn
     {
@@ -613,13 +592,16 @@ std::vector<Move> BitPosition::inCheckCaptures() const
             for (unsigned short destination_square : getBitIndices(precomputed_moves::king_moves[m_white_king_position] & pieces_array[i] & ~m_all_squares_attacked_by_black))
             {
                 if (BitPosition::kingIsSafeFromSliders(destination_square))
-                    captures.emplace_back(m_white_king_position, destination_square, i + 1);
+                {
+                    captures.emplace_back(m_white_king_position, destination_square, 5, 0);
+                    scores.emplace_back(i);
+                }
             }
         }
         if (m_num_checks == 1)
         // We can only capture (with a piece that is not the king) or block if there is only one check
         {
-            // Capturing/blocking with pawns
+            // Capturing with pawns
             for (unsigned short origin_square : getBitIndices(m_white_pawns_bit & ~m_all_pins))
             {
                 for (unsigned short i = 0; i <= 4; ++i)
@@ -633,58 +615,80 @@ std::vector<Move> BitPosition::inCheckCaptures() const
                             if (destination_square > 55)
                             // Promotions
                             {
-                                captures.push_back(Move::promotingMove(origin_square, destination_square, 1));
-                                captures.push_back(Move::promotingMove(origin_square, destination_square, 2));
-                                captures.push_back(Move::promotingMove(origin_square, destination_square, 3));
-                                captures.push_back(Move::promotingMove(origin_square, destination_square, 4));
+                                captures.emplace_back(origin_square, destination_square, 1, 1);
+                                scores.emplace_back(i + 1);
+                                captures.emplace_back(origin_square, destination_square, 2, 1);
+                                scores.emplace_back(i + 2);
+                                captures.emplace_back(origin_square, destination_square, 3, 1);
+                                scores.emplace_back(i + 3);
+                                captures.emplace_back(origin_square, destination_square, 4, 1);
+                                scores.emplace_back(i + 4);
                             }
                             else
-                                captures.emplace_back(origin_square, destination_square, i + 1);
+                            {
+                                captures.emplace_back(origin_square, destination_square, 0, 0);
+                                scores.emplace_back(i);
+                            }
                         }
                     }
                 }
                 // Passant capture
                 if ((precomputed_moves::white_pawn_attacks[origin_square] & passant_bitboards[m_psquare])!= 0 && kingIsSafeAfterPassant(origin_square, m_psquare-8))
-                    captures.emplace_back(origin_square, m_psquare, 1);
+                {
+                    captures.emplace_back(origin_square, m_psquare, 0, 0);
+                    scores.emplace_back(0);
+                }
             }
-            // Capturing/blocking with knights
+            // Capturing with knights
             for (unsigned short origin_square : getBitIndices(m_white_knights_bit & ~m_all_pins))
             {
                 for (unsigned short i = 0; i <= 4; ++i)
                     {
                         uint64_t moveable_squares{precomputed_moves::knight_moves[origin_square] & checks_array[i]};
                         if (moveable_squares != 0)
-                            captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), i + 1);
+                        {
+                            captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), 1, 0);
+                            scores.emplace_back(i - 1);
+                        }
                     }
             }
-            // Capturing/blocking with bishops
+            // Capturing with bishops
             for (unsigned short origin_square : getBitIndices(m_white_bishops_bit & ~m_all_pins))
             {
                 for (unsigned short i = 0; i <= 4; ++i)
                 {
                     uint64_t moveable_squares{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & checks_array[i]};
                     if (moveable_squares != 0)
-                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), i + 1);
+                    {
+                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), 2, 0);
+                        scores.emplace_back(i - 2);
+                    }
                 }
             }
-            // Capturing/blocking with rooks
+            // Capturing with rooks
             for (unsigned short origin_square : getBitIndices(m_white_rooks_bit & ~m_all_pins))
             {
                 for (unsigned short i = 0; i <= 4; ++i)
                 {
                     uint64_t moveable_squares{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & checks_array[i]};
                     if (moveable_squares != 0)
-                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), i + 1);
+                    {
+                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), 3, 0);
+                        scores.emplace_back(i - 3);
+                    }
                 }
             }
-            // Capturing/blocking with queens
+            // Capturing with queens
             for (unsigned short origin_square : getBitIndices(m_white_queens_bit & ~m_all_pins))
             {
                 for (unsigned short i = 0; i <= 4; ++i)
                 {
                     uint64_t moveable_squares{(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) | RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit)) & checks_array[i]};
                     if (moveable_squares !=0)
-                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), i + 1);
+                    {
+                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), 4, 0);
+                        scores.emplace_back(i - 4);
+                    }
                 }
             }
         }
@@ -698,7 +702,10 @@ std::vector<Move> BitPosition::inCheckCaptures() const
             for (unsigned short destination_square : getBitIndices(precomputed_moves::king_moves[m_black_king_position] & pieces_array[i] & ~m_all_squares_attacked_by_white))
             {
                 if (BitPosition::kingIsSafeFromSliders(destination_square))
-                    captures.emplace_back(m_black_king_position, destination_square, i + 1);
+                {
+                    captures.emplace_back(m_black_king_position, destination_square, 5, 0);
+                    scores.emplace_back(i + 1);
+                }
             }
         }
         if (m_num_checks == 1)
@@ -718,58 +725,80 @@ std::vector<Move> BitPosition::inCheckCaptures() const
                             if (destination_square < 8)
                             // Promotions
                             {
-                                captures.push_back(Move::promotingMove(origin_square, destination_square, 1));
-                                captures.push_back(Move::promotingMove(origin_square, destination_square, 2));
-                                captures.push_back(Move::promotingMove(origin_square, destination_square, 3));
-                                captures.push_back(Move::promotingMove(origin_square, destination_square, 4));
+                                captures.emplace_back(origin_square, destination_square, 1, 1);
+                                scores.emplace_back(i + 1);
+                                captures.emplace_back(origin_square, destination_square, 2, 1);
+                                scores.emplace_back(i + 2);
+                                captures.emplace_back(origin_square, destination_square, 3, 1);
+                                scores.emplace_back(i + 3);
+                                captures.emplace_back(origin_square, destination_square, 4, 1);
+                                scores.emplace_back(i + 4);
                             }
                             else
-                                captures.emplace_back(origin_square, destination_square, i + 1);
+                            {
+                                captures.emplace_back(origin_square, destination_square, 0, 0);
+                                scores.emplace_back(i);
+                            }
                         }
                     }
                 }
                 // Passant capture
                 if ((precomputed_moves::black_pawn_attacks[origin_square] & passant_bitboards[m_psquare]) != 0 && kingIsSafeAfterPassant(origin_square, m_psquare + 8))
-                    captures.emplace_back(origin_square, m_psquare, 1);
+                {    
+                    captures.emplace_back(origin_square, m_psquare, 0, 0);
+                    scores.emplace_back(0);
+                }
             }
-            // Capturing/blocking with knights
+            // Capturing with knights
             for (unsigned short origin_square : getBitIndices(m_black_knights_bit & ~m_all_pins))
             {
                 for (unsigned short i = 0; i <= 4; ++i)
                 {
                     uint64_t moveable_squares{precomputed_moves::knight_moves[origin_square] & checks_array[i]};
                     if (moveable_squares != 0)
-                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), i + 1);
+                    {
+                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), 1, 0);
+                        scores.emplace_back(i-1);
+                    }
                 }
             }
-            // Capturing/blocking with bishops
+            // Capturing with bishops
             for (unsigned short origin_square : getBitIndices(m_black_bishops_bit & ~m_all_pins))
             {
                 for (unsigned short i = 0; i <= 4; ++i)
                 {
                     uint64_t moveable_squares{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & checks_array[i]};
                     if (moveable_squares != 0)
-                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), i + 1);
+                    {
+                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), 2, 0);
+                        scores.emplace_back(i-2);
+                    }
                 }
             }
-            // Capturing/blocking with rooks
+            // Capturing with rooks
             for (unsigned short origin_square : getBitIndices(m_black_rooks_bit & ~m_all_pins))
             {
                 for (unsigned short i = 0; i <= 4; ++i)
                 {
                     uint64_t moveable_squares{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & checks_array[i]};
                     if (moveable_squares != 0)
-                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), i + 1);
+                    {
+                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), 3, 0);
+                        scores.emplace_back(i-3);
+                    }
                 }
             }
-            // Capturing/blocking with queens
+            // Capturing with queens
             for (unsigned short origin_square : getBitIndices(m_black_queens_bit & ~m_all_pins))
             {
                 for (unsigned short i = 0; i <= 4; ++i)
                 {
                     uint64_t moveable_squares{(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) | RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit)) & checks_array[i]};
                     if (moveable_squares != 0)
-                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), i + 1);
+                    {
+                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), 4, 0);
+                        scores.emplace_back(i-4);
+                    }
                 }
             }
         }
@@ -777,12 +806,14 @@ std::vector<Move> BitPosition::inCheckCaptures() const
     return captures;
 }
 
-std::vector<Move> BitPosition::captureMoves() const
+std::vector<Move> BitPosition::orderedCaptures() const
 // We create a set of moves and order them in terms of the score, returning a tuple of moves. This set of moves will always be computed before
 // non_capture_moves.
 {
     std::vector<Move> captures;
+    std::vector<unsigned short> scores;
     captures.reserve(50);
+    scores.reserve(50);
     if (m_turn) // White's turn
     {
         std::array<uint64_t, 5> pieces_array{m_black_pawns_bit, m_black_knights_bit, m_black_bishops_bit, m_black_rooks_bit, m_black_queens_bit};
@@ -792,14 +823,20 @@ std::vector<Move> BitPosition::captureMoves() const
             for (unsigned short i = 0; i <= 4; ++i)
             {
                 for (unsigned short destination_square : (getBitIndices(precomputed_moves::knight_moves[origin_square] & pieces_array[i])))
-                    captures.emplace_back(origin_square, destination_square, i + 1);
+                {
+                    captures.emplace_back(origin_square, destination_square, 1, 0);
+                    scores.emplace_back(i-1);
+                }
             }
         }
         // Capturing with king
         for (unsigned short i = 0; i <= 4; ++i)
         {
             for (unsigned short destination_square : (getBitIndices(precomputed_moves::king_moves[m_white_king_position] & pieces_array[i] & ~m_all_squares_attacked_by_black)))
-                captures.emplace_back(m_white_king_position, destination_square, i + 1);
+            {
+                captures.emplace_back(m_white_king_position, destination_square, 5, 0);
+                scores.emplace_back(i);
+            }
         }
         // Capturing with rooks that arent pinned
         for (unsigned short origin_square : getBitIndices(m_white_rooks_bit & ~m_all_pins))
@@ -807,7 +844,10 @@ std::vector<Move> BitPosition::captureMoves() const
             for (unsigned short i = 0; i <= 4; ++i)
             {
                 for (unsigned short destination_square : (getBitIndices(RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i])))
-                    captures.emplace_back(origin_square, destination_square, i + 1);
+                {
+                    captures.emplace_back(origin_square, destination_square, 3, 0);
+                    scores.emplace_back(i-3);
+                }
             }
         }
         // Capturing with bishops that arent pinned
@@ -816,7 +856,10 @@ std::vector<Move> BitPosition::captureMoves() const
             for (unsigned short i = 0; i <= 4; ++i)
             {
                 for (unsigned short destination_square : (getBitIndices(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i])))
-                    captures.emplace_back(origin_square, destination_square, i + 1);
+                {
+                    captures.emplace_back(origin_square, destination_square, 2, 0);
+                    scores.emplace_back(i-2);
+                }
             }
         }
         // Capturing with queens that arent pinned
@@ -825,31 +868,70 @@ std::vector<Move> BitPosition::captureMoves() const
             for (unsigned short i = 0; i <= 4; ++i)
             {
                 for (unsigned short destination_square : (getBitIndices((BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) | RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit)) & pieces_array[i])))
-                    captures.emplace_back(origin_square, destination_square, i + 1);
+                {
+                    captures.emplace_back(origin_square, destination_square, 4, 0);
+                    scores.emplace_back(i-4);
+                }
             }
         }
-        // Capturing with pawns that arent pinned
-        for (unsigned short origin_square : getBitIndices(m_white_pawns_bit & ~m_all_pins))
+        // Pawn captures
+        for (unsigned short i = 0; i <= 4; ++i)
         {
-            for (unsigned short i = 0; i <= 4; ++i)
+            for (unsigned short destination_square : getBitIndices((((m_white_pawns_bit & ~m_all_pins & 0b1111111011111110111111101111111011111110111111101111111011111110) << 7) & pieces_array[i])))
             {
-                for (unsigned short destination_square : (getBitIndices(precomputed_moves::white_pawn_attacks[origin_square] & pieces_array[i])))
-                    {
-                        if (destination_square > 55)
-                        // Promotions
-                        {
-                            captures.push_back(Move::promotingMove(origin_square, destination_square, 1));
-                            captures.push_back(Move::promotingMove(origin_square, destination_square, 2));
-                            captures.push_back(Move::promotingMove(origin_square, destination_square, 3));
-                            captures.push_back(Move::promotingMove(origin_square, destination_square, 4));
-                        }
-                        else
-                            captures.emplace_back(origin_square, destination_square, i + 1);
-                    }
+                if (destination_square > 55)
+                // Promotions
+                {
+                    captures.emplace_back(destination_square - 7, destination_square, 1, 1);
+                    scores.emplace_back(i + 1);
+                    captures.emplace_back(destination_square - 7, destination_square, 2, 1);
+                    scores.emplace_back(i + 2);
+                    captures.emplace_back(destination_square - 7, destination_square, 3, 1);
+                    scores.emplace_back(i + 3);
+                    captures.emplace_back(destination_square - 7, destination_square, 4, 1);
+                    scores.emplace_back(i + 4);
+                }
+                else
+                {
+                    captures.emplace_back(destination_square - 7, destination_square, 0, 0);
+                    scores.emplace_back(i);
+                }
             }
-            // Passant capture
-            if ((precomputed_moves::white_pawn_attacks[origin_square] & passant_bitboards[m_psquare]) != 0 && kingIsSafeAfterPassant(origin_square, m_psquare - 8))
-                captures.emplace_back(origin_square, m_psquare, 1);
+            for (unsigned short destination_square : getBitIndices((((m_white_pawns_bit & ~m_all_pins & 0b0111111101111111011111110111111101111111011111110111111101111111) << 9) & pieces_array[i])))
+            {
+                if (destination_square > 55)
+                // Promotions
+                {
+                    captures.emplace_back(destination_square - 9, destination_square, 1, 1);
+                    scores.emplace_back(i + 1);
+                    captures.emplace_back(destination_square - 9, destination_square, 2, 1);
+                    scores.emplace_back(i + 2);
+                    captures.emplace_back(destination_square - 9, destination_square, 3, 1);
+                    scores.emplace_back(i + 3);
+                    captures.emplace_back(destination_square - 9, destination_square, 4, 1);
+                    scores.emplace_back(i + 4);
+                }
+                else
+                {
+                    captures.emplace_back(destination_square - 9, destination_square, 0, 0);
+                    scores.emplace_back(i);
+                }
+            }
+        }
+        // Passant capture
+        if (m_psquare != 0)
+        {
+            if (((precomputed_moves::one_one_bits[m_psquare - 7] & m_white_pawns_bit & 0b1111111011111110111111101111111011111110111111101111111011111110 & ~m_all_pins) != 0) && BitPosition::kingIsSafeAfterPassant(m_psquare - 7, m_psquare - 8))
+            {
+                captures.emplace_back(m_psquare - 7, m_psquare, 0, 0);
+                scores.emplace_back(0);
+            }
+
+            if (((precomputed_moves::one_one_bits[m_psquare - 9] & m_white_pawns_bit & 0b0111111101111111011111110111111101111111011111110111111101111111 & ~m_all_pins) != 0) && BitPosition::kingIsSafeAfterPassant(m_psquare - 9, m_psquare - 8))
+            {
+                captures.emplace_back(m_psquare - 9, m_psquare, 0, 0);
+                scores.emplace_back(0);
+            }
         }
         // Capturing with pinned pieces 
         // (Note, pinned rooks, bishops and queens will always be able to capture pinned piece if it is a diagonal/straight pin for bishops/rooks)
@@ -861,7 +943,10 @@ std::vector<Move> BitPosition::captureMoves() const
             {
                 uint64_t destination_bit{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_diagonal_pins};
                 if (destination_bit != 0)
-                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), i + 1);
+                {
+                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), 2, 0);
+                    scores.emplace_back(i-2);
+                }
             }
         }
         // Capturing with pinned rooks
@@ -871,7 +956,10 @@ std::vector<Move> BitPosition::captureMoves() const
             {
                 uint64_t destination_bit{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_straight_pins};
                 if (destination_bit != 0)
-                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), i + 1);
+                {
+                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), 3, 0);
+                    scores.emplace_back(i-3);
+                }
             }
         }
         // Capturing with pinned queens
@@ -882,7 +970,10 @@ std::vector<Move> BitPosition::captureMoves() const
             {
                 uint64_t destination_bit{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_diagonal_pins};
                 if (destination_bit != 0)
-                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), i + 1);
+                {
+                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), 4, 0);
+                    scores.emplace_back(i-4);
+                }
             }
         }
         for (unsigned short origin_square : getBitIndices(m_white_queens_bit & m_straight_pins))
@@ -892,7 +983,10 @@ std::vector<Move> BitPosition::captureMoves() const
             {
                 uint64_t destination_bit{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_straight_pins};
                 if (destination_bit != 0)
-                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), i + 1);
+                {
+                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), 4,  0);
+                    scores.emplace_back(i-4);
+                }
             }
         }
         // Capturing with pinned pawns
@@ -905,13 +999,20 @@ std::vector<Move> BitPosition::captureMoves() const
                     {
                         if (destination_square > 55)
                         {
-                            captures.push_back(Move::promotingMove(origin_square, destination_square, 1));
-                            captures.push_back(Move::promotingMove(origin_square, destination_square, 2));
-                            captures.push_back(Move::promotingMove(origin_square, destination_square, 3));
-                            captures.push_back(Move::promotingMove(origin_square, destination_square, 4));
+                            captures.emplace_back(origin_square, destination_square, 1, 1);
+                            scores.emplace_back(i+1);
+                            captures.emplace_back(origin_square, destination_square, 2, 1);
+                            scores.emplace_back(i+2);
+                            captures.emplace_back(origin_square, destination_square, 3, 1);
+                            scores.emplace_back(i+3);
+                            captures.emplace_back(origin_square, destination_square, 4, 1);
+                            scores.emplace_back(i+4);
                         }
                         else
-                            captures.emplace_back(origin_square, destination_square, i + 1);
+                        {
+                            captures.emplace_back(origin_square, destination_square, 0, 0);
+                            scores.emplace_back(i);
+                        }
                     }        
             }
         }
@@ -925,14 +1026,20 @@ std::vector<Move> BitPosition::captureMoves() const
             for (unsigned short i = 0; i <= 4; ++i)
             {
                 for (unsigned short destination_square : (getBitIndices(precomputed_moves::knight_moves[origin_square] & pieces_array[i])))
-                    captures.emplace_back(origin_square, destination_square, i + 1);
+                {
+                    captures.emplace_back(origin_square, destination_square, 1, 0);
+                    scores.emplace_back(i-1);
+                }
             }
         }
         // Capturing with king
         for (unsigned short i = 0; i <= 4; ++i)
         {
             for (unsigned short destination_square : (getBitIndices(precomputed_moves::king_moves[m_black_king_position] & pieces_array[i] & ~m_all_squares_attacked_by_white)))
-                captures.emplace_back(m_black_king_position, destination_square, i + 1);
+            {
+                captures.emplace_back(m_black_king_position, destination_square, 5, 0);
+                scores.emplace_back(i);
+            }
         }
         // Capturing with rooks that arent pinned
         for (unsigned short origin_square : getBitIndices(m_black_rooks_bit & ~m_all_pins))
@@ -940,7 +1047,10 @@ std::vector<Move> BitPosition::captureMoves() const
             for (unsigned short i = 0; i <= 4; ++i)
             {
                 for (unsigned short destination_square : (getBitIndices(RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i])))
-                    captures.emplace_back(origin_square, destination_square, i + 1);
+                {
+                    captures.emplace_back(origin_square, destination_square, 3, 0);
+                    scores.emplace_back(i-3);
+                }
             }
         }
         // Capturing with bishops that arent pinned
@@ -949,7 +1059,10 @@ std::vector<Move> BitPosition::captureMoves() const
             for (unsigned short i = 0; i <= 4; ++i)
             {
                 for (unsigned short destination_square : (getBitIndices(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i])))
-                    captures.emplace_back(origin_square, destination_square, i + 1);
+                {
+                    captures.emplace_back(origin_square, destination_square, 2, 0);
+                    scores.emplace_back(i-2);
+                }
             }
         }
         // Capturing with queens that arent pinned
@@ -958,30 +1071,70 @@ std::vector<Move> BitPosition::captureMoves() const
             for (unsigned short i = 0; i <= 4; ++i)
             {
                 for (unsigned short destination_square : (getBitIndices((BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) | RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit)) & pieces_array[i])))
-                    captures.emplace_back(origin_square, destination_square, i + 1);
-            }
-        }
-        // Capturing with pawns that arent pinned
-        for (unsigned short origin_square : getBitIndices(m_black_pawns_bit & ~m_all_pins))
-        {
-            for (unsigned short i = 0; i <= 4; ++i)
-            {
-                for (unsigned short destination_square : (getBitIndices(precomputed_moves::black_pawn_attacks[origin_square] & pieces_array[i])))
                 {
-                    if (destination_square < 8)
-                    {
-                        captures.push_back(Move::promotingMove(origin_square, destination_square, 1));
-                        captures.push_back(Move::promotingMove(origin_square, destination_square, 2));
-                        captures.push_back(Move::promotingMove(origin_square, destination_square, 3));
-                        captures.push_back(Move::promotingMove(origin_square, destination_square, 4));
-                    }
-                    else
-                        captures.emplace_back(origin_square, destination_square, i + 1);
+                    captures.emplace_back(origin_square, destination_square, 4, 0);
+                    scores.emplace_back(i-4);
                 }
             }
-            // Passant capture
-            if ((precomputed_moves::black_pawn_attacks[origin_square] & passant_bitboards[m_psquare]) != 0 && kingIsSafeAfterPassant(origin_square, m_psquare + 8))
-                captures.emplace_back(origin_square, m_psquare, 1);
+        }
+        // Pawn captures
+        for (unsigned short i = 0; i <= 4; ++i)
+        {
+            for (unsigned short destination_square : getBitIndices(((m_black_pawns_bit & ~m_all_pins & 0b0111111101111111011111110111111101111111011111110111111101111111) >> 7) & pieces_array[i]))
+            {
+                if (destination_square < 8)
+                // Promotions
+                {
+                    captures.emplace_back(destination_square + 7, destination_square, 1, 1);
+                    scores.emplace_back(i + 1);
+                    captures.emplace_back(destination_square + 7, destination_square, 2, 1);
+                    scores.emplace_back(i + 2);
+                    captures.emplace_back(destination_square + 7, destination_square, 3, 1);
+                    scores.emplace_back(i + 3);
+                    captures.emplace_back(destination_square + 7, destination_square, 4, 1);
+                    scores.emplace_back(i + 4);
+                }
+                else
+                {
+                    captures.emplace_back(destination_square + 7, destination_square, 0, 0);
+                    scores.emplace_back(i);
+                }
+            }
+            for (unsigned short destination_square : getBitIndices(((m_black_pawns_bit & ~m_all_pins & 0b1111111011111110111111101111111011111110111111101111111011111110) >> 9) & pieces_array[i]))
+            {
+                if (destination_square < 8)
+                // Promotions
+                {
+                    captures.emplace_back(destination_square + 9, destination_square, 1, 1);
+                    scores.emplace_back(i + 1);
+                    captures.emplace_back(destination_square + 9, destination_square, 2, 1);
+                    scores.emplace_back(i + 2);
+                    captures.emplace_back(destination_square + 9, destination_square, 3, 1);
+                    scores.emplace_back(i + 3);
+                    captures.emplace_back(destination_square + 9, destination_square, 4, 1);
+                    scores.emplace_back(i + 4);
+                }
+                else
+                {
+                    captures.emplace_back(destination_square + 9, destination_square, 0, 0);
+                    scores.emplace_back(i);
+                }
+            }
+        }
+        // Passant capture
+        if (m_psquare != 0)
+        {
+            if (((precomputed_moves::one_one_bits[m_psquare + 9] & m_black_pawns_bit & 0b1111111011111110111111101111111011111110111111101111111011111110 & ~m_all_pins) != 0) && BitPosition::kingIsSafeAfterPassant(m_psquare + 8, m_psquare + 9))
+            {
+                captures.emplace_back(m_psquare + 9, m_psquare, 0, 0);
+                scores.emplace_back(0);
+            }
+
+            if (((precomputed_moves::one_one_bits[m_psquare + 7] & m_black_pawns_bit & 0b0111111101111111011111110111111101111111011111110111111101111111 & ~m_all_pins) != 0) && BitPosition::kingIsSafeAfterPassant(m_psquare + 8, m_psquare + 7))
+            {
+                captures.emplace_back(m_psquare + 7, m_psquare, 0, 0);
+                scores.emplace_back(0);
+            }
         }
         // Capturing with pinned pieces
         // (Note, pinned rooks, bishops and queens will always be able to capture pinned piece if it is a diagonal/straight pin for bishops/rooks)
@@ -993,7 +1146,10 @@ std::vector<Move> BitPosition::captureMoves() const
             {
                 uint64_t destination_bit{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_diagonal_pins};
                 if (destination_bit != 0)
-                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), i + 1);
+                {
+                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), 2, 0);
+                    scores.emplace_back(i-2);
+                }
             }
         }
         // Capturing with pinned rooks
@@ -1003,7 +1159,10 @@ std::vector<Move> BitPosition::captureMoves() const
             {
                 uint64_t destination_bit{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_straight_pins};
                 if (destination_bit != 0)
-                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), i + 1);
+                {
+                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), 3, 0);
+                    scores.emplace_back(i-3);
+                }
             }
         }
         // Capturing with pinned queens
@@ -1014,7 +1173,10 @@ std::vector<Move> BitPosition::captureMoves() const
             {
                 uint64_t destination_bit{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_diagonal_pins};
                 if (destination_bit != 0)
-                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), i + 1);
+                {
+                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), 4, 0);
+                    scores.emplace_back(i-4);
+                }
             }
         }
         for (unsigned short origin_square : getBitIndices(m_black_queens_bit & m_straight_pins))
@@ -1024,7 +1186,10 @@ std::vector<Move> BitPosition::captureMoves() const
             {
                 uint64_t destination_bit{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_straight_pins};
                 if (destination_bit != 0)
-                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), i + 1);
+                {
+                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), 4, 0);
+                    scores.emplace_back(i-4);
+                }
             }
         }
         // Capturing with pinned pawns
@@ -1037,57 +1202,27 @@ std::vector<Move> BitPosition::captureMoves() const
                 {
                     if (destination_square < 8)
                     {
-                        captures.push_back(Move::promotingMove(origin_square, destination_square, 1));
-                        captures.push_back(Move::promotingMove(origin_square, destination_square, 2));
-                        captures.push_back(Move::promotingMove(origin_square, destination_square, 3));
-                        captures.push_back(Move::promotingMove(origin_square, destination_square, 4));
+                        captures.emplace_back(origin_square, destination_square, 1, 1);
+                        scores.emplace_back(i+1);
+                        captures.emplace_back(origin_square, destination_square, 2, 1);
+                        scores.emplace_back(i+2);
+                        captures.emplace_back(origin_square, destination_square, 3, 1);
+                        scores.emplace_back(i+3);
+                        captures.emplace_back(origin_square, destination_square, 4, 1);
+                        scores.emplace_back(i+4);
                     }
                     else
-                        captures.emplace_back(origin_square, destination_square, i + 1);
+                    {
+                        captures.emplace_back(origin_square, destination_square, 0, 0);
+                        scores.emplace_back(i);
+                    }
                 }
             }
         }
     }
-    return captures;
-}
+    // Now we order them
 
-void BitPosition::setPiece(uint64_t origin_bit, uint64_t destination_bit)
-// Move a piece, given an origin bit and destination bit
-{
-    if (m_turn)
-    {
-        // array of pointers to our pieces
-        std::array<uint64_t *, 6> piece_arrays{&m_white_pawns_bit, &m_white_knights_bit, &m_white_bishops_bit, &m_white_rooks_bit, &m_white_queens_bit, &m_white_king_bit};
-        int count{0};
-        for (auto &piece_bit : piece_arrays)
-        {
-            if ((origin_bit & *piece_bit) != 0)
-            {
-                *piece_bit &= ~origin_bit;
-                *piece_bit |= destination_bit;
-                m_moved_piece = count;
-                break;
-            }
-            count++;
-        }
-    }
-    else
-    {
-        // array of pointers to our pieces
-        std::array<uint64_t *, 6> piece_arrays{&m_black_pawns_bit, &m_black_knights_bit, &m_black_bishops_bit, &m_black_rooks_bit, &m_black_queens_bit, &m_black_king_bit};
-        int count{0};
-        for (auto &piece_bit : piece_arrays)
-        {
-            if ((origin_bit & *piece_bit) != 0)
-            {
-                *piece_bit &= ~origin_bit;
-                *piece_bit |= destination_bit;
-                m_moved_piece = count;
-                break;
-            }
-            count++;
-        }
-    }
+    return captures;
 }
 
 void BitPosition::removePiece(uint64_t destination_bit)
@@ -1180,7 +1315,7 @@ void BitPosition::storePlyInfo()
     m_all_squares_attacked_by_black_array[m_ply] = m_all_squares_attacked_by_black;
 }
 
-void BitPosition::makeMove(Move move)
+void BitPosition::makeCapture(Move move)
 // Move piece and switch white and black roles, without rotating the board.
 // After making move, set pins and checks to 0.
 {
@@ -1192,7 +1327,9 @@ void BitPosition::makeMove(Move move)
     m_last_destination_bit = precomputed_moves::one_one_bits[destination_square];
     m_captured_piece = 7; // Representing no capture
     m_promoted_piece = 7; // Representing no promotion
-
+    m_moved_piece = move.getMovingPiece();
+    unsigned short psquare {0};
+    BitPosition::removePiece(m_last_destination_bit);
     if (m_turn) // White's move
     {
         if (m_last_origin_bit == m_white_king_bit) // If we move king
@@ -1213,84 +1350,47 @@ void BitPosition::makeMove(Move move)
         if (destination_square == 56) // If we capture rook
             m_black_queenside_castling = false;
 
-        // 1) Normal moves
-        if (move.getData() <= 16383) // 0011111111111111
-        {
-            BitPosition::setPiece(m_last_origin_bit, m_last_destination_bit);
-            m_psquare = 0;
-        }
-        // 2) Captures
-        else if ((move.getData() & 49152) == 49152 && (m_last_destination_bit != passant_bitboards[m_psquare])) // 1100000000000000
-        {
-            BitPosition::setPiece(m_last_origin_bit, m_last_destination_bit);
-            // Remove captured piece
-            BitPosition::removePiece(m_last_destination_bit);
-            m_psquare = 0;
-        }
-        // 3) Double pawn moves
-        else if ((move.getData() & 49152) == 32768) // 1000000000000000
+        if (m_moved_piece == 0) // Moving Pawns (Non promotions)
         {
             m_white_pawns_bit &= ~m_last_origin_bit;
             m_white_pawns_bit |= m_last_destination_bit;
-            m_psquare = origin_square + 8;
+            if (destination_square == m_psquare) // Passant capture
+            {
+                m_captured_piece = 0;
+                m_black_pawns_bit &= ~(m_last_destination_bit >> 8);
+            }
+            else if ((m_last_origin_bit << 16) == m_last_destination_bit) // Double move
+                psquare = origin_square + 8;
+        }
+        else if (m_moved_piece == 1) // Moving knights
+        {
+            m_white_knights_bit &= ~m_last_origin_bit;
+            m_white_knights_bit |= m_last_destination_bit;
+        }
+        else if (m_moved_piece == 2)
+        {
+            m_white_bishops_bit &= ~m_last_origin_bit;
+            m_white_bishops_bit |= m_last_destination_bit;
+        }
+        else if (m_moved_piece == 3)
+        {
+            m_white_rooks_bit &= ~m_last_origin_bit;
+            m_white_rooks_bit |= m_last_destination_bit;
+        }
+        else if (m_moved_piece == 4)
+        {
+            m_white_queens_bit &= ~m_last_origin_bit;
+            m_white_queens_bit |= m_last_destination_bit;
+        }
+        else if (m_moved_piece == 5)
+        {
+            m_white_king_bit = m_last_destination_bit;
+        }
+        if (move.isPromotion()) // Promotions
+        {
+            m_white_pawns_bit &= ~m_last_origin_bit;
+            m_promoted_piece = m_moved_piece;
             m_moved_piece = 0;
-        }
-        // 4) Passant Captures
-        else if (((move.getData() & 49152) == 49152) && (m_last_destination_bit == passant_bitboards[m_psquare])) // 1100000000000000
-        {
-            BitPosition::setPiece(m_last_origin_bit, m_last_destination_bit);
-            // Remove captured piece
-            m_black_pawns_bit &= ~precomputed_moves::one_one_bits[m_psquare - 8];
-            m_psquare = 0;
-            m_captured_piece = 0;
-        }
-        // 5) Promotions and Castling
-        else // 0100000000000000
-        {
-            m_psquare = 0;
-            if (move.getData() == 16772) // White kingside castling
-            {
-                m_white_king_bit = m_last_destination_bit;
-                m_white_rooks_bit &= ~128;
-                m_white_rooks_bit |= 32;
-
-                m_moved_piece = 3; // Moved rook so we need to recompute the rook attacked squares
-            }
-            else if (move.getData() == 16516) // White queenside castling
-            {
-                m_white_king_bit = m_last_destination_bit;
-                m_white_rooks_bit &= ~1;
-                m_white_rooks_bit |= 8;
-
-                m_moved_piece = 3; // Moved rook so we need to recompute the rook attacked squares
-            }
-            else // Promotions
-            {
-                BitPosition::removePiece(m_last_destination_bit);
-
-                m_white_pawns_bit &= ~m_last_origin_bit;
-                uint16_t promoting_piece{static_cast<uint16_t>(move.getData() & 12288)};
-                if (promoting_piece == 12288) // queen promotion
-                {
-                    m_promoted_piece = 4;
-                    m_white_queens_bit |= m_last_destination_bit;
-                }
-                else if (promoting_piece == 8192) // rook promotion
-                {
-                    m_promoted_piece = 3;
-                    m_white_rooks_bit |= m_last_destination_bit;
-                }
-                else if (promoting_piece == 4096) // bishop promotion
-                {
-                    m_promoted_piece = 2;
-                    m_white_bishops_bit |= m_last_destination_bit;
-                }
-                else // knight promotion
-                {
-                    m_promoted_piece = 1;
-                    m_white_knights_bit |= m_last_destination_bit;
-                }
-            }
         }
     }
     else // Black's move
@@ -1313,83 +1413,47 @@ void BitPosition::makeMove(Move move)
         if (destination_square == 0) // If we capture rook
             m_white_queenside_castling = false;
 
-        // 1) Normal moves
-        if (move.getData() <= 16383) // 0011111111111111
-        {
-            BitPosition::setPiece(m_last_origin_bit, m_last_destination_bit);
-            m_psquare = 0;
-        }
-        // 2) Captures
-        else if ((move.getData() & 49152) == 49152 && (m_last_destination_bit != passant_bitboards[m_psquare])) // 1100000000000000
-        {
-            BitPosition::setPiece(m_last_origin_bit, m_last_destination_bit);
-            // Remove captured piece
-            BitPosition::removePiece(m_last_destination_bit);
-            m_psquare = 0;
-        }
-        // 3) Double pawn moves
-        else if ((move.getData() & 49152) == 32768) // 1000000000000000
+        if (m_moved_piece == 0) // Moving Pawns (Non promotions)
         {
             m_black_pawns_bit &= ~m_last_origin_bit;
             m_black_pawns_bit |= m_last_destination_bit;
-            m_psquare = origin_square - 8;
+            if (destination_square == m_psquare) // Passant capture
+            {
+                m_captured_piece = 0;
+                m_white_pawns_bit &= ~(m_last_destination_bit << 8);
+            }
+            else if ((m_last_origin_bit >> 16) == m_last_destination_bit) // Double move
+                psquare = origin_square - 8;
+        }
+        else if (m_moved_piece == 1) // Moving knights
+        {
+            m_black_knights_bit &= ~m_last_origin_bit;
+            m_black_knights_bit |= m_last_destination_bit;
+        }
+        else if (m_moved_piece == 2)
+        {
+            m_black_bishops_bit &= ~m_last_origin_bit;
+            m_black_bishops_bit |= m_last_destination_bit;
+        }
+        else if (m_moved_piece == 3)
+        {
+            m_black_rooks_bit &= ~m_last_origin_bit;
+            m_black_rooks_bit |= m_last_destination_bit;
+        }
+        else if (m_moved_piece == 4)
+        {
+            m_black_queens_bit &= ~m_last_origin_bit;
+            m_black_queens_bit |= m_last_destination_bit;
+        }
+        else if (m_moved_piece == 5)
+        {
+            m_black_king_bit = m_last_destination_bit;
+        }
+        if (move.isPromotion()) // Promotions
+        {
+            m_black_pawns_bit &= ~m_last_origin_bit;
+            m_promoted_piece = m_moved_piece;
             m_moved_piece = 0;
-        }
-        // 4) Passant Captures
-        else if (((move.getData() & 49152) == 49152) && (m_last_destination_bit == passant_bitboards[m_psquare])) // 1100000000000000
-        {
-            BitPosition::setPiece(m_last_origin_bit, m_last_destination_bit);
-            // Remove captured piece
-            m_white_pawns_bit &= ~precomputed_moves::one_one_bits[m_psquare + 8];
-            m_psquare = 0;
-            m_captured_piece = 0;
-        }
-        // 5) Promotions and Castling
-        else // 0100000000000000
-        {
-            m_psquare = 0;
-            if (move.getData() == 20412) // Black kingside castling
-            {
-                m_black_king_bit = m_last_destination_bit;
-                m_black_rooks_bit &= ~9223372036854775808ULL;
-                m_black_rooks_bit |= 2305843009213693952ULL;
-
-                m_moved_piece = 3; // Moved rook so we need to recompute the rook attacked squares
-            }
-            else if (move.getData() == 20156) // Black queenside castling
-            {
-                m_black_king_bit = m_last_destination_bit;
-                m_black_rooks_bit &= ~72057594037927936ULL;
-                m_black_rooks_bit |= 576460752303423488ULL;
-
-                m_moved_piece = 3; // Moved rook so we need to recompute the rook attacked squares
-            }
-            else // Promotions
-            {
-                BitPosition::removePiece(m_last_destination_bit);
-                m_black_pawns_bit &= ~m_last_origin_bit;
-                uint16_t promoting_piece{static_cast<uint16_t>(move.getData() & 12288)};
-                if (promoting_piece == 12288) // queen promotion
-                {
-                    m_promoted_piece = 4;
-                    m_black_queens_bit |= m_last_destination_bit;
-                }
-                else if (promoting_piece == 8192) // rook promotion
-                {
-                    m_promoted_piece = 3;
-                    m_black_rooks_bit |= m_last_destination_bit;
-                }
-                else if (promoting_piece == 4096) // bishop promotion
-                {
-                    m_promoted_piece = 2;
-                    m_black_bishops_bit |= m_last_destination_bit;
-                }
-                else // knight promotion
-                {
-                    m_promoted_piece = 1;
-                    m_black_knights_bit |= m_last_destination_bit;
-                }
-            }
         }
     }
     m_turn = not m_turn;
@@ -1404,6 +1468,8 @@ void BitPosition::makeMove(Move move)
     m_check_rays = 0;
     m_num_checks = 0;
     m_ply++;
+
+    m_psquare = psquare;
 
     BitPosition::setAllPiecesBits();
 }
@@ -1660,24 +1726,40 @@ std::vector<Move> BitPosition::allMoves() const
                 moves.push_back(double_moves[destination_square - 8]);
         }
         // Pawn captures
-        for (unsigned short origin_square : getBitIndices(m_white_pawns_bit & ~m_all_pins))
+        for (unsigned short destination_square : getBitIndices((((m_white_pawns_bit & ~m_all_pins & 0b1111111011111110111111101111111011111110111111101111111011111110) << 7) & m_black_pieces_bit)))
         {
-            for (unsigned short destination_square : (getBitIndices(precomputed_moves::white_pawn_attacks[origin_square] & m_black_pieces_bit)))
+            if (destination_square > 55)
+            // Promotions
             {
-                if (destination_square > 55)
-                // Promotions
-                {
-                    moves.push_back(Move::promotingMove(origin_square, destination_square, 1));
-                    moves.push_back(Move::promotingMove(origin_square, destination_square, 2));
-                    moves.push_back(Move::promotingMove(origin_square, destination_square, 3));
-                    moves.push_back(Move::promotingMove(origin_square, destination_square, 4));
-                }
-                else
-                    moves.emplace_back(origin_square, destination_square);
+                moves.push_back(Move::promotingMove(destination_square - 7, destination_square, 1));
+                moves.push_back(Move::promotingMove(destination_square - 7, destination_square, 2));
+                moves.push_back(Move::promotingMove(destination_square - 7, destination_square, 3));
+                moves.push_back(Move::promotingMove(destination_square - 7, destination_square, 4));
             }
-            // Passant capture
-            if ((precomputed_moves::white_pawn_attacks[origin_square] & passant_bitboards[m_psquare]) != 0 && kingIsSafeAfterPassant(origin_square, m_psquare - 8))
-                moves.emplace_back(origin_square, m_psquare);
+            else
+                moves.emplace_back(destination_square - 7, destination_square);
+        }
+        for (unsigned short destination_square : getBitIndices((((m_white_pawns_bit & ~m_all_pins & 0b0111111101111111011111110111111101111111011111110111111101111111) << 9) & m_black_pieces_bit)))
+        {
+            if (destination_square > 55)
+            // Promotions
+            {
+                moves.push_back(Move::promotingMove(destination_square - 9, destination_square, 1));
+                moves.push_back(Move::promotingMove(destination_square - 9, destination_square, 2));
+                moves.push_back(Move::promotingMove(destination_square - 9, destination_square, 3));
+                moves.push_back(Move::promotingMove(destination_square - 9, destination_square, 4));
+            }
+            else
+                moves.emplace_back(destination_square - 9, destination_square);
+        }
+        // Passant capture
+        if (m_psquare != 0)
+        {
+            if (((precomputed_moves::one_one_bits[m_psquare - 7] & m_white_pawns_bit & 0b1111111011111110111111101111111011111110111111101111111011111110 & ~m_all_pins) != 0) && BitPosition::kingIsSafeAfterPassant(m_psquare - 7, m_psquare - 8))
+                moves.emplace_back(m_psquare-7, m_psquare);
+
+            if (((precomputed_moves::one_one_bits[m_psquare - 9] & m_white_pawns_bit & 0b0111111101111111011111110111111101111111011111110111111101111111 & ~m_all_pins) != 0) && BitPosition::kingIsSafeAfterPassant(m_psquare - 9, m_psquare - 8))
+                moves.emplace_back(m_psquare-9, m_psquare);
         }
 
         // King
@@ -1730,24 +1812,40 @@ std::vector<Move> BitPosition::allMoves() const
             }
         }
         // Capturing with pinned pawns
-        for (unsigned short origin_square : getBitIndices(m_white_pawns_bit & m_diagonal_pins))
+        for (unsigned short destination_square : getBitIndices((((m_white_pawns_bit & m_diagonal_pins & 0b1111111011111110111111101111111011111110111111101111111011111110) << 7) & m_black_pieces_bit & m_diagonal_pins)))
         {
-            // Diagonal moves
-            for (unsigned short destination_square : (getBitIndices(precomputed_moves::white_pawn_attacks[origin_square] & m_black_pieces_bit & m_diagonal_pins)))
+            if (destination_square > 55)
+            // Promotions
             {
-                if (destination_square > 55)
-                {
-                    moves.push_back(Move::promotingMove(origin_square, destination_square, 1));
-                    moves.push_back(Move::promotingMove(origin_square, destination_square, 2));
-                    moves.push_back(Move::promotingMove(origin_square, destination_square, 3));
-                    moves.push_back(Move::promotingMove(origin_square, destination_square, 4));
-                }
-                else
-                    moves.emplace_back(origin_square, destination_square);
+                moves.push_back(Move::promotingMove(destination_square - 7, destination_square, 1));
+                moves.push_back(Move::promotingMove(destination_square - 7, destination_square, 2));
+                moves.push_back(Move::promotingMove(destination_square - 7, destination_square, 3));
+                moves.push_back(Move::promotingMove(destination_square - 7, destination_square, 4));
             }
-            // Passant capture
-            if ((precomputed_moves::white_pawn_attacks[origin_square] & passant_bitboards[m_psquare] & m_diagonal_pins) != 0 && kingIsSafeAfterPassant(origin_square, m_psquare - 8))
-                moves.emplace_back(origin_square, m_psquare);
+            else
+                moves.emplace_back(destination_square - 7, destination_square);
+        }
+        for (unsigned short destination_square : getBitIndices((((m_white_pawns_bit & m_diagonal_pins & 0b0111111101111111011111110111111101111111011111110111111101111111) << 9) & m_black_pieces_bit & m_diagonal_pins)))
+        {
+            if (destination_square > 55)
+            // Promotions
+            {
+                moves.push_back(Move::promotingMove(destination_square - 9, destination_square, 1));
+                moves.push_back(Move::promotingMove(destination_square - 9, destination_square, 2));
+                moves.push_back(Move::promotingMove(destination_square - 9, destination_square, 3));
+                moves.push_back(Move::promotingMove(destination_square - 9, destination_square, 4));
+            }
+            else
+                moves.emplace_back(destination_square - 9, destination_square);
+        }
+        // Passant capture
+        if (m_psquare != 0)
+        {
+            if (((precomputed_moves::one_one_bits[m_psquare - 7] & m_white_pawns_bit & 0b1111111011111110111111101111111011111110111111101111111011111110 & m_diagonal_pins) != 0) && BitPosition::kingIsSafeAfterPassant(m_psquare-8, m_psquare-7))
+                moves.emplace_back(m_psquare - 7, m_psquare);
+
+            if (((precomputed_moves::one_one_bits[m_psquare - 9] & m_white_pawns_bit & 0b0111111101111111011111110111111101111111011111110111111101111111 & m_diagonal_pins) != 0) && BitPosition::kingIsSafeAfterPassant(m_psquare - 8, m_psquare - 9))
+                moves.emplace_back(m_psquare - 9, m_psquare);
         }
     }
     else // Black's turn
@@ -1797,24 +1895,40 @@ std::vector<Move> BitPosition::allMoves() const
                 moves.push_back(double_moves[destination_square - 40]);
         }
         // Pawn captures
-        // Capturing with pawns that arent pinned
-        for (unsigned short origin_square : getBitIndices(m_black_pawns_bit & ~m_all_pins))
+        for (unsigned short destination_square : getBitIndices(((m_black_pawns_bit & ~m_all_pins & 0b0111111101111111011111110111111101111111011111110111111101111111) >> 7) & m_white_pieces_bit))
         {
-            for (unsigned short destination_square : (getBitIndices(precomputed_moves::black_pawn_attacks[origin_square] & m_white_pieces_bit)))
+            if (destination_square < 8)
+            // Promotions
             {
-                if (destination_square < 8)
-                {
-                    moves.push_back(Move::promotingMove(origin_square, destination_square, 1));
-                    moves.push_back(Move::promotingMove(origin_square, destination_square, 2));
-                    moves.push_back(Move::promotingMove(origin_square, destination_square, 3));
-                    moves.push_back(Move::promotingMove(origin_square, destination_square, 4));
-                }
-                else
-                    moves.emplace_back(origin_square, destination_square);
+                moves.push_back(Move::promotingMove(destination_square + 7, destination_square, 1));
+                moves.push_back(Move::promotingMove(destination_square + 7, destination_square, 2));
+                moves.push_back(Move::promotingMove(destination_square + 7, destination_square, 3));
+                moves.push_back(Move::promotingMove(destination_square + 7, destination_square, 4));
             }
-            // Passant capture
-            if ((precomputed_moves::black_pawn_attacks[origin_square] & passant_bitboards[m_psquare]) != 0 && kingIsSafeAfterPassant(origin_square, m_psquare + 8))
-                moves.emplace_back(origin_square, m_psquare);
+            else
+                moves.emplace_back(destination_square + 7, destination_square);
+        }
+        for (unsigned short destination_square : getBitIndices(((m_black_pawns_bit & ~m_all_pins & 0b1111111011111110111111101111111011111110111111101111111011111110) >> 9) & m_white_pieces_bit))
+        {
+            if (destination_square < 8)
+            // Promotions
+            {
+                moves.push_back(Move::promotingMove(destination_square + 9, destination_square, 1));
+                moves.push_back(Move::promotingMove(destination_square + 9, destination_square, 2));
+                moves.push_back(Move::promotingMove(destination_square + 9, destination_square, 3));
+                moves.push_back(Move::promotingMove(destination_square + 9, destination_square, 4));
+            }
+            else
+                moves.emplace_back(destination_square + 9, destination_square);
+        }
+        // Passant capture
+        if (m_psquare != 0)
+        {
+            if (((precomputed_moves::one_one_bits[m_psquare + 9] & m_black_pawns_bit & 0b1111111011111110111111101111111011111110111111101111111011111110 & ~m_all_pins) != 0) && BitPosition::kingIsSafeAfterPassant(m_psquare + 8, m_psquare + 9))
+                moves.emplace_back(m_psquare + 9, m_psquare);
+
+            if (((precomputed_moves::one_one_bits[m_psquare + 7] & m_black_pawns_bit & 0b0111111101111111011111110111111101111111011111110111111101111111 & ~m_all_pins) != 0) && BitPosition::kingIsSafeAfterPassant(m_psquare + 8, m_psquare + 7))
+                moves.emplace_back(m_psquare + 7, m_psquare);
         }
 
         // King
@@ -1865,28 +1979,84 @@ std::vector<Move> BitPosition::allMoves() const
                     moves.push_back(double_moves[origin_square]);
             }
         }
-        // Capturing with pinned pawns
-        for (unsigned short origin_square : getBitIndices(m_black_pawns_bit & m_diagonal_pins))
+
+        // Pawn captures
+        for (unsigned short destination_square : getBitIndices((((m_black_pawns_bit & m_diagonal_pins & 0b0111111101111111011111110111111101111111011111110111111101111111) >> 9) & m_white_pieces_bit & m_diagonal_pins)))
         {
-            // Diagonal moves
-            for (unsigned short destination_square : (getBitIndices(precomputed_moves::black_pawn_attacks[origin_square] & m_white_pieces_bit & m_diagonal_pins)))
+            if (destination_square < 8)
+            // Promotions
             {
-                if (destination_square < 8)
-                {
-                    moves.push_back(Move::promotingMove(origin_square, destination_square, 1));
-                    moves.push_back(Move::promotingMove(origin_square, destination_square, 2));
-                    moves.push_back(Move::promotingMove(origin_square, destination_square, 3));
-                    moves.push_back(Move::promotingMove(origin_square, destination_square, 4));
-                }
-                else
-                    moves.emplace_back(origin_square, destination_square);
+                moves.push_back(Move::promotingMove(destination_square + 9, destination_square, 1));
+                moves.push_back(Move::promotingMove(destination_square + 9, destination_square, 2));
+                moves.push_back(Move::promotingMove(destination_square + 9, destination_square, 3));
+                moves.push_back(Move::promotingMove(destination_square + 9, destination_square, 4));
             }
-            // Passant capture
-            if ((precomputed_moves::black_pawn_attacks[origin_square] & passant_bitboards[m_psquare] & m_diagonal_pins) != 0 && kingIsSafeAfterPassant(origin_square, m_psquare + 8))
-                moves.emplace_back(origin_square, m_psquare);
+            else
+                moves.emplace_back(destination_square + 9, destination_square);
+        }
+        for (unsigned short destination_square : getBitIndices((((m_black_pawns_bit & m_diagonal_pins & 0b1111111011111110111111101111111011111110111111101111111011111110) >> 7) & m_white_pieces_bit & m_diagonal_pins)))
+        {
+            if (destination_square < 8)
+            // Promotions
+            {
+                moves.push_back(Move::promotingMove(destination_square + 7, destination_square, 1));
+                moves.push_back(Move::promotingMove(destination_square + 7, destination_square, 2));
+                moves.push_back(Move::promotingMove(destination_square + 7, destination_square, 3));
+                moves.push_back(Move::promotingMove(destination_square + 7, destination_square, 4));
+            }
+            else
+                moves.emplace_back(destination_square + 7, destination_square);
+        }
+        // Passant capture
+        if (m_psquare != 0)
+        {
+            if (((precomputed_moves::one_one_bits[m_psquare + 9] & m_black_pawns_bit & 0b1111111011111110111111101111111011111110111111101111111011111110 & m_diagonal_pins) != 0) && BitPosition::kingIsSafeAfterPassant(m_psquare + 8, m_psquare + 9))
+                moves.emplace_back(m_psquare + 9, m_psquare);
+
+            if (((precomputed_moves::one_one_bits[m_psquare + 7] & m_black_pawns_bit & 0b0111111101111111011111110111111101111111011111110111111101111111 & m_diagonal_pins) != 0) && BitPosition::kingIsSafeAfterPassant(m_psquare + 8, m_psquare + 7))
+                moves.emplace_back(m_psquare + 7, m_psquare);
         }
     }
     return moves;
+}
+
+void BitPosition::setPiece(uint64_t origin_bit, uint64_t destination_bit)
+// Move a piece, given an origin bit and destination bit
+{
+    if (m_turn)
+    {
+        // array of pointers to our pieces
+        std::array<uint64_t *, 6> piece_arrays{&m_white_pawns_bit, &m_white_knights_bit, &m_white_bishops_bit, &m_white_rooks_bit, &m_white_queens_bit, &m_white_king_bit};
+        int count{0};
+        for (auto &piece_bit : piece_arrays)
+        {
+            if ((origin_bit & *piece_bit) != 0)
+            {
+                *piece_bit &= ~origin_bit;
+                *piece_bit |= destination_bit;
+                m_moved_piece = count;
+                break;
+            }
+            count++;
+        }
+    }
+    else
+    {
+        // array of pointers to our pieces
+        std::array<uint64_t *, 6> piece_arrays{&m_black_pawns_bit, &m_black_knights_bit, &m_black_bishops_bit, &m_black_rooks_bit, &m_black_queens_bit, &m_black_king_bit};
+        int count{0};
+        for (auto &piece_bit : piece_arrays)
+        {
+            if ((origin_bit & *piece_bit) != 0)
+            {
+                *piece_bit &= ~origin_bit;
+                *piece_bit |= destination_bit;
+                m_moved_piece = count;
+                break;
+            }
+            count++;
+        }
+    }
 }
 
 void BitPosition::makeNormalMove(Move move)
@@ -2191,7 +2361,7 @@ std::vector<Move> BitPosition::nonCaptureMoves() const
             // Promotions
             else
             {
-                moves.push_back(Move::promotingMove(destination_square-8, destination_square, 1));
+                moves.push_back(Move::promotingMove(destination_square - 8, destination_square, 1));
                 moves.push_back(Move::promotingMove(destination_square - 8, destination_square, 2));
                 moves.push_back(Move::promotingMove(destination_square - 8, destination_square, 3));
                 moves.push_back(Move::promotingMove(destination_square - 8, destination_square, 4));

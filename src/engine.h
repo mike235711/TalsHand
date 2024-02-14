@@ -311,12 +311,12 @@ std::pair<Move, int> quiesenceSearch(BitPosition& position, int alpha, int beta,
     if (position.isCheck())
     {
         position.setChecksAndPinsBits();
-        moves = position.inCheckCaptures();
+        moves = position.inCheckOrderedCaptures();
     }
     else
     {
         position.setPinsBits();
-        moves = position.captureMoves();
+        moves = position.orderedCaptures();
     }
     // If we have reached quisence search and there are no captures
     if (moves.size() == 0)
@@ -338,7 +338,7 @@ std::pair<Move, int> quiesenceSearch(BitPosition& position, int alpha, int beta,
     {
         for (Move move : moves)
         {
-            position.makeMove(move);
+            position.makeCapture(move);
             int child_value{quiesenceSearch(position, alpha, beta, false).second};
             if (child_value > value)
             {
@@ -355,7 +355,7 @@ std::pair<Move, int> quiesenceSearch(BitPosition& position, int alpha, int beta,
     {
         for (Move move : moves)
         {
-            position.makeMove(move);
+            position.makeCapture(move);
             int child_value{quiesenceSearch(position, alpha, beta, true).second};
             if (child_value < value)
             {
@@ -375,6 +375,8 @@ std::pair<Move, int> quiesenceSearch(BitPosition& position, int alpha, int beta,
 std::pair<Move, int> alphaBetaSearch(BitPosition &position, int depth, int alpha, int beta, bool our_turn)
 // This search is done when depth is more than 0 and considers all moves
 {
+    if (position.isThreeFold())
+        return std::pair<Move, int>(0, 0);
     if (depth <= 0)
     {
         return quiesenceSearch(position, alpha, beta, our_turn);

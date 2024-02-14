@@ -158,9 +158,9 @@ public:
     void setChecksAndPinsBits();
     bool kingIsSafeFromSliders(unsigned short destination_square) const;
     bool kingIsSafeAfterPassant(unsigned short removed_square_1, unsigned short removed_square_2) const;
-    std::vector<Move> inCheckCaptures() const;
+    std::vector<Move> inCheckOrderedCaptures() const;
+    std::vector<Move> orderedCaptures() const;
     std::vector<Move> inCheckAllMoves() const;
-    std::vector<Move> captureMoves() const;
     std::vector<Move> allMoves() const;
     std::vector<Move> inCheckMoves() const;
     std::vector<Move> nonCaptureMoves() const;
@@ -169,12 +169,73 @@ public:
     void removePiece(uint64_t destination_bit);
     void storePlyInfo();
     void makeNormalMove(Move move);
-    void makeMove(Move move);
+    void makeCapture(Move move);
     void unmakeMove();
     void setSliderAttackedSquares();
     void setAttackedSquaresAfterMove();
     std::vector<Move> setPinsBitsReturningPinnedMoves();
     // Member function definitions
+
+    void restorePlyInfo()
+    // This member function is used when either opponent or engine makes a capture.
+    // To make the ply info smaller. For a faster 3 fold repetition check.
+    // It isnt used when making a move in search!
+    {
+        // ply number
+        // WE HAVE TO MAKE SURE WE RESET IT TO 0 AFTER THE ENGINE GIVES A MOVE.
+        m_ply = 0;
+        // ply info arrays (these is the info used on non capture moves,
+        // since captured moves will all have already benn generated before unmaking move)
+        std::array<bool, 150> m_wkcastling_array{};
+        std::array<bool, 150> m_wqcastling_array{};
+        std::array<bool, 150> m_bkcastling_array{};
+        std::array<bool, 150> m_bqcastling_array{};
+        std::array<unsigned short, 150> m_psquare_array{};
+        std::array<uint64_t, 150> m_diagonal_pins_array{};
+        std::array<uint64_t, 150> m_straight_pins_array{};
+
+        std::array<uint64_t, 150> m_white_pawns_bits_array{};
+        std::array<uint64_t, 150> m_white_knights_bits_array{};
+        std::array<uint64_t, 150> m_white_bishops_bits_array{};
+        std::array<uint64_t, 150> m_white_rooks_bits_array{};
+        std::array<uint64_t, 150> m_white_queens_bits_array{};
+        std::array<uint64_t, 150> m_white_king_bits_array{};
+
+        std::array<uint64_t, 150> m_black_pawns_bits_array{};
+        std::array<uint64_t, 150> m_black_knights_bits_array{};
+        std::array<uint64_t, 150> m_black_bishops_bits_array{};
+        std::array<uint64_t, 150> m_black_rooks_bits_array{};
+        std::array<uint64_t, 150> m_black_queens_bits_array{};
+        std::array<uint64_t, 150> m_black_king_bits_array{};
+
+        std::array<bool, 150> m_is_check_array{};
+
+        std::array<unsigned short, 150> m_white_king_positions_array{};
+        std::array<unsigned short, 150> m_black_king_positions_array{};
+
+        std::array<uint64_t, 150> m_squares_attacked_by_white_pawns_array{};
+        std::array<uint64_t, 150> m_squares_attacked_by_black_pawns_array{};
+        std::array<uint64_t, 150> m_squares_attacked_by_white_knights_array{};
+        std::array<uint64_t, 150> m_squares_attacked_by_black_knights_array{};
+        std::array<uint64_t, 150> m_squares_attacked_by_white_bishops_array{};
+        std::array<uint64_t, 150> m_squares_attacked_by_black_bishops_array{};
+        std::array<uint64_t, 150> m_squares_attacked_by_white_rooks_array{};
+        std::array<uint64_t, 150> m_squares_attacked_by_black_rooks_array{};
+        std::array<uint64_t, 150> m_squares_attacked_by_white_queens_array{};
+        std::array<uint64_t, 150> m_squares_attacked_by_black_queens_array{};
+        std::array<uint64_t, 150> m_squares_attacked_by_white_king_array{};
+        std::array<uint64_t, 150> m_squares_attacked_by_black_king_array{};
+
+        std::array<uint64_t, 150> m_all_squares_attacked_by_white_array{};
+        std::array<uint64_t, 150> m_all_squares_attacked_by_black_array{};
+
+        BitPosition::storePlyInfo();
+    }
+    bool isThreeFold()
+    // Checking in position is three-fold or not
+    {
+        return false;
+    }
 
     void setKingPosition()
     // Set the index of the king in the board.

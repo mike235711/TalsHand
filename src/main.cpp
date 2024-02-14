@@ -102,7 +102,7 @@ BitPosition fenToBitPosition(const std::string &fen)
     return position;
 }
 
-Move findMoveFromString(std::string moveString, BitPosition position)
+Move findCaptureFromString(std::string moveString, BitPosition position)
 {
     if (position.isCheck())
     {
@@ -114,7 +114,7 @@ Move findMoveFromString(std::string moveString, BitPosition position)
                 return move;
             }
         }
-        for (Move move : position.inCheckCaptures())
+        for (Move move : position.inCheckOrderedCaptures())
         {
             if (move.toString() == moveString)
             {
@@ -132,7 +132,7 @@ Move findMoveFromString(std::string moveString, BitPosition position)
                 return move;
             }
         }
-        for (Move move : position.captureMoves())
+        for (Move move : position.orderedCaptures())
         {
             if (move.toString() == moveString)
             {
@@ -141,6 +141,74 @@ Move findMoveFromString(std::string moveString, BitPosition position)
         }
     }
     return Move(0);
+}
+Move findNormalMoveFromString(std::string moveString, BitPosition position)
+{
+    if (position.isCheck())
+    {
+        position.setChecksAndPinsBits();
+        for (Move move : position.inCheckAllMoves())
+        {
+            if (move.toString() == moveString)
+            {
+                return move;
+            }
+        }
+    }
+    else
+    {
+        position.setPinsBits();
+        for (Move move : position.allMoves())
+        {
+            if (move.toString() == moveString)
+            {
+                return move;
+            }
+        }
+    }
+    return Move(0);
+}
+bool moveIsCapture(std::string moveString, BitPosition position)
+// This function is used to see when we reset the ply information. Since capturing a piece
+// prevents reaching previously seen positions, so restoring ply info makes checking for 3 fold
+// repetitions and transposition tables more efficient.
+{
+    if (position.isCheck())
+    {
+        position.setChecksAndPinsBits();
+        for (Move move : position.inCheckMoves())
+        {
+            if (move.toString() == moveString)
+            {
+                return false;
+            }
+        }
+        for (Move move : position.inCheckOrderedCaptures())
+        {
+            if (move.toString() == moveString)
+            {
+                return true;
+            }
+        }
+    }
+    else
+    {
+        position.setPinsBits();
+        for (Move move : position.nonCaptureMoves())
+        {
+            if (move.toString() == moveString)
+            {
+                return false;
+            }
+        }
+        for (Move move : position.orderedCaptures())
+        {
+            if (move.toString() == moveString)
+            {
+                return true;
+            }
+        }
+    }
 }
 
 int main()
@@ -203,11 +271,13 @@ int main()
                 // Apply each move in the moves list
                 moveUci = command;
             }
-            Move move{findMoveFromString(moveUci, position)};
+            Move move{findNormalMoveFromString(moveUci, position)};
             if (move.getData() != 0)
             {
                 position.makeNormalMove(move);
                 position.setAttackedSquaresAfterMove();
+                if (moveIsCapture(moveUci, position))
+                    position.restorePlyInfo();
             }
         }
         else if (command == "position" && position_initialized == true)
@@ -218,11 +288,13 @@ int main()
             {
                 moveUci = command;
             }
-            Move move{findMoveFromString(moveUci, position)};
+            Move move{findNormalMoveFromString(moveUci, position)};
             if (move.getData() != 0)
             {
                 position.makeNormalMove(move);
                 position.setAttackedSquaresAfterMove();
+                if (moveIsCapture(moveUci, position))
+                    position.restorePlyInfo();
             }
         }
         else if (inputLine.substr(0,2) == "go")
@@ -232,6 +304,8 @@ int main()
             Move bestMove = iterativeSearch(position,  800);
             position.makeNormalMove(bestMove);
             position.setAttackedSquaresAfterMove();
+            if (moveIsCapture(bestMove.toString(), position))
+                position.restorePlyInfo();
             std::cout << "bestmove " << bestMove.toString() << "\n"
                       << std::flush;
         }
@@ -248,6 +322,13 @@ int main()
                 BitPosition position_1 {fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
                 std::cout << "Position 1: \n" << runCapturesPerftTest(position_1, depth) << " moves\n";
                 BitPosition position_2 {fenToBitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")};
+                //position_2.makeNormalMove(findNormalMoveFromString(std::string{"e1f1"}, position_2));
+                //position_2.setAttackedSquaresAfterMove();
+                //position_2.setPinsBits();
+                //position_2.makeCapture(findCaptureFromString(std::string{"a6e2"}, position_2));
+                //position_2.setAttackedSquaresAfterMove();
+                //position_2.setPinsBits();
+                //position_2.makeCapture(findCaptureFromString(std::string{"c3e2"}, position_2));
                 std::cout << "Position 2: \n" << runCapturesPerftTest(position_2, depth) << " moves\n";
                 BitPosition position_3{fenToBitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1")};
                 std::cout << "Position 3: \n" << runCapturesPerftTest(position_3, depth) << " moves\n";

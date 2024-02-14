@@ -23,13 +23,13 @@ unsigned long long runCapturesPerftTest(BitPosition& position, int depth, int cu
     if (position.isCheck())
     {
         position.setChecksAndPinsBits();
-        captures = position.inCheckCaptures();
+        captures = position.inCheckOrderedCaptures();
         non_captures = position.inCheckMoves();
     }
     else
     {
         position.setPinsBits();
-        captures = position.captureMoves();
+        captures = position.orderedCaptures();
         non_captures = position.nonCaptureMoves();
     }
 
@@ -40,7 +40,7 @@ unsigned long long runCapturesPerftTest(BitPosition& position, int depth, int cu
         {
             printMove(move);
         }
-        position.makeMove(move);
+        position.makeCapture(move);
 
         unsigned long long subCount = runCapturesPerftTest(position, depth - 1, currentDepth + 1);
         
@@ -59,7 +59,7 @@ unsigned long long runCapturesPerftTest(BitPosition& position, int depth, int cu
         {
             printMove(move);
         }
-        position.makeMove(move);
+        position.makeNormalMove(move);
 
         unsigned long long subCount = runCapturesPerftTest(position, depth - 1, currentDepth + 1);
 
