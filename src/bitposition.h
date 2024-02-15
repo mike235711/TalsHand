@@ -163,6 +163,7 @@ public:
     std::vector<Move> inCheckAllMoves() const;
     std::vector<Move> allMoves() const;
     std::vector<Move> orderAllMoves(std::vector<Move> &moves) const;
+    std::vector<Move> orderAllMovesOnFirstIteration(std::vector<Move> &moves, Move bestMove) const;
     std::vector<Move> inCheckMoves() const;
     std::vector<Move> nonCaptureMoves() const;
 

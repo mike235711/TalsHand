@@ -452,6 +452,71 @@ std::pair<Move, int> alphaBetaSearch(BitPosition &position, int depth, int alpha
     return std::pair<Move, int>(best_move, value);
 }
 
+std::pair<Move, int> firstMoveSearch(BitPosition &position, int depth, int alpha, int beta, bool our_turn, Move last_best_move)
+// This search is done when depth is more than 0 and considers all moves
+{
+    position.setAttackedSquaresAfterMove();
+    std::vector<Move> moves;
+    if (position.isCheck())
+    {
+        position.setChecksAndPinsBits();
+        moves = position.inCheckAllMoves();
+        moves = position.orderAllMovesOnFirstIteration(moves, last_best_move);
+    }
+    else
+    {
+        position.setPinsBits();
+        moves = position.allMoves();
+        moves = position.orderAllMovesOnFirstIteration(moves, last_best_move);
+    }
+    // If we are in quiescence, we have a baseline evaluation as if no captures happened
+    int value{our_turn ? -1000004 : 1000004};
+    Move best_move;
+    bool found_break{false};
+    if (our_turn) // Maximize
+    {
+        for (Move move : moves)
+        {
+            position.makeNormalMove(move);
+            int child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false).second};
+            if (child_value > value)
+            {
+                value = child_value;
+                best_move = move;
+            }
+            position.unmakeMove();
+            if (value >= beta)
+            {
+                found_break = true;
+                break;
+            }
+            alpha = std::max(alpha, value);
+        }
+    }
+    else // Minimize
+    {
+        for (Move move : moves)
+        {
+            position.makeNormalMove(move);
+            int child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true).second};
+            if (child_value < value)
+            {
+                value = child_value;
+                best_move = move;
+            }
+            position.unmakeMove();
+            if (value <= alpha)
+            {
+                found_break = true;
+                break;
+            }
+            beta = std::min(beta, value);
+        }
+    }
+
+    return std::pair<Move, int>(best_move, value);
+}
+
 Move iterativeSearch(BitPosition position, int time_for_move)
 {
     std::chrono::milliseconds timeForMoveMS(time_for_move);
