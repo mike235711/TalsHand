@@ -144,6 +144,7 @@ Move findCaptureFromString(std::string moveString, BitPosition position)
 }
 Move findNormalMoveFromString(std::string moveString, BitPosition position)
 {
+    position.setAttackedSquaresAfterMove();
     if (position.isCheck())
     {
         position.setChecksAndPinsBits();
@@ -173,6 +174,7 @@ bool moveIsCapture(std::string moveString, BitPosition position)
 // prevents reaching previously seen positions, so restoring ply info makes checking for 3 fold
 // repetitions and transposition tables more efficient.
 {
+    position.setAttackedSquaresAfterMove();
     if (position.isCheck())
     {
         position.setChecksAndPinsBits();
@@ -297,11 +299,12 @@ int main()
                     position.restorePlyInfo();
             }
         }
-        else if (inputLine.substr(0,2) == "go")
+        else if (inputLine.substr(0, 2) == "go")
         {
             // Implement your move generation and evaluation logic here
             // Placeholder for first non-capture move
-            Move bestMove = iterativeSearch(position,  800);
+            runNormalPerftTest(position, 1);
+            Move bestMove = iterativeSearch(position, 800);
             position.makeNormalMove(bestMove);
             position.setAttackedSquaresAfterMove();
             if (moveIsCapture(bestMove.toString(), position))
@@ -322,13 +325,6 @@ int main()
                 BitPosition position_1 {fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
                 std::cout << "Position 1: \n" << runCapturesPerftTest(position_1, depth) << " moves\n";
                 BitPosition position_2 {fenToBitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")};
-                //position_2.makeNormalMove(findNormalMoveFromString(std::string{"e1f1"}, position_2));
-                //position_2.setAttackedSquaresAfterMove();
-                //position_2.setPinsBits();
-                //position_2.makeCapture(findCaptureFromString(std::string{"a6e2"}, position_2));
-                //position_2.setAttackedSquaresAfterMove();
-                //position_2.setPinsBits();
-                //position_2.makeCapture(findCaptureFromString(std::string{"c3e2"}, position_2));
                 std::cout << "Position 2: \n" << runCapturesPerftTest(position_2, depth) << " moves\n";
                 BitPosition position_3{fenToBitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1")};
                 std::cout << "Position 3: \n" << runCapturesPerftTest(position_3, depth) << " moves\n";

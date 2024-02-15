@@ -1975,8 +1975,8 @@ std::vector<Move> BitPosition::allMoves() const
             for (unsigned short destination_square : getBitIndices(precomputed_moves::black_pawn_moves[origin_square] & m_straight_pins & ~m_all_pieces_bit))
             {
                 moves.emplace_back(origin_square, destination_square);
-                if (origin_square > 48 && (precomputed_moves::black_pawn_doubles[origin_square] & m_all_pieces_bit) == 0)
-                    moves.push_back(double_moves[origin_square]);
+                if (origin_square > 47 && (precomputed_moves::black_pawn_doubles[origin_square] & m_all_pieces_bit) == 0)
+                    moves.push_back(double_moves[origin_square-48]);
             }
         }
 

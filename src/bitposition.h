@@ -181,11 +181,7 @@ public:
     // To make the ply info smaller. For a faster 3 fold repetition check.
     // It isnt used when making a move in search!
     {
-        // ply number
-        // WE HAVE TO MAKE SURE WE RESET IT TO 0 AFTER THE ENGINE GIVES A MOVE.
         m_ply = 0;
-        // ply info arrays (these is the info used on non capture moves,
-        // since captured moves will all have already benn generated before unmaking move)
         std::array<bool, 150> m_wkcastling_array{};
         std::array<bool, 150> m_wqcastling_array{};
         std::array<bool, 150> m_bkcastling_array{};
@@ -228,8 +224,6 @@ public:
 
         std::array<uint64_t, 150> m_all_squares_attacked_by_white_array{};
         std::array<uint64_t, 150> m_all_squares_attacked_by_black_array{};
-
-        BitPosition::storePlyInfo();
     }
     bool isThreeFold()
     // Checking in position is three-fold or not
@@ -274,7 +268,7 @@ public:
         std::cout << "Black queens " << m_black_queens_bit << "\n";
         std::cout << "Black king " << m_black_king_bit << "\n";
 
-        std::cout << "psquare " << m_psquare;
+        std::cout << "psquare " << m_psquare << "\n";
     }
     void printChecksInfo() const
     {

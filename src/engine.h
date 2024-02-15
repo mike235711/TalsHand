@@ -377,10 +377,10 @@ std::pair<Move, int> alphaBetaSearch(BitPosition &position, int depth, int alpha
 {
     if (position.isThreeFold())
         return std::pair<Move, int>(0, 0);
+        
     if (depth <= 0)
-    {
         return quiesenceSearch(position, alpha, beta, our_turn);
-    }
+
     position.setAttackedSquaresAfterMove();
     std::vector<Move> moves;
     if (position.isCheck())
