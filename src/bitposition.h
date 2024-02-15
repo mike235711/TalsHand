@@ -162,6 +162,7 @@ public:
     std::vector<Move> orderedCaptures() const;
     std::vector<Move> inCheckAllMoves() const;
     std::vector<Move> allMoves() const;
+    std::vector<Move> orderAllMoves(std::vector<Move> &moves) const;
     std::vector<Move> inCheckMoves() const;
     std::vector<Move> nonCaptureMoves() const;
 
@@ -173,7 +174,6 @@ public:
     void unmakeMove();
     void setSliderAttackedSquares();
     void setAttackedSquaresAfterMove();
-    std::vector<Move> setPinsBitsReturningPinnedMoves();
     // Member function definitions
 
     void restorePlyInfo()
@@ -297,5 +297,94 @@ public:
     uint64_t getBlackRooksBits() const { return m_black_rooks_bit; }
     uint64_t getBlackQueensBits() const { return m_black_queens_bit; }
     uint64_t getBlackKingBits() const { return m_black_king_bit; }
+
+    std::string toFenString() const
+    {
+        std::string fen;
+        for (int row = 7; row >= 0; --row)
+        {
+            int emptyCount = 0;
+            for (int col = 0; col < 8; ++col)
+            {
+                int square = row * 8 + col;
+                uint64_t bit = 1ULL << square;
+                char pieceChar = ' ';
+                if (m_white_pawns_bit & bit)
+                    pieceChar = 'P';
+                else if (m_white_knights_bit & bit)
+                    pieceChar = 'N';
+                else if (m_white_bishops_bit & bit)
+                    pieceChar = 'B';
+                else if (m_white_rooks_bit & bit)
+                    pieceChar = 'R';
+                else if (m_white_queens_bit & bit)
+                    pieceChar = 'Q';
+                else if (m_white_king_bit & bit)
+                    pieceChar = 'K';
+                else if (m_black_pawns_bit & bit)
+                    pieceChar = 'p';
+                else if (m_black_knights_bit & bit)
+                    pieceChar = 'n';
+                else if (m_black_bishops_bit & bit)
+                    pieceChar = 'b';
+                else if (m_black_rooks_bit & bit)
+                    pieceChar = 'r';
+                else if (m_black_queens_bit & bit)
+                    pieceChar = 'q';
+                else if (m_black_king_bit & bit)
+                    pieceChar = 'k';
+
+                if (pieceChar != ' ')
+                {
+                    if (emptyCount > 0)
+                    {
+                        fen += std::to_string(emptyCount);
+                        emptyCount = 0;
+                    }
+                    fen += pieceChar;
+                }
+                else
+                {
+                    ++emptyCount;
+                }
+            }
+            if (emptyCount > 0)
+                fen += std::to_string(emptyCount);
+            if (row > 0)
+                fen += '/';
+        }
+
+        // Active color
+        fen += ' ';
+        fen += (m_turn ? 'w' : 'b');
+
+        // Castling availability
+        fen += ' ';
+        if (!m_white_kingside_castling && !m_white_queenside_castling &&
+            !m_black_kingside_castling && !m_black_queenside_castling)
+        {
+            fen += '-';
+        }
+        else
+        {
+            if (m_white_kingside_castling)
+                fen += 'K';
+            if (m_white_queenside_castling)
+                fen += 'Q';
+            if (m_black_kingside_castling)
+                fen += 'k';
+            if (m_black_queenside_castling)
+                fen += 'q';
+        }
+
+        // En passant target square
+        fen += ' ';
+        fen += '-';
+
+        // Halfmove clock and fullmove number placeholders (not stored in BitPosition)
+        fen += " 0 1"; // These values would need to be tracked elsewhere for accuracy
+
+        return fen;
+    }
 };
 #endif

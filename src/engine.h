@@ -377,7 +377,7 @@ std::pair<Move, int> alphaBetaSearch(BitPosition &position, int depth, int alpha
 {
     if (position.isThreeFold())
         return std::pair<Move, int>(0, 0);
-        
+
     if (depth <= 0)
         return quiesenceSearch(position, alpha, beta, our_turn);
 
@@ -387,11 +387,13 @@ std::pair<Move, int> alphaBetaSearch(BitPosition &position, int depth, int alpha
     {
         position.setChecksAndPinsBits();
         moves = position.inCheckAllMoves();
+        moves = position.orderAllMoves(moves);
     }
     else
     {
         position.setPinsBits();
         moves = position.allMoves();
+        moves = position.orderAllMoves(moves);
     }
     if (moves.size() == 0)
     {

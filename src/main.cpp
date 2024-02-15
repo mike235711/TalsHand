@@ -6,6 +6,7 @@
 #include "bitposition.h"
 #include "tests.h"
 #include <chrono>
+#include <random>
 #include "magicmoves.h"
 #include "engine.h"
 
@@ -303,7 +304,6 @@ int main()
         {
             // Implement your move generation and evaluation logic here
             // Placeholder for first non-capture move
-            runNormalPerftTest(position, 1);
             Move bestMove = iterativeSearch(position, 800);
             position.makeNormalMove(bestMove);
             position.setAttackedSquaresAfterMove();
@@ -371,6 +371,37 @@ int main()
 
             std::cout << "Time taken: " << duration.count() << " seconds\n";
         }
+        else if (inputLine == "generateQuietFens")
+        {
+            std::srand(static_cast<unsigned int>(std::time(nullptr))); // Seed for basic random (used if <random> is not implemented)
+            std::random_device rd;                                     // Non-deterministic random number generator
+            std::mt19937 gen(rd());                                    // Standard mersenne_twister_engine seeded with rd()
+
+            for (int iteration = 1; iteration <= 50; ++iteration)
+            {
+                std::cout << "Iteration " << iteration << "\n";
+                for (int games = 1; games <= 1000; ++games)
+                {
+                    BitPosition position_1{fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
+
+                    for (int i = 1; i <= 190; ++i)
+                    {
+                        position_1.setAttackedSquaresAfterMove();
+                        std::vector<Move> moves = position_1.isCheck() ? position_1.inCheckAllMoves() : position_1.allMoves();
+
+                        if (moves.empty())
+                            break;
+
+                        std::uniform_int_distribution<> dis(0, moves.size() - 1); // Uniform distribution for index
+                        Move move{moves[dis(gen)]};                               // Selecting a random move using <random>
+
+                        position_1.makeNormalMove(move);
+                        std::cout << "Game " << games << "\n";
+                        std::cout << "Fen " << position_1.toFenString() << "\n";
+                    }
+                }
+            }
         }
+    }
     return 0;
 }

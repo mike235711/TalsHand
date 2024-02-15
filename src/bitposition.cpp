@@ -578,10 +578,8 @@ bool BitPosition::kingIsSafeAfterPassant(unsigned short removed_square_1, unsign
 
 std::vector<Move> BitPosition::inCheckOrderedCaptures() const
 {
-    std::vector<Move> captures;
-    std::vector<unsigned short> scores;
-    captures.reserve(20);
-    scores.reserve(20);
+    std::vector<std::pair<Move, int>> captures_scores;
+    captures_scores.reserve(20);
     std::array<uint64_t, 5> checks_array{m_pawn_checks, m_knight_checks, m_bishop_checks, m_rook_checks, m_queen_checks};
     if (m_turn) // White's turn
     {
@@ -593,8 +591,7 @@ std::vector<Move> BitPosition::inCheckOrderedCaptures() const
             {
                 if (BitPosition::kingIsSafeFromSliders(destination_square))
                 {
-                    captures.emplace_back(m_white_king_position, destination_square, 5, 0);
-                    scores.emplace_back(i);
+                    captures_scores.emplace_back(Move(m_white_king_position, destination_square, 5, 0), i);
                 }
             }
         }
@@ -615,19 +612,14 @@ std::vector<Move> BitPosition::inCheckOrderedCaptures() const
                             if (destination_square > 55)
                             // Promotions
                             {
-                                captures.emplace_back(origin_square, destination_square, 1, 1);
-                                scores.emplace_back(i + 1);
-                                captures.emplace_back(origin_square, destination_square, 2, 1);
-                                scores.emplace_back(i + 2);
-                                captures.emplace_back(origin_square, destination_square, 3, 1);
-                                scores.emplace_back(i + 3);
-                                captures.emplace_back(origin_square, destination_square, 4, 1);
-                                scores.emplace_back(i + 4);
+                                captures_scores.emplace_back(Move(origin_square, destination_square, 1, 1), i + 1);
+                                captures_scores.emplace_back(Move(origin_square, destination_square, 2, 1), i + 2);
+                                captures_scores.emplace_back(Move(origin_square, destination_square, 3, 1), i + 3);
+                                captures_scores.emplace_back(Move(origin_square, destination_square, 4, 1), i + 4);
                             }
                             else
                             {
-                                captures.emplace_back(origin_square, destination_square, 0, 0);
-                                scores.emplace_back(i);
+                                captures_scores.emplace_back(Move(origin_square, destination_square, 0, 0), i);
                             }
                         }
                     }
@@ -635,8 +627,7 @@ std::vector<Move> BitPosition::inCheckOrderedCaptures() const
                 // Passant capture
                 if ((precomputed_moves::white_pawn_attacks[origin_square] & passant_bitboards[m_psquare])!= 0 && kingIsSafeAfterPassant(origin_square, m_psquare-8))
                 {
-                    captures.emplace_back(origin_square, m_psquare, 0, 0);
-                    scores.emplace_back(0);
+                    captures_scores.emplace_back(Move(origin_square, m_psquare, 0, 0), 0);
                 }
             }
             // Capturing with knights
@@ -647,8 +638,7 @@ std::vector<Move> BitPosition::inCheckOrderedCaptures() const
                         uint64_t moveable_squares{precomputed_moves::knight_moves[origin_square] & checks_array[i]};
                         if (moveable_squares != 0)
                         {
-                            captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), 1, 0);
-                            scores.emplace_back(i - 1);
+                            captures_scores.emplace_back(Move(origin_square, getLeastSignificantBitIndex(moveable_squares), 1, 0), i - 1);
                         }
                     }
             }
@@ -660,8 +650,7 @@ std::vector<Move> BitPosition::inCheckOrderedCaptures() const
                     uint64_t moveable_squares{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & checks_array[i]};
                     if (moveable_squares != 0)
                     {
-                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), 2, 0);
-                        scores.emplace_back(i - 2);
+                        captures_scores.emplace_back(Move(origin_square, getLeastSignificantBitIndex(moveable_squares), 2, 0), i - 2);
                     }
                 }
             }
@@ -673,8 +662,7 @@ std::vector<Move> BitPosition::inCheckOrderedCaptures() const
                     uint64_t moveable_squares{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & checks_array[i]};
                     if (moveable_squares != 0)
                     {
-                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), 3, 0);
-                        scores.emplace_back(i - 3);
+                        captures_scores.emplace_back(Move(origin_square, getLeastSignificantBitIndex(moveable_squares), 3, 0), i - 3);
                     }
                 }
             }
@@ -686,8 +674,7 @@ std::vector<Move> BitPosition::inCheckOrderedCaptures() const
                     uint64_t moveable_squares{(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) | RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit)) & checks_array[i]};
                     if (moveable_squares !=0)
                     {
-                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), 4, 0);
-                        scores.emplace_back(i - 4);
+                        captures_scores.emplace_back(Move(origin_square, getLeastSignificantBitIndex(moveable_squares), 4, 0), i - 4);
                     }
                 }
             }
@@ -703,8 +690,7 @@ std::vector<Move> BitPosition::inCheckOrderedCaptures() const
             {
                 if (BitPosition::kingIsSafeFromSliders(destination_square))
                 {
-                    captures.emplace_back(m_black_king_position, destination_square, 5, 0);
-                    scores.emplace_back(i + 1);
+                    captures_scores.emplace_back(Move(m_black_king_position, destination_square, 5, 0), i + 1);
                 }
             }
         }
@@ -725,19 +711,14 @@ std::vector<Move> BitPosition::inCheckOrderedCaptures() const
                             if (destination_square < 8)
                             // Promotions
                             {
-                                captures.emplace_back(origin_square, destination_square, 1, 1);
-                                scores.emplace_back(i + 1);
-                                captures.emplace_back(origin_square, destination_square, 2, 1);
-                                scores.emplace_back(i + 2);
-                                captures.emplace_back(origin_square, destination_square, 3, 1);
-                                scores.emplace_back(i + 3);
-                                captures.emplace_back(origin_square, destination_square, 4, 1);
-                                scores.emplace_back(i + 4);
+                                captures_scores.emplace_back(Move(origin_square, destination_square, 1, 1), i + 1);
+                                captures_scores.emplace_back(Move(origin_square, destination_square, 2, 1), i + 2);
+                                captures_scores.emplace_back(Move(origin_square, destination_square, 3, 1), i + 3);
+                                captures_scores.emplace_back(Move(origin_square, destination_square, 4, 1), i + 4);
                             }
                             else
                             {
-                                captures.emplace_back(origin_square, destination_square, 0, 0);
-                                scores.emplace_back(i);
+                                captures_scores.emplace_back(Move(origin_square, destination_square, 0, 0), i);
                             }
                         }
                     }
@@ -745,8 +726,7 @@ std::vector<Move> BitPosition::inCheckOrderedCaptures() const
                 // Passant capture
                 if ((precomputed_moves::black_pawn_attacks[origin_square] & passant_bitboards[m_psquare]) != 0 && kingIsSafeAfterPassant(origin_square, m_psquare + 8))
                 {    
-                    captures.emplace_back(origin_square, m_psquare, 0, 0);
-                    scores.emplace_back(0);
+                    captures_scores.emplace_back(Move(origin_square, m_psquare, 0, 0), 0);
                 }
             }
             // Capturing with knights
@@ -757,8 +737,7 @@ std::vector<Move> BitPosition::inCheckOrderedCaptures() const
                     uint64_t moveable_squares{precomputed_moves::knight_moves[origin_square] & checks_array[i]};
                     if (moveable_squares != 0)
                     {
-                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), 1, 0);
-                        scores.emplace_back(i-1);
+                        captures_scores.emplace_back(Move(origin_square, getLeastSignificantBitIndex(moveable_squares), 1, 0), i - 1);
                     }
                 }
             }
@@ -770,8 +749,7 @@ std::vector<Move> BitPosition::inCheckOrderedCaptures() const
                     uint64_t moveable_squares{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & checks_array[i]};
                     if (moveable_squares != 0)
                     {
-                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), 2, 0);
-                        scores.emplace_back(i-2);
+                        captures_scores.emplace_back(Move(origin_square, getLeastSignificantBitIndex(moveable_squares), 2, 0), i - 2);
                     }
                 }
             }
@@ -783,8 +761,7 @@ std::vector<Move> BitPosition::inCheckOrderedCaptures() const
                     uint64_t moveable_squares{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & checks_array[i]};
                     if (moveable_squares != 0)
                     {
-                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), 3, 0);
-                        scores.emplace_back(i-3);
+                        captures_scores.emplace_back(Move(origin_square, getLeastSignificantBitIndex(moveable_squares), 3, 0), i - 3);
                     }
                 }
             }
@@ -796,12 +773,26 @@ std::vector<Move> BitPosition::inCheckOrderedCaptures() const
                     uint64_t moveable_squares{(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) | RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit)) & checks_array[i]};
                     if (moveable_squares != 0)
                     {
-                        captures.emplace_back(origin_square, getLeastSignificantBitIndex(moveable_squares), 4, 0);
-                        scores.emplace_back(i-4);
+                        captures_scores.emplace_back(Move(origin_square, getLeastSignificantBitIndex(moveable_squares), 4, 0), i - 4);
                     }
                 }
             }
         }
+    }
+    // Sort the pair vector by scores, highest first
+    std::sort(captures_scores.begin(), captures_scores.end(),
+              [](const std::pair<Move, int> &a, const std::pair<Move, int> &b)
+              {
+                  return a.second > b.second; // Sort by score in descending order
+              });
+
+    std::vector<Move> captures;
+    captures.reserve(captures_scores.size()); // Reserve space to avoid reallocations
+
+    // Unpack the sorted captures into the vector
+    for (size_t i = 0; i < captures_scores.size(); ++i)
+    {
+        captures.push_back(captures_scores[i].first); // Note: first is the Move, second is the score
     }
     return captures;
 }
@@ -810,10 +801,8 @@ std::vector<Move> BitPosition::orderedCaptures() const
 // We create a set of moves and order them in terms of the score, returning a tuple of moves. This set of moves will always be computed before
 // non_capture_moves.
 {
-    std::vector<Move> captures;
-    std::vector<unsigned short> scores;
-    captures.reserve(50);
-    scores.reserve(50);
+    std::vector<std::pair<Move, int>> captures_scores;
+    captures_scores.reserve(50);
     if (m_turn) // White's turn
     {
         std::array<uint64_t, 5> pieces_array{m_black_pawns_bit, m_black_knights_bit, m_black_bishops_bit, m_black_rooks_bit, m_black_queens_bit};
@@ -824,8 +813,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
             {
                 for (unsigned short destination_square : (getBitIndices(precomputed_moves::knight_moves[origin_square] & pieces_array[i])))
                 {
-                    captures.emplace_back(origin_square, destination_square, 1, 0);
-                    scores.emplace_back(i-1);
+                    captures_scores.emplace_back(Move(origin_square, destination_square, 1, 0), i-1);
                 }
             }
         }
@@ -834,8 +822,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
         {
             for (unsigned short destination_square : (getBitIndices(precomputed_moves::king_moves[m_white_king_position] & pieces_array[i] & ~m_all_squares_attacked_by_black)))
             {
-                captures.emplace_back(m_white_king_position, destination_square, 5, 0);
-                scores.emplace_back(i);
+                captures_scores.emplace_back(Move(m_white_king_position, destination_square, 5, 0), i);
             }
         }
         // Capturing with rooks that arent pinned
@@ -845,8 +832,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
             {
                 for (unsigned short destination_square : (getBitIndices(RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i])))
                 {
-                    captures.emplace_back(origin_square, destination_square, 3, 0);
-                    scores.emplace_back(i-3);
+                    captures_scores.emplace_back(Move(origin_square, destination_square, 3, 0), i-3);
                 }
             }
         }
@@ -857,8 +843,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
             {
                 for (unsigned short destination_square : (getBitIndices(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i])))
                 {
-                    captures.emplace_back(origin_square, destination_square, 2, 0);
-                    scores.emplace_back(i-2);
+                    captures_scores.emplace_back(Move(origin_square, destination_square, 2, 0), i-1);
                 }
             }
         }
@@ -869,8 +854,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
             {
                 for (unsigned short destination_square : (getBitIndices((BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) | RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit)) & pieces_array[i])))
                 {
-                    captures.emplace_back(origin_square, destination_square, 4, 0);
-                    scores.emplace_back(i-4);
+                    captures_scores.emplace_back(Move(origin_square, destination_square, 4, 0), i-4);
                 }
             }
         }
@@ -882,19 +866,14 @@ std::vector<Move> BitPosition::orderedCaptures() const
                 if (destination_square > 55)
                 // Promotions
                 {
-                    captures.emplace_back(destination_square - 7, destination_square, 1, 1);
-                    scores.emplace_back(i + 1);
-                    captures.emplace_back(destination_square - 7, destination_square, 2, 1);
-                    scores.emplace_back(i + 2);
-                    captures.emplace_back(destination_square - 7, destination_square, 3, 1);
-                    scores.emplace_back(i + 3);
-                    captures.emplace_back(destination_square - 7, destination_square, 4, 1);
-                    scores.emplace_back(i + 4);
+                    captures_scores.emplace_back(Move(destination_square - 7, destination_square, 1, 1), i + 1);
+                    captures_scores.emplace_back(Move(destination_square - 7, destination_square, 2, 1), i + 2);
+                    captures_scores.emplace_back(Move(destination_square - 7, destination_square, 3, 1), i + 3);
+                    captures_scores.emplace_back(Move(destination_square - 7, destination_square, 4, 1), i + 4);
                 }
                 else
                 {
-                    captures.emplace_back(destination_square - 7, destination_square, 0, 0);
-                    scores.emplace_back(i);
+                    captures_scores.emplace_back(Move(destination_square - 7, destination_square, 0, 0), i);
                 }
             }
             for (unsigned short destination_square : getBitIndices((((m_white_pawns_bit & ~m_all_pins & 0b0111111101111111011111110111111101111111011111110111111101111111) << 9) & pieces_array[i])))
@@ -902,19 +881,14 @@ std::vector<Move> BitPosition::orderedCaptures() const
                 if (destination_square > 55)
                 // Promotions
                 {
-                    captures.emplace_back(destination_square - 9, destination_square, 1, 1);
-                    scores.emplace_back(i + 1);
-                    captures.emplace_back(destination_square - 9, destination_square, 2, 1);
-                    scores.emplace_back(i + 2);
-                    captures.emplace_back(destination_square - 9, destination_square, 3, 1);
-                    scores.emplace_back(i + 3);
-                    captures.emplace_back(destination_square - 9, destination_square, 4, 1);
-                    scores.emplace_back(i + 4);
+                    captures_scores.emplace_back(Move(destination_square - 9, destination_square, 1, 1), i + 1);
+                    captures_scores.emplace_back(Move(destination_square - 9, destination_square, 2, 1), i + 2);
+                    captures_scores.emplace_back(Move(destination_square - 9, destination_square, 3, 1), i + 3);
+                    captures_scores.emplace_back(Move(destination_square - 9, destination_square, 4, 1), i + 4);
                 }
                 else
                 {
-                    captures.emplace_back(destination_square - 9, destination_square, 0, 0);
-                    scores.emplace_back(i);
+                    captures_scores.emplace_back(Move(destination_square - 9, destination_square, 0, 0), i);
                 }
             }
         }
@@ -923,14 +897,12 @@ std::vector<Move> BitPosition::orderedCaptures() const
         {
             if (((precomputed_moves::one_one_bits[m_psquare - 7] & m_white_pawns_bit & 0b1111111011111110111111101111111011111110111111101111111011111110 & ~m_all_pins) != 0) && BitPosition::kingIsSafeAfterPassant(m_psquare - 7, m_psquare - 8))
             {
-                captures.emplace_back(m_psquare - 7, m_psquare, 0, 0);
-                scores.emplace_back(0);
+                captures_scores.emplace_back(Move(m_psquare - 7, m_psquare, 0, 0), 0);
             }
 
             if (((precomputed_moves::one_one_bits[m_psquare - 9] & m_white_pawns_bit & 0b0111111101111111011111110111111101111111011111110111111101111111 & ~m_all_pins) != 0) && BitPosition::kingIsSafeAfterPassant(m_psquare - 9, m_psquare - 8))
             {
-                captures.emplace_back(m_psquare - 9, m_psquare, 0, 0);
-                scores.emplace_back(0);
+                captures_scores.emplace_back(Move(m_psquare - 9, m_psquare, 0, 0), 0);
             }
         }
         // Capturing with pinned pieces 
@@ -944,8 +916,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
                 uint64_t destination_bit{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_diagonal_pins};
                 if (destination_bit != 0)
                 {
-                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), 2, 0);
-                    scores.emplace_back(i-2);
+                    captures_scores.emplace_back(Move(origin_square, getLeastSignificantBitIndex(destination_bit), 2, 0), i-2);
                 }
             }
         }
@@ -957,8 +928,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
                 uint64_t destination_bit{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_straight_pins};
                 if (destination_bit != 0)
                 {
-                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), 3, 0);
-                    scores.emplace_back(i-3);
+                    captures_scores.emplace_back(Move(origin_square, getLeastSignificantBitIndex(destination_bit), 3, 0), i-3);
                 }
             }
         }
@@ -971,8 +941,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
                 uint64_t destination_bit{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_diagonal_pins};
                 if (destination_bit != 0)
                 {
-                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), 4, 0);
-                    scores.emplace_back(i-4);
+                    captures_scores.emplace_back(Move(origin_square, getLeastSignificantBitIndex(destination_bit), 4, 0), i - 4);
                 }
             }
         }
@@ -984,8 +953,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
                 uint64_t destination_bit{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_straight_pins};
                 if (destination_bit != 0)
                 {
-                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), 4,  0);
-                    scores.emplace_back(i-4);
+                    captures_scores.emplace_back(Move(origin_square, getLeastSignificantBitIndex(destination_bit), 4,  0), i - 4);
                 }
             }
         }
@@ -999,19 +967,14 @@ std::vector<Move> BitPosition::orderedCaptures() const
                     {
                         if (destination_square > 55)
                         {
-                            captures.emplace_back(origin_square, destination_square, 1, 1);
-                            scores.emplace_back(i+1);
-                            captures.emplace_back(origin_square, destination_square, 2, 1);
-                            scores.emplace_back(i+2);
-                            captures.emplace_back(origin_square, destination_square, 3, 1);
-                            scores.emplace_back(i+3);
-                            captures.emplace_back(origin_square, destination_square, 4, 1);
-                            scores.emplace_back(i+4);
+                            captures_scores.emplace_back(Move(origin_square, destination_square, 1, 1), i + 1);
+                            captures_scores.emplace_back(Move(origin_square, destination_square, 2, 1), i + 2);
+                            captures_scores.emplace_back(Move(origin_square, destination_square, 3, 1), i + 3);
+                            captures_scores.emplace_back(Move(origin_square, destination_square, 4, 1), i + 4);
                         }
                         else
                         {
-                            captures.emplace_back(origin_square, destination_square, 0, 0);
-                            scores.emplace_back(i);
+                            captures_scores.emplace_back(Move(origin_square, destination_square, 0, 0), i);
                         }
                     }        
             }
@@ -1027,8 +990,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
             {
                 for (unsigned short destination_square : (getBitIndices(precomputed_moves::knight_moves[origin_square] & pieces_array[i])))
                 {
-                    captures.emplace_back(origin_square, destination_square, 1, 0);
-                    scores.emplace_back(i-1);
+                    captures_scores.emplace_back(Move(origin_square, destination_square, 1, 0), i - 1);
                 }
             }
         }
@@ -1037,8 +999,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
         {
             for (unsigned short destination_square : (getBitIndices(precomputed_moves::king_moves[m_black_king_position] & pieces_array[i] & ~m_all_squares_attacked_by_white)))
             {
-                captures.emplace_back(m_black_king_position, destination_square, 5, 0);
-                scores.emplace_back(i);
+                captures_scores.emplace_back(Move(m_black_king_position, destination_square, 5, 0), i);
             }
         }
         // Capturing with rooks that arent pinned
@@ -1048,8 +1009,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
             {
                 for (unsigned short destination_square : (getBitIndices(RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i])))
                 {
-                    captures.emplace_back(origin_square, destination_square, 3, 0);
-                    scores.emplace_back(i-3);
+                    captures_scores.emplace_back(Move(origin_square, destination_square, 3, 0), i - 3);
                 }
             }
         }
@@ -1060,8 +1020,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
             {
                 for (unsigned short destination_square : (getBitIndices(BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i])))
                 {
-                    captures.emplace_back(origin_square, destination_square, 2, 0);
-                    scores.emplace_back(i-2);
+                    captures_scores.emplace_back(Move(origin_square, destination_square, 2, 0), i - 2);
                 }
             }
         }
@@ -1072,8 +1031,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
             {
                 for (unsigned short destination_square : (getBitIndices((BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) | RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit)) & pieces_array[i])))
                 {
-                    captures.emplace_back(origin_square, destination_square, 4, 0);
-                    scores.emplace_back(i-4);
+                    captures_scores.emplace_back(Move(origin_square, destination_square, 4, 0), i - 4);
                 }
             }
         }
@@ -1085,19 +1043,14 @@ std::vector<Move> BitPosition::orderedCaptures() const
                 if (destination_square < 8)
                 // Promotions
                 {
-                    captures.emplace_back(destination_square + 7, destination_square, 1, 1);
-                    scores.emplace_back(i + 1);
-                    captures.emplace_back(destination_square + 7, destination_square, 2, 1);
-                    scores.emplace_back(i + 2);
-                    captures.emplace_back(destination_square + 7, destination_square, 3, 1);
-                    scores.emplace_back(i + 3);
-                    captures.emplace_back(destination_square + 7, destination_square, 4, 1);
-                    scores.emplace_back(i + 4);
+                    captures_scores.emplace_back(Move(destination_square + 7, destination_square, 1, 1), i + 1);
+                    captures_scores.emplace_back(Move(destination_square + 7, destination_square, 2, 1), i + 2);
+                    captures_scores.emplace_back(Move(destination_square + 7, destination_square, 3, 1), i + 3);
+                    captures_scores.emplace_back(Move(destination_square + 7, destination_square, 4, 1), i + 4);
                 }
                 else
                 {
-                    captures.emplace_back(destination_square + 7, destination_square, 0, 0);
-                    scores.emplace_back(i);
+                    captures_scores.emplace_back(Move(destination_square + 7, destination_square, 0, 0), i);
                 }
             }
             for (unsigned short destination_square : getBitIndices(((m_black_pawns_bit & ~m_all_pins & 0b1111111011111110111111101111111011111110111111101111111011111110) >> 9) & pieces_array[i]))
@@ -1105,19 +1058,14 @@ std::vector<Move> BitPosition::orderedCaptures() const
                 if (destination_square < 8)
                 // Promotions
                 {
-                    captures.emplace_back(destination_square + 9, destination_square, 1, 1);
-                    scores.emplace_back(i + 1);
-                    captures.emplace_back(destination_square + 9, destination_square, 2, 1);
-                    scores.emplace_back(i + 2);
-                    captures.emplace_back(destination_square + 9, destination_square, 3, 1);
-                    scores.emplace_back(i + 3);
-                    captures.emplace_back(destination_square + 9, destination_square, 4, 1);
-                    scores.emplace_back(i + 4);
+                    captures_scores.emplace_back(Move(destination_square + 9, destination_square, 1, 1), i + 1);
+                    captures_scores.emplace_back(Move(destination_square + 9, destination_square, 2, 1), i + 2);
+                    captures_scores.emplace_back(Move(destination_square + 9, destination_square, 3, 1), i + 3);
+                    captures_scores.emplace_back(Move(destination_square + 9, destination_square, 4, 1), i + 4);
                 }
                 else
                 {
-                    captures.emplace_back(destination_square + 9, destination_square, 0, 0);
-                    scores.emplace_back(i);
+                    captures_scores.emplace_back(Move(destination_square + 9, destination_square, 0, 0), i);
                 }
             }
         }
@@ -1126,14 +1074,12 @@ std::vector<Move> BitPosition::orderedCaptures() const
         {
             if (((precomputed_moves::one_one_bits[m_psquare + 9] & m_black_pawns_bit & 0b1111111011111110111111101111111011111110111111101111111011111110 & ~m_all_pins) != 0) && BitPosition::kingIsSafeAfterPassant(m_psquare + 8, m_psquare + 9))
             {
-                captures.emplace_back(m_psquare + 9, m_psquare, 0, 0);
-                scores.emplace_back(0);
+                captures_scores.emplace_back(Move(m_psquare + 9, m_psquare, 0, 0), 0);
             }
 
             if (((precomputed_moves::one_one_bits[m_psquare + 7] & m_black_pawns_bit & 0b0111111101111111011111110111111101111111011111110111111101111111 & ~m_all_pins) != 0) && BitPosition::kingIsSafeAfterPassant(m_psquare + 8, m_psquare + 7))
             {
-                captures.emplace_back(m_psquare + 7, m_psquare, 0, 0);
-                scores.emplace_back(0);
+                captures_scores.emplace_back(Move(m_psquare + 7, m_psquare, 0, 0), 0);
             }
         }
         // Capturing with pinned pieces
@@ -1147,8 +1093,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
                 uint64_t destination_bit{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_diagonal_pins};
                 if (destination_bit != 0)
                 {
-                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), 2, 0);
-                    scores.emplace_back(i-2);
+                    captures_scores.emplace_back(Move(origin_square, getLeastSignificantBitIndex(destination_bit), 2, 0), i - 2);
                 }
             }
         }
@@ -1160,8 +1105,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
                 uint64_t destination_bit{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_straight_pins};
                 if (destination_bit != 0)
                 {
-                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), 3, 0);
-                    scores.emplace_back(i-3);
+                    captures_scores.emplace_back(Move(origin_square, getLeastSignificantBitIndex(destination_bit), 3, 0), i - 3);
                 }
             }
         }
@@ -1174,8 +1118,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
                 uint64_t destination_bit{BmagicNOMASK(origin_square, precomputed_moves::bishop_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_diagonal_pins};
                 if (destination_bit != 0)
                 {
-                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), 4, 0);
-                    scores.emplace_back(i-4);
+                    captures_scores.emplace_back(Move(origin_square, getLeastSignificantBitIndex(destination_bit), 4, 0), i - 4);
                 }
             }
         }
@@ -1187,8 +1130,7 @@ std::vector<Move> BitPosition::orderedCaptures() const
                 uint64_t destination_bit{RmagicNOMASK(origin_square, precomputed_moves::rook_unfull_rays[origin_square] & m_all_pieces_bit) & pieces_array[i] & m_straight_pins};
                 if (destination_bit != 0)
                 {
-                    captures.emplace_back(origin_square, getLeastSignificantBitIndex(destination_bit), 4, 0);
-                    scores.emplace_back(i-4);
+                    captures_scores.emplace_back(Move(origin_square, getLeastSignificantBitIndex(destination_bit), 4, 0), i - 4);
                 }
             }
         }
@@ -1202,26 +1144,34 @@ std::vector<Move> BitPosition::orderedCaptures() const
                 {
                     if (destination_square < 8)
                     {
-                        captures.emplace_back(origin_square, destination_square, 1, 1);
-                        scores.emplace_back(i+1);
-                        captures.emplace_back(origin_square, destination_square, 2, 1);
-                        scores.emplace_back(i+2);
-                        captures.emplace_back(origin_square, destination_square, 3, 1);
-                        scores.emplace_back(i+3);
-                        captures.emplace_back(origin_square, destination_square, 4, 1);
-                        scores.emplace_back(i+4);
+                        captures_scores.emplace_back(Move(origin_square, destination_square, 1, 1), i + 1);
+                        captures_scores.emplace_back(Move(origin_square, destination_square, 2, 1), i + 2);
+                        captures_scores.emplace_back(Move(origin_square, destination_square, 3, 1), i + 3);
+                        captures_scores.emplace_back(Move(origin_square, destination_square, 4, 1), i + 4);
                     }
                     else
                     {
-                        captures.emplace_back(origin_square, destination_square, 0, 0);
-                        scores.emplace_back(i);
+                        captures_scores.emplace_back(Move(origin_square, destination_square, 0, 0), i);
                     }
                 }
             }
         }
     }
-    // Now we order them
+    // Sort the pair vector by scores, highest first
+    std::sort(captures_scores.begin(), captures_scores.end(),
+              [](const std::pair<Move, int> &a, const std::pair<Move, int> &b)
+              {
+                  return a.second > b.second; // Sort by score in descending order
+              });
 
+    std::vector<Move> captures;
+    captures.reserve(captures_scores.size()); // Reserve space to avoid reallocations
+
+    // Unpack the sorted captures into the vector
+    for (size_t i = 0; i < captures_scores.size(); ++i)
+    {
+        captures.push_back(captures_scores[i].first); // Note: first is the Move, second is the score
+    }
     return captures;
 }
 
@@ -1496,12 +1446,6 @@ bool BitPosition::kingIsSafeFromSliders(unsigned short king_square) const
             return false;
     }
     return true;
-}
-std::vector<Move> BitPosition::setPinsBitsReturningPinnedMoves()
-// This is so that we don't have to calculate pinned pieces moves in allMoves.
-// HMMMMM.
-{
-
 }
 
 std::vector<Move> BitPosition::inCheckAllMoves() const
@@ -2019,7 +1963,124 @@ std::vector<Move> BitPosition::allMoves() const
     }
     return moves;
 }
+std::vector<Move> BitPosition::orderAllMoves(std::vector<Move> &moves) const
+{
+    std::vector<std::pair<Move, int>> moves_scores;
+    moves_scores.reserve(moves.size()); // Reserve space to avoid reallocations
+    if (m_turn) // Whites turn
+    {
+        for (Move move : moves)
+        {
+            unsigned short origin_square{move.getOriginSquare()};
+            uint64_t origin_bit {precomputed_moves::one_one_bits[origin_square]};
+            unsigned short destination_square{move.getDestinationSquare()};
+            uint64_t destination_bit {precomputed_moves::one_one_bits[destination_square]};
+            int score{0};
+            // Capture score
+            if ((destination_bit & m_black_pieces_bit) != 0)
+            {
+                if ((destination_bit & m_black_pawns_bit) != 0)
+                    score += 1;
+                else if ((destination_bit & m_black_knights_bit) != 0)
+                    score += 2;
+                else if ((destination_bit & m_black_bishops_bit) != 0)
+                    score += 3;
+                else if ((destination_bit & m_black_rooks_bit) != 0)
+                    score += 4;
+                else
+                    score += 5;
+            }
+            // Move safety
+            if ((origin_bit & m_white_knights_bit) != 0) // Moving knight
+            {
+                if ((destination_bit & ~m_squares_attacked_by_black_pawns) == 0) // Unsafe
+                    score -= 2;
+            }
+            else if ((origin_bit & m_white_bishops_bit) != 0) // Moving bishop
+            {
+                if ((destination_bit & ~m_squares_attacked_by_black_pawns) == 0) // Unsafe
+                    score -= 2;
+            }
+            else if ((origin_bit & m_white_rooks_bit) != 0) // Moving rook
+            {
+                if ((destination_bit & ~m_squares_attacked_by_black_pawns & ~m_squares_attacked_by_black_knights & ~m_squares_attacked_by_black_bishops) == 0) // Unsafe
+                    score -= 3;
+            }
+            else if ((origin_bit & m_white_queens_bit) != 0) // Moving queen
+            {
+                if ((destination_bit & ~m_squares_attacked_by_black_pawns & ~m_squares_attacked_by_black_knights & ~m_squares_attacked_by_black_bishops & ~m_squares_attacked_by_black_rooks) == 0) // Unsafe
+                    score -= 3;
+            }
+            moves_scores.emplace_back(move, score);
+        }
+    }
+    else // Blacks turn
+    {
+        for (Move move : moves)
+        {
+            unsigned short origin_square{move.getOriginSquare()};
+            uint64_t origin_bit{precomputed_moves::one_one_bits[origin_square]};
+            unsigned short destination_square{move.getDestinationSquare()};
+            uint64_t destination_bit{precomputed_moves::one_one_bits[destination_square]};
+            int score{0};
+            // Capture score
+            if ((destination_bit & m_white_pieces_bit) != 0)
+            {
+                if ((destination_bit & m_white_pawns_bit) != 0)
+                    score += 1;
+                else if ((destination_bit & m_white_knights_bit) != 0)
+                    score += 2;
+                else if ((destination_bit & m_white_bishops_bit) != 0)
+                    score += 3;
+                else if ((destination_bit & m_white_rooks_bit) != 0)
+                    score += 4;
+                else
+                    score += 5;
+            }
+            // Move safety
+            if ((origin_bit & m_black_knights_bit) != 0) // Moving knight
+            {
+                if ((destination_bit & ~m_squares_attacked_by_white_pawns) == 0) // Unsafe
+                    score -= 2;
+            }
+            else if ((origin_bit & m_black_bishops_bit) != 0) // Moving bishop
+            {
+                if ((destination_bit & ~m_squares_attacked_by_white_pawns) == 0) // Unsafe
+                    score -= 2;
+            }
+            else if ((origin_bit & m_black_rooks_bit) != 0) // Moving rook
+            {
+                if ((destination_bit & ~m_squares_attacked_by_white_pawns & ~m_squares_attacked_by_white_knights & ~m_squares_attacked_by_white_bishops) == 0) // Unsafe
+                    score -= 3;
+            }
+            else if ((origin_bit & m_black_queens_bit) != 0) // Moving queen
+            {
+                if ((destination_bit & ~m_squares_attacked_by_white_pawns & ~m_squares_attacked_by_white_knights & ~m_squares_attacked_by_white_bishops & ~m_squares_attacked_by_white_rooks) == 0) // Unsafe
+                    score -= 3;
+            }
+            moves_scores.emplace_back(move, score);
+        }
+    }
+    // Order moves
+    // Sort the pair vector by scores, highest first
+    std::sort(moves_scores.begin(), moves_scores.end(),
+              [](const std::pair<Move, int> &a, const std::pair<Move, int> &b)
+              {
+                  return a.second > b.second; // Sort by score in descending order
+              });
 
+    // Clear the original moves vector and repopulate it with sorted moves
+    moves.clear();                      // Clear the input vector if modifying it directly
+    moves.reserve(moves_scores.size()); // Reserve space to avoid reallocations
+
+    // Unpack the sorted moves into the vector
+    for (const auto &move_score : moves_scores)
+    {
+        moves.push_back(move_score.first); // Note: first is the Move
+    }
+
+    return moves; // Return the sorted moves
+}
 void BitPosition::setPiece(uint64_t origin_bit, uint64_t destination_bit)
 // Move a piece, given an origin bit and destination bit
 {
