@@ -6,6 +6,7 @@
 #include "bit_utils.h" // Bit utility functions
 #include "move.h"
 #include "magicmoves.h"
+#include "zobrist_keys.h"
 
 std::array<Move, 4> castling_moves{Move(16772), Move(16516), Move(20412), Move(20156)}; // WKS, WQS, BKS, BQS
 std::array<Move, 16> double_moves{Move(34864), Move(34929), Move(34994), Move(35059), // Black double pawn moves (a-h)
@@ -52,8 +53,130 @@ BitPosition::BitPosition(uint64_t white_pawns_bit, uint64_t white_knights_bit, u
 
     m_all_squares_attacked_by_white = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens | m_squares_attacked_by_white_king;
     m_all_squares_attacked_by_black = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens | m_squares_attacked_by_black_king;
-}
 
+    BitPosition::initializeZobristKey();
+}
+void BitPosition::initializeZobristKey()
+{
+    m_zobrist_key = 0;
+    // Piece keys
+    for (int square : getBitIndices(m_white_pawns_bit))
+        m_zobrist_key ^= zobrist_keys::whitePawnZobristNumbers[square];
+    for (int square : getBitIndices(m_white_knights_bit))
+        m_zobrist_key ^= zobrist_keys::whiteKnightZobristNumbers[square];
+    for (int square : getBitIndices(m_white_bishops_bit))
+        m_zobrist_key ^= zobrist_keys::whiteBishopZobristNumbers[square];
+    for (int square : getBitIndices(m_white_rooks_bit))
+        m_zobrist_key ^= zobrist_keys::whiteRookZobristNumbers[square];
+    for (int square : getBitIndices(m_white_queens_bit))
+        m_zobrist_key ^= zobrist_keys::whiteQueenZobristNumbers[square];
+    m_zobrist_key ^= zobrist_keys::whiteKingZobristNumbers[m_white_king_position];
+
+    for (int square : getBitIndices(m_black_pawns_bit))
+        m_zobrist_key ^= zobrist_keys::blackPawnZobristNumbers[square];
+    for (int square : getBitIndices(m_black_knights_bit))
+        m_zobrist_key ^= zobrist_keys::blackKnightZobristNumbers[square];
+    for (int square : getBitIndices(m_black_bishops_bit))
+        m_zobrist_key ^= zobrist_keys::blackBishopZobristNumbers[square];
+    for (int square : getBitIndices(m_black_rooks_bit))
+        m_zobrist_key ^= zobrist_keys::blackRookZobristNumbers[square];
+    for (int square : getBitIndices(m_black_queens_bit))
+        m_zobrist_key ^= zobrist_keys::blackQueenZobristNumbers[square];
+    m_zobrist_key ^= zobrist_keys::blackKingZobristNumbers[m_black_king_position];
+    // Turn key
+    if (not m_turn)
+        m_zobrist_key ^= zobrist_keys::blackToMoveZobristNumber;
+    // Castling rights key
+    int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+    m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+    // Psquare key
+    m_zobrist_key ^= zobrist_keys::passantSquaresZobristNumbers[m_psquare];
+    m_zobrist_keys_array[m_ply] = m_zobrist_key;
+}
+void BitPosition::updateZobristKeyPiecePartAfterMove(unsigned short origin_square, unsigned short destination_square)
+// Since the zobrist hashes are done by XOR on each individual key. And XOR is its own inverse.
+// We can efficiently update the hash by XORing the previous key with the key of the piece origin 
+// square and with the key of the piece destination square.
+{
+    if (m_turn)
+    {
+        if (m_moved_piece == 0) // Pawn
+            m_zobrist_key ^= zobrist_keys::whitePawnZobristNumbers[origin_square] ^ zobrist_keys::whitePawnZobristNumbers[destination_square];
+        else if (m_moved_piece == 1) // Knight
+            m_zobrist_key ^= zobrist_keys::whiteKnightZobristNumbers[origin_square] ^ zobrist_keys::whiteKnightZobristNumbers[destination_square];
+        else if (m_moved_piece == 2) // Bishop
+            m_zobrist_key ^= zobrist_keys::whiteBishopZobristNumbers[origin_square] ^ zobrist_keys::whiteBishopZobristNumbers[destination_square];
+        else if (m_moved_piece == 3) // Rook
+            m_zobrist_key ^= zobrist_keys::whiteRookZobristNumbers[origin_square] ^ zobrist_keys::whiteRookZobristNumbers[destination_square];
+        else if (m_moved_piece == 5) // Queen
+            m_zobrist_key ^= zobrist_keys::whiteQueenZobristNumbers[origin_square] ^ zobrist_keys::whiteQueenZobristNumbers[destination_square];
+        else // King
+            m_zobrist_key ^= zobrist_keys::whiteKingZobristNumbers[origin_square] ^ zobrist_keys::whiteKingZobristNumbers[destination_square];
+        if (m_captured_piece != 7) 
+        {
+            if (m_captured_piece == 0) // Pawn
+                m_zobrist_key ^= zobrist_keys::blackPawnZobristNumbers[destination_square];
+            else if (m_captured_piece == 1) // Knight
+                m_zobrist_key ^= zobrist_keys::blackKnightZobristNumbers[destination_square];
+            else if (m_captured_piece == 2) // Bishop
+                m_zobrist_key ^= zobrist_keys::blackBishopZobristNumbers[destination_square];
+            else if (m_captured_piece == 3) // Rook
+                m_zobrist_key ^= zobrist_keys::blackRookZobristNumbers[destination_square];
+            else // Queen
+                m_zobrist_key ^= zobrist_keys::blackQueenZobristNumbers[destination_square];
+        }
+        if (m_promoted_piece != 7)
+        {
+            if (m_promoted_piece == 1) // Knight
+                m_zobrist_key ^= zobrist_keys::whiteKnightZobristNumbers[destination_square] ^ zobrist_keys::whitePawnZobristNumbers[destination_square];
+            else if (m_promoted_piece == 2) // Bishop
+                m_zobrist_key ^= zobrist_keys::whiteBishopZobristNumbers[destination_square] ^ zobrist_keys::whitePawnZobristNumbers[destination_square];
+            else if (m_promoted_piece == 3) // Rook
+                m_zobrist_key ^= zobrist_keys::whiteRookZobristNumbers[destination_square] ^ zobrist_keys::whitePawnZobristNumbers[destination_square];
+            else // Queen
+                m_zobrist_key ^= zobrist_keys::whiteQueenZobristNumbers[destination_square] ^ zobrist_keys::whitePawnZobristNumbers[destination_square];
+        }
+    }
+    else
+    {
+        if (m_moved_piece == 0) // Pawn
+            m_zobrist_key ^= zobrist_keys::blackPawnZobristNumbers[origin_square] ^ zobrist_keys::blackPawnZobristNumbers[destination_square];
+        else if (m_moved_piece == 1) // Knight
+            m_zobrist_key ^= zobrist_keys::blackKnightZobristNumbers[origin_square] ^ zobrist_keys::blackKnightZobristNumbers[destination_square];
+        else if (m_moved_piece == 2) // Bishop
+            m_zobrist_key ^= zobrist_keys::blackBishopZobristNumbers[origin_square] ^ zobrist_keys::blackBishopZobristNumbers[destination_square];
+        else if (m_moved_piece == 3) // Rook
+            m_zobrist_key ^= zobrist_keys::blackRookZobristNumbers[origin_square] ^ zobrist_keys::blackRookZobristNumbers[destination_square];
+        else if (m_moved_piece == 5) // Queen
+            m_zobrist_key ^= zobrist_keys::blackQueenZobristNumbers[origin_square] ^ zobrist_keys::blackQueenZobristNumbers[destination_square];
+        else // King
+            m_zobrist_key ^= zobrist_keys::blackKingZobristNumbers[origin_square] ^ zobrist_keys::blackKingZobristNumbers[destination_square];
+        if (m_captured_piece != 7)
+        {
+            if (m_captured_piece == 0) // Pawn
+                m_zobrist_key ^= zobrist_keys::whitePawnZobristNumbers[destination_square];
+            else if (m_captured_piece == 1) // Knight
+                m_zobrist_key ^= zobrist_keys::whiteKnightZobristNumbers[destination_square];
+            else if (m_captured_piece == 2) // Bishop
+                m_zobrist_key ^= zobrist_keys::whiteBishopZobristNumbers[destination_square];
+            else if (m_captured_piece == 3) // Rook
+                m_zobrist_key ^= zobrist_keys::whiteRookZobristNumbers[destination_square];
+            else // Queen
+                m_zobrist_key ^= zobrist_keys::whiteQueenZobristNumbers[destination_square];
+        }
+        if (m_promoted_piece != 7)
+        {
+            if (m_promoted_piece == 1) // Knight
+                m_zobrist_key ^= zobrist_keys::blackKnightZobristNumbers[destination_square] ^ zobrist_keys::blackPawnZobristNumbers[destination_square];
+            else if (m_promoted_piece == 2) // Bishop
+                m_zobrist_key ^= zobrist_keys::blackBishopZobristNumbers[destination_square] ^ zobrist_keys::blackPawnZobristNumbers[destination_square];
+            else if (m_promoted_piece == 3) // Rook
+                m_zobrist_key ^= zobrist_keys::blackRookZobristNumbers[destination_square] ^ zobrist_keys::blackPawnZobristNumbers[destination_square];
+            else // Queen
+                m_zobrist_key ^= zobrist_keys::blackQueenZobristNumbers[destination_square] ^ zobrist_keys::blackPawnZobristNumbers[destination_square];
+        }
+    }
+}
 void BitPosition::setWhiteBishopsAttackedSquares()
 {
     m_squares_attacked_by_white_bishops = 0;
@@ -1406,6 +1529,7 @@ void BitPosition::makeCapture(Move move)
             m_moved_piece = 0;
         }
     }
+    BitPosition::updateZobristKeyPiecePartAfterMove(origin_square, destination_square);
     m_turn = not m_turn;
     m_diagonal_pins = 0;
     m_straight_pins = 0;
@@ -2090,7 +2214,7 @@ std::vector<Move> BitPosition::orderAllMovesOnFirstIteration(std::vector<Move> &
     {
         for (Move move : moves)
         {
-            if (move.getData() == bestMove.getData())
+            if (move.getData() == bestMove.getData() && move.getData() != 0)
             {
                 moves_scores.emplace_back(move, 100);
             }
@@ -2144,7 +2268,7 @@ std::vector<Move> BitPosition::orderAllMovesOnFirstIteration(std::vector<Move> &
     {
         for (Move move : moves)
         {
-            if (move.getData() == bestMove.getData())
+            if (move.getData() == bestMove.getData() && move.getData() != 0)
             {
                 moves_scores.emplace_back(move, 100);
             }
@@ -2272,21 +2396,53 @@ void BitPosition::makeNormalMove(Move move)
     {
         if (m_last_origin_bit == m_white_king_bit) // If we move king
         {
+            // Remove castling zobrist part
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+
             m_white_kingside_castling = false;
             m_white_queenside_castling = false;
+
+            // Set new castling zobrist part
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
             m_white_king_position = destination_square;
         }
         if (origin_square == 7) // If we move rook
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
             m_white_kingside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
 
         if (origin_square == 0) // If we move rook
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
             m_white_queenside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
 
         if (destination_square == 63) // If we capture rook
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
             m_black_kingside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
 
         if (destination_square == 56) // If we capture rook
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
             m_black_queenside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
 
         BitPosition::setPiece(m_last_origin_bit, m_last_destination_bit);
         unsigned short psquare{0};
@@ -2350,27 +2506,57 @@ void BitPosition::makeNormalMove(Move move)
                 }
             }
         }
+        m_zobrist_key ^= zobrist_keys::passantSquaresZobristNumbers[m_psquare];
         m_psquare = psquare;
+        m_zobrist_key ^= zobrist_keys::passantSquaresZobristNumbers[m_psquare];
     }
     else // Black's move
     {
         if (m_last_origin_bit == m_black_king_bit) // If we move king
         {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
             m_black_kingside_castling = false;
             m_black_queenside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
             m_black_king_position = destination_square;
         }
         if (origin_square == 63) // If we move rook
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
             m_black_kingside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
 
         if (origin_square == 56) // If we move rook
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
             m_black_queenside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
 
         if (destination_square == 7) // If we capture rook
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
             m_white_kingside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
 
         if (destination_square == 0) // If we capture rook
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
             m_white_queenside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
 
         BitPosition::setPiece(m_last_origin_bit, m_last_destination_bit);
         unsigned short psquare{0};
@@ -2434,9 +2620,18 @@ void BitPosition::makeNormalMove(Move move)
                 }
             }
         }
+        m_zobrist_key ^= zobrist_keys::passantSquaresZobristNumbers[m_psquare];
         m_psquare = psquare;
+        m_zobrist_key ^= zobrist_keys::passantSquaresZobristNumbers[m_psquare];
     }
     m_turn = not m_turn;
+    BitPosition::updateZobristKeyPiecePartAfterMove(origin_square, destination_square);
+    m_zobrist_key ^= zobrist_keys::blackToMoveZobristNumber;
+    // Note, we store the zobrist key in it's array when making the move. However the rest of the ply info
+    // is stored when making the next move to be able to go back.
+    // Note we store it m_ply+1 position because the initial position (or position after capture) is the m_ply 0.
+    m_zobrist_keys_array[m_ply + 1] = m_zobrist_key;
+
     m_diagonal_pins = 0;
     m_straight_pins = 0;
     m_all_pins = 0;
@@ -2501,6 +2696,9 @@ void BitPosition::unmakeMove()
 
     m_all_squares_attacked_by_white = m_all_squares_attacked_by_white_array[m_ply];
     m_all_squares_attacked_by_black = m_all_squares_attacked_by_black_array[m_ply];
+
+    m_zobrist_key = m_zobrist_keys_array[m_ply];
+    m_zobrist_keys_array[m_ply + 1] = 0;
 
     BitPosition::setAllPiecesBits();
 }

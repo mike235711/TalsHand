@@ -125,9 +125,9 @@ std::array<bool, 64> bitboardToArray(uint64_t bitboard)
 }
 
 // Evaluation function for white
-int evaluationFunctionWhite(const BitPosition &position)
+int16_t evaluationFunctionWhite(const BitPosition &position)
 {
-    int totalEval = 0;
+    int16_t totalEval = 0;
 
     for (unsigned short square : getBitIndices(position.getWhitePawnsBits()))
     {
@@ -182,9 +182,9 @@ int evaluationFunctionWhite(const BitPosition &position)
 }
 
 // Evaluation function for black
-int evaluationFunctionBlack(const BitPosition &position)
+int16_t evaluationFunctionBlack(const BitPosition &position)
 {
-    int totalEval = 0;
+    int16_t totalEval = 0;
 
     for (unsigned short square : getBitIndices(position.getWhitePawnsBits()))
     {
@@ -238,9 +238,9 @@ int evaluationFunctionBlack(const BitPosition &position)
 
     return totalEval;
 }
-int simpleEvaluationFunctionWhite(BitPosition position)
+int16_t simpleEvaluationFunctionWhite(BitPosition position)
 {
-    int totalEval = 0;
+    int16_t totalEval = 0;
 
     for (unsigned short i : getBitIndices(position.getWhitePawnsBits()))
         totalEval++;
@@ -264,9 +264,9 @@ int simpleEvaluationFunctionWhite(BitPosition position)
         totalEval-=10;
     return totalEval;
 }
-int simpleEvaluationFunctionBlack(BitPosition position)
+int16_t simpleEvaluationFunctionBlack(BitPosition position)
 {
-    int totalEval = 0;
+    int16_t totalEval = 0;
 
     for (unsigned short i : getBitIndices(position.getWhitePawnsBits()))
         totalEval--;
@@ -291,7 +291,7 @@ int simpleEvaluationFunctionBlack(BitPosition position)
     return totalEval;
 }
 // Main evaluation function
-int evaluationFunction(const BitPosition& position)
+int16_t evaluationFunction(const BitPosition &position)
 {
     if (ENGINEISWHITE)
     {
@@ -303,7 +303,7 @@ int evaluationFunction(const BitPosition& position)
     }
 }
 
-std::pair<Move, int> quiesenceSearch(BitPosition& position, int alpha, int beta, bool our_turn)
+int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool our_turn)
 // This search is done when depth is less than or equal to 0 and considers only captures and promotions
 {
     std::vector<Move> moves;
@@ -322,24 +322,24 @@ std::pair<Move, int> quiesenceSearch(BitPosition& position, int alpha, int beta,
     if (moves.size() == 0)
     {
         if (not position.isCheck())
-            return std::pair<Move, int>(0, evaluationFunction(position));
+            return evaluationFunction(position);
         else if (position.inCheckAllMoves().size() == 0) // Mate
         {
             if (our_turn)
-                return std::pair<Move, int>(0, -100003);
+                return -32764;
             else
-                return std::pair<Move, int>(0, 100003);
+                return 32764;
         }
     }
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
-    int value{evaluationFunction(position)};
+    int16_t value{evaluationFunction(position)};
     Move best_move;
     if (our_turn) // Maximize
     {
         for (Move move : moves)
         {
             position.makeCapture(move);
-            int child_value{quiesenceSearch(position, alpha, beta, false).second};
+            int16_t child_value{quiesenceSearch(position, alpha, beta, false)};
             if (child_value > value)
             {
                 value = child_value;
@@ -356,7 +356,7 @@ std::pair<Move, int> quiesenceSearch(BitPosition& position, int alpha, int beta,
         for (Move move : moves)
         {
             position.makeCapture(move);
-            int child_value{quiesenceSearch(position, alpha, beta, true).second};
+            int16_t child_value{quiesenceSearch(position, alpha, beta, true)};
             if (child_value < value)
             {
                 value = child_value;
@@ -369,14 +369,14 @@ std::pair<Move, int> quiesenceSearch(BitPosition& position, int alpha, int beta,
         }
     }
 
-    return std::pair<Move, int>(best_move, value);
+    return value;
 }
 
-std::pair<Move, int> alphaBetaSearch(BitPosition &position, int depth, int alpha, int beta, bool our_turn)
+int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int16_t beta, bool our_turn)
 // This search is done when depth is more than 0 and considers all moves
 {
     if (position.isThreeFold())
-        return std::pair<Move, int>(0, 0);
+        return 0;
 
     if (depth <= 0)
         return quiesenceSearch(position, alpha, beta, our_turn);
@@ -397,23 +397,22 @@ std::pair<Move, int> alphaBetaSearch(BitPosition &position, int depth, int alpha
     }
     if (moves.size() == 0)
     {
-        if (not position.isCheck()) // Stalemate
-            return std::pair<Move, int>(0, 0);
+        if (not position.getIsCheck()) // Stalemate
+            return 0;
         else if (our_turn) // Checkmate against us
-            return std::pair<Move, int>(0, -100003);
+            return -32764;
         else // Checkmate against opponent
-            return std::pair<Move, int>(0, 100003);
+            return 32764;
     }
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
-    int value{our_turn ? -1000004 : 1000004};
+    int16_t value{our_turn ? static_cast<int16_t>(-32765) : static_cast<int16_t>(32765)};
     Move best_move;
-    bool found_break{false};
     if (our_turn) // Maximize
     {
         for (Move move : moves)
         {
             position.makeNormalMove(move);
-            int child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false).second};
+            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
             if (child_value > value)
             {
                 value = child_value;
@@ -422,7 +421,6 @@ std::pair<Move, int> alphaBetaSearch(BitPosition &position, int depth, int alpha
             position.unmakeMove();
             if (value >= beta)
             {
-                found_break = true;
                 break;
             }
             alpha = std::max(alpha, value);
@@ -433,7 +431,7 @@ std::pair<Move, int> alphaBetaSearch(BitPosition &position, int depth, int alpha
         for (Move move : moves)
         {
             position.makeNormalMove(move);
-            int child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true).second};
+            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
             if (child_value < value)
             {
                 value = child_value;
@@ -442,17 +440,16 @@ std::pair<Move, int> alphaBetaSearch(BitPosition &position, int depth, int alpha
             position.unmakeMove();
             if (value <= alpha)
             {
-                found_break = true;
                 break;
             }
             beta = std::min(beta, value);
         }
     }
 
-    return std::pair<Move, int>(best_move, value);
+    return value;
 }
 
-std::pair<Move, int> firstMoveSearch(BitPosition &position, int depth, int alpha, int beta, bool our_turn, Move last_best_move)
+std::pair<Move, int16_t> firstMoveSearch(BitPosition &position, int8_t depth, int16_t alpha, int16_t beta, bool our_turn, Move last_best_move)
 // This search is done when depth is more than 0 and considers all moves
 {
     position.setAttackedSquaresAfterMove();
@@ -470,15 +467,14 @@ std::pair<Move, int> firstMoveSearch(BitPosition &position, int depth, int alpha
         moves = position.orderAllMovesOnFirstIteration(moves, last_best_move);
     }
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
-    int value{our_turn ? -1000004 : 1000004};
+    int16_t value{our_turn ? static_cast<int16_t>(-32765) : static_cast<int16_t>(32765)};
     Move best_move;
-    bool found_break{false};
     if (our_turn) // Maximize
     {
         for (Move move : moves)
         {
             position.makeNormalMove(move);
-            int child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false).second};
+            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
             if (child_value > value)
             {
                 value = child_value;
@@ -487,7 +483,6 @@ std::pair<Move, int> firstMoveSearch(BitPosition &position, int depth, int alpha
             position.unmakeMove();
             if (value >= beta)
             {
-                found_break = true;
                 break;
             }
             alpha = std::max(alpha, value);
@@ -498,7 +493,7 @@ std::pair<Move, int> firstMoveSearch(BitPosition &position, int depth, int alpha
         for (Move move : moves)
         {
             position.makeNormalMove(move);
-            int child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true).second};
+            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
             if (child_value < value)
             {
                 value = child_value;
@@ -507,32 +502,30 @@ std::pair<Move, int> firstMoveSearch(BitPosition &position, int depth, int alpha
             position.unmakeMove();
             if (value <= alpha)
             {
-                found_break = true;
                 break;
             }
             beta = std::min(beta, value);
         }
     }
 
-    return std::pair<Move, int>(best_move, value);
+    return std::pair<Move, int16_t>(best_move, value);
 }
 
-Move iterativeSearch(BitPosition position, int time_for_move)
+Move iterativeSearch(BitPosition position, int time_for_move, int8_t fixed_max_depth = 100)
 {
     std::chrono::milliseconds timeForMoveMS(time_for_move);
     auto start_time = std::chrono::high_resolution_clock::now(); // Start timing
     ENGINEISWHITE = position.getTurn();
     Move bestMove{};
-    int bestValue;
+    int16_t bestValue;
     std::pair<Move, int> pair;
-    for (int depth = 1; depth < 100; ++depth)
+    for (int8_t depth = 1; depth <= fixed_max_depth; ++depth)
     {
-        std::cout << "Depth " << depth << "\n" << std::flush;
-        int alpha{-100005};
-        int beta{100005};
+        int16_t alpha{-32766};
+        int16_t beta{32766};
         // Get the current time
         auto now = std::chrono::steady_clock::now();
-        pair = alphaBetaSearch(position, depth, alpha, beta, true);
+        pair = firstMoveSearch(position, depth, alpha, beta, true, bestMove);
         bestMove = pair.first;
         bestValue = pair.second;
         // Calculate the elapsed time
@@ -541,7 +534,7 @@ Move iterativeSearch(BitPosition position, int time_for_move)
         // Check if the duration has been exceeded
         if (duration >= timeForMoveMS)
         {
-            std::cout << "Depth " << depth << "\n";
+            std::cout << "Depth " << unsigned(depth) << "\n";
             std::cout << evaluationFunction(position) << "\n" << std::flush;
             break;
         }

@@ -9,14 +9,8 @@
 #include <random>
 #include "magicmoves.h"
 #include "engine.h"
+#include "zobrist_keys.h"
 
-// We have to declare them since they where made extern in precomputed_moves.h
-/*
-namespace precomputed_moves{
-    std::vector<std::map<uint64_t, uint64_t>> precomputedBishopMovesTable;
-    std::vector<std::map<uint64_t, uint64_t>> precomputedRookMovesTable;
-}
-*/
 // Function to convert a FEN string to a BitPosition object
 BitPosition fenToBitPosition(const std::string &fen)
 {
@@ -217,12 +211,7 @@ bool moveIsCapture(std::string moveString, BitPosition position)
 int main()
 {
     initmagicmoves();
-    // Initializing precomputed data
-    /*
-    precomputed_moves::precomputedBishopMovesTable = getBishopLongPrecomputedTable();
-    precomputed_moves::precomputedRookMovesTable = getRookLongPrecomputedTable();
-    */
-
+    zobrist_keys::initializeZobristNumbers();
     // Initialize position
     std::string inputLine;
     std::string lastFen; // Variable to store the last FEN string
@@ -318,10 +307,10 @@ int main()
 
             auto start = std::chrono::high_resolution_clock::now(); // Start timing
 
-            for (int depth = 1; depth <= 4; ++depth)
+            for (int8_t depth = 1; depth <= 4; ++depth)
             {
                 // It's important to output the results of the tests to verify correctness
-                std::cout << "Depth " << depth << ":\n";
+                std::cout << "Depth " << unsigned(depth) << ":\n";
                 BitPosition position_1 {fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
                 std::cout << "Position 1: \n" << runCapturesPerftTest(position_1, depth) << " moves\n";
                 BitPosition position_2 {fenToBitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")};
@@ -348,11 +337,27 @@ int main()
 
             auto start = std::chrono::high_resolution_clock::now(); // Start timing
 
-            for (int depth = 1; depth <= 4; ++depth)
+            for (int8_t depth = 1; depth <= 4; ++depth)
             {
                 // It's important to output the results of the tests to verify correctness
-                std::cout << "Depth " << depth << ":\n";
+                std::cout << "Depth " << unsigned(depth) << ":\n";
                 BitPosition position_1{fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
+                position_1.makeNormalMove(findNormalMoveFromString(std::string{"g1f3"}, position_1));
+                std::cout << position_1.isThreeFold();
+                position_1.makeNormalMove(findNormalMoveFromString(std::string{"g8f6"}, position_1));
+                std::cout << position_1.isThreeFold();
+                position_1.makeNormalMove(findNormalMoveFromString(std::string{"f3g1"}, position_1));
+                std::cout << position_1.isThreeFold();
+                position_1.makeNormalMove(findNormalMoveFromString(std::string{"f6g8"}, position_1));
+                std::cout << position_1.isThreeFold();
+                position_1.makeNormalMove(findNormalMoveFromString(std::string{"g1f3"}, position_1));
+                std::cout << position_1.isThreeFold();
+                position_1.makeNormalMove(findNormalMoveFromString(std::string{"g8f6"}, position_1));
+                std::cout << position_1.isThreeFold();
+                position_1.makeNormalMove(findNormalMoveFromString(std::string{"f3g1"}, position_1));
+                std::cout << position_1.isThreeFold();
+                position_1.makeNormalMove(findNormalMoveFromString(std::string{"f6g8"}, position_1));
+                std::cout << position_1.isThreeFold();
                 std::cout << "Position 1: \n" << runNormalPerftTest(position_1, depth) << " moves\n";
                 BitPosition position_2{fenToBitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")};
                 std::cout << "Position 2: \n" << runNormalPerftTest(position_2, depth) << " moves\n";
@@ -371,36 +376,51 @@ int main()
 
             std::cout << "Time taken: " << duration.count() << " seconds\n";
         }
-        else if (inputLine == "generateQuietFens")
+
+        else if (inputLine == "tacticsTests")
         {
-            std::srand(static_cast<unsigned int>(std::time(nullptr))); // Seed for basic random (used if <random> is not implemented)
-            std::random_device rd;                                     // Non-deterministic random number generator
-            std::mt19937 gen(rd());                                    // Standard mersenne_twister_engine seeded with rd()
+            std::cout << "Starting test\n";
 
-            for (int iteration = 1; iteration <= 50; ++iteration)
+            auto start = std::chrono::high_resolution_clock::now(); // Start timing
+
+            for (int8_t depth = 1; depth <= 4; ++depth)
             {
-                std::cout << "Iteration " << iteration << "\n";
-                for (int games = 1; games <= 1000; ++games)
-                {
-                    BitPosition position_1{fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
-
-                    for (int i = 1; i <= 190; ++i)
-                    {
-                        position_1.setAttackedSquaresAfterMove();
-                        std::vector<Move> moves = position_1.isCheck() ? position_1.inCheckAllMoves() : position_1.allMoves();
-
-                        if (moves.empty())
-                            break;
-
-                        std::uniform_int_distribution<> dis(0, moves.size() - 1); // Uniform distribution for index
-                        Move move{moves[dis(gen)]};                               // Selecting a random move using <random>
-
-                        position_1.makeNormalMove(move);
-                        std::cout << "Game " << games << "\n";
-                        std::cout << "Fen " << position_1.toFenString() << "\n";
-                    }
-                }
+                // It's important to output the results of the tests to verify correctness
+                std::cout << "Depth " << unsigned(depth) << ":\n";
+                BitPosition position_1{fenToBitPosition("kbK5/pp6/1P6/8/8/8/8/R7 w - - 0 1")};
+                std::cout << "Position 1: \n"
+                          << iterativeSearch(position_1, 999999999, depth).toString() << "\n";
+                std::cout << "Best move should be a1a6 \n";
+                BitPosition position_2{fenToBitPosition("rR6/p7/KnPk4/P7/8/8/8/8 w - - 0 1")};
+                std::cout << "Position 2: \n"
+                          << iterativeSearch(position_2, 999999999, depth).toString() << "\n";
+                std::cout << "Best move should be c6c7 \n";
+                BitPosition position_3{fenToBitPosition("1b1q4/8/P2p4/1N1Pp2p/5P1k/7P/1B1P3K/8 w - - 0 1")};
+                std::cout << "Position 3: \n"
+                          << iterativeSearch(position_3, 999999999, depth).toString() << "\n";
+                std::cout << "Best move should be b2b4 \n";
+                BitPosition position_4{fenToBitPosition("2r2rk1/1b3ppp/p1qpp3/1P6/1Pn1P2b/2NB1P1P/1BP1R1P1/R2Q2K1 b - - 0 19")};
+                std::cout << "Position 4: \n"
+                          << iterativeSearch(position_4, 999999999, depth).toString() << "\n";
+                std::cout << "Best move should be c6b6 \n";
+                BitPosition position_5{fenToBitPosition("rn2kb1r/1bq2pp1/pp3n1p/4p3/2PQ1B1P/2N3P1/PP2PPB1/2KR3R w kq - 0 12")};
+                std::cout << "Position 5: \n"
+                          << iterativeSearch(position_5, 999999999, depth).toString() << "\n";
+                std::cout << "Best move should be f4e5 \n";
+                BitPosition position_6{fenToBitPosition("3k2rr/4b3/p3Qpq1/P2pn3/1p1Nb3/6B1/1PP1B2P/3R1RK1 b - - 0 25")};
+                std::cout << "Position 6: \n"
+                          << iterativeSearch(position_6, 999999999, depth).toString() << "\n";
+                std::cout << "Best move should be h8h2 \n";
+                BitPosition position_7{fenToBitPosition("4k3/Q6n/8/8/8/8/PR5P/4K1NR w K - 0 1")};
+                std::cout << "Position 7: \n"
+                          << iterativeSearch(position_7, 999999999, depth).toString() << "\n";
+                std::cout << "Best move should be b2b8 \n";
             }
+
+            auto end = std::chrono::high_resolution_clock::now(); // End timing
+            std::chrono::duration<double> duration = end - start; // Calculate duration
+
+            std::cout << "Time taken: " << duration.count() << " seconds\n";
         }
     }
     return 0;

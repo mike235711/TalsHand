@@ -83,6 +83,8 @@ private:
     bool m_black_rooks_attacked_squares_set{false};
     bool m_white_queens_attacked_squares_set{false};
     bool m_black_queens_attacked_squares_set{false};
+
+    uint64_t m_zobrist_key{};
     // ply number
     // WE HAVE TO MAKE SURE WE RESET IT TO 0 AFTER THE ENGINE GIVES A MOVE.
     unsigned short m_ply{};
@@ -131,6 +133,8 @@ private:
     std::array<uint64_t, 150> m_all_squares_attacked_by_white_array{};
     std::array<uint64_t, 150> m_all_squares_attacked_by_black_array{};
 
+    std::array<uint64_t, 150> m_zobrist_keys_array{};
+
 public:
     // I define the short member functions here, the rest are defined in bitposition.cpp
     // Member function declarations (defined in bitposition.cpp)
@@ -141,6 +145,8 @@ public:
                 bool turn, bool white_kingside_castling, bool white_queenside_castling, 
                 bool black_kingside_castling, bool black_queenside_castling);
 
+    void initializeZobristKey();
+    void updateZobristKeyPiecePartAfterMove(unsigned short origin_square, unsigned short destination_square);
     void setBlackBishopsAttackedSquares();
     void setBlackRooksAttackedSquares();
     void setBlackQueensAttackedSquares();
@@ -225,11 +231,42 @@ public:
 
         std::array<uint64_t, 150> m_all_squares_attacked_by_white_array{};
         std::array<uint64_t, 150> m_all_squares_attacked_by_black_array{};
+
+        std::array<uint64_t, 150> m_zobrist_keys_array{m_zobrist_key};
     }
     bool isThreeFold()
-    // Checking in position is three-fold or not
     {
-        return false;
+        if (m_zobrist_keys_array.empty())
+        {
+            return false; // Ensure there is at least one element
+        }
+
+        // Find the last non-zero key in the array
+        uint64_t lastKey = 0;
+        for (auto it = m_zobrist_keys_array.rbegin(); it != m_zobrist_keys_array.rend(); ++it)
+        {
+            if (*it != 0)
+            {
+                lastKey = *it;
+                break; // Break once the last non-zero key is found
+            }
+        }
+
+        // If lastKey remains 0, it means all elements were zero, or the last element is zero which should not count.
+        if (lastKey == 0)
+        {
+            return false;
+        }
+
+        int count = 0;
+        for (uint64_t key : m_zobrist_keys_array)
+        {
+            if (key == lastKey)
+            {
+                count++;
+            }
+        }
+        return count >= 3; // Return true if last non-zero position occurred at least three times
     }
 
     void setKingPosition()
