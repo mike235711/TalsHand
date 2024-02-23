@@ -10,6 +10,10 @@
 #include "magicmoves.h"
 #include "engine.h"
 #include "zobrist_keys.h"
+#include "ttable.h"
+
+TranspositionTable globalTT;
+int TTSIZE {20};
 
 // Function to convert a FEN string to a BitPosition object
 BitPosition fenToBitPosition(const std::string &fen)
@@ -218,6 +222,7 @@ int main()
     BitPosition position {fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
     bool position_initialized{false};
 
+    globalTT.resize(1 << 20);
     // Simple loop to read commands from the Python GUI
     while (std::getline(std::cin, inputLine))
     {
@@ -269,7 +274,10 @@ int main()
                 position.makeNormalMove(move);
                 position.setAttackedSquaresAfterMove();
                 if (moveIsCapture(moveUci, position))
+                {
                     position.restorePlyInfo();
+                    globalTT.resize(TTSIZE);
+                }
             }
         }
         else if (command == "position" && position_initialized == true)
@@ -286,7 +294,10 @@ int main()
                 position.makeNormalMove(move);
                 position.setAttackedSquaresAfterMove();
                 if (moveIsCapture(moveUci, position))
+                {
                     position.restorePlyInfo();
+                    globalTT.resize(TTSIZE);
+                }
             }
         }
         else if (inputLine.substr(0, 2) == "go")
@@ -297,7 +308,10 @@ int main()
             position.makeNormalMove(bestMove);
             position.setAttackedSquaresAfterMove();
             if (moveIsCapture(bestMove.toString(), position))
+            {
+                globalTT.resize(TTSIZE);
                 position.restorePlyInfo();
+            }
             std::cout << "bestmove " << bestMove.toString() << "\n"
                       << std::flush;
         }

@@ -2087,7 +2087,7 @@ std::vector<Move> BitPosition::allMoves() const
     }
     return moves;
 }
-std::vector<Move> BitPosition::orderAllMoves(std::vector<Move> &moves) const
+std::vector<Move> BitPosition::orderAllMoves(std::vector<Move> &moves, Move ttMove) const
 {
     std::vector<std::pair<Move, int>> moves_scores;
     moves_scores.reserve(moves.size()); // Reserve space to avoid reallocations
@@ -2095,94 +2095,109 @@ std::vector<Move> BitPosition::orderAllMoves(std::vector<Move> &moves) const
     {
         for (Move move : moves)
         {
-            unsigned short origin_square{move.getOriginSquare()};
-            uint64_t origin_bit {precomputed_moves::one_one_bits[origin_square]};
-            unsigned short destination_square{move.getDestinationSquare()};
-            uint64_t destination_bit {precomputed_moves::one_one_bits[destination_square]};
-            int score{0};
-            // Capture score
-            if ((destination_bit & m_black_pieces_bit) != 0)
+            if (move.getData() == ttMove.getData() && move.getData() != 0)
             {
-                if ((destination_bit & m_black_pawns_bit) != 0)
-                    score += 1;
-                else if ((destination_bit & m_black_knights_bit) != 0)
-                    score += 2;
-                else if ((destination_bit & m_black_bishops_bit) != 0)
-                    score += 3;
-                else if ((destination_bit & m_black_rooks_bit) != 0)
-                    score += 4;
-                else
-                    score += 5;
+                moves_scores.emplace_back(move, 100);
             }
-            // Move safety
-            if ((origin_bit & m_white_knights_bit) != 0) // Moving knight
+            else
             {
-                if ((destination_bit & ~m_squares_attacked_by_black_pawns) == 0) // Unsafe
-                    score -= 2;
+                unsigned short origin_square{move.getOriginSquare()};
+                uint64_t origin_bit{precomputed_moves::one_one_bits[origin_square]};
+                unsigned short destination_square{move.getDestinationSquare()};
+                uint64_t destination_bit{precomputed_moves::one_one_bits[destination_square]};
+                int score{0};
+                // Capture score
+                if ((destination_bit & m_black_pieces_bit) != 0)
+                {
+                    if ((destination_bit & m_black_pawns_bit) != 0)
+                        score += 1;
+                    else if ((destination_bit & m_black_knights_bit) != 0)
+                        score += 2;
+                    else if ((destination_bit & m_black_bishops_bit) != 0)
+                        score += 3;
+                    else if ((destination_bit & m_black_rooks_bit) != 0)
+                        score += 4;
+                    else
+                        score += 5;
+                }
+                // Move safety
+                if ((origin_bit & m_white_knights_bit) != 0) // Moving knight
+                {
+                    if ((destination_bit & ~m_squares_attacked_by_black_pawns) == 0) // Unsafe
+                        score -= 2;
+                }
+                else if ((origin_bit & m_white_bishops_bit) != 0) // Moving bishop
+                {
+                    if ((destination_bit & ~m_squares_attacked_by_black_pawns) == 0) // Unsafe
+                        score -= 2;
+                }
+                else if ((origin_bit & m_white_rooks_bit) != 0) // Moving rook
+                {
+                    if ((destination_bit & ~m_squares_attacked_by_black_pawns & ~m_squares_attacked_by_black_knights & ~m_squares_attacked_by_black_bishops) == 0) // Unsafe
+                        score -= 3;
+                }
+                else if ((origin_bit & m_white_queens_bit) != 0) // Moving queen
+                {
+                    if ((destination_bit & ~m_squares_attacked_by_black_pawns & ~m_squares_attacked_by_black_knights & ~m_squares_attacked_by_black_bishops & ~m_squares_attacked_by_black_rooks) == 0) // Unsafe
+                        score -= 3;
+                }
+                moves_scores.emplace_back(move, score);
             }
-            else if ((origin_bit & m_white_bishops_bit) != 0) // Moving bishop
-            {
-                if ((destination_bit & ~m_squares_attacked_by_black_pawns) == 0) // Unsafe
-                    score -= 2;
-            }
-            else if ((origin_bit & m_white_rooks_bit) != 0) // Moving rook
-            {
-                if ((destination_bit & ~m_squares_attacked_by_black_pawns & ~m_squares_attacked_by_black_knights & ~m_squares_attacked_by_black_bishops) == 0) // Unsafe
-                    score -= 3;
-            }
-            else if ((origin_bit & m_white_queens_bit) != 0) // Moving queen
-            {
-                if ((destination_bit & ~m_squares_attacked_by_black_pawns & ~m_squares_attacked_by_black_knights & ~m_squares_attacked_by_black_bishops & ~m_squares_attacked_by_black_rooks) == 0) // Unsafe
-                    score -= 3;
-            }
-            moves_scores.emplace_back(move, score);
         }
     }
     else // Blacks turn
     {
         for (Move move : moves)
         {
-            unsigned short origin_square{move.getOriginSquare()};
-            uint64_t origin_bit{precomputed_moves::one_one_bits[origin_square]};
-            unsigned short destination_square{move.getDestinationSquare()};
-            uint64_t destination_bit{precomputed_moves::one_one_bits[destination_square]};
-            int score{0};
-            // Capture score
-            if ((destination_bit & m_white_pieces_bit) != 0)
+            if (move.getData() == ttMove.getData() && move.getData() != 0)
             {
-                if ((destination_bit & m_white_pawns_bit) != 0)
-                    score += 1;
-                else if ((destination_bit & m_white_knights_bit) != 0)
-                    score += 2;
-                else if ((destination_bit & m_white_bishops_bit) != 0)
-                    score += 3;
-                else if ((destination_bit & m_white_rooks_bit) != 0)
-                    score += 4;
-                else
-                    score += 5;
+                moves_scores.emplace_back(move, 100);
             }
-            // Move safety
-            if ((origin_bit & m_black_knights_bit) != 0) // Moving knight
+            else
             {
-                if ((destination_bit & ~m_squares_attacked_by_white_pawns) == 0) // Unsafe
-                    score -= 2;
+                unsigned short origin_square{move.getOriginSquare()};
+                uint64_t origin_bit{precomputed_moves::one_one_bits[origin_square]};
+                unsigned short destination_square{move.getDestinationSquare()};
+                uint64_t destination_bit{precomputed_moves::one_one_bits[destination_square]};
+                int score{0};
+                // Capture score
+                if ((destination_bit & m_white_pieces_bit) != 0)
+                {
+                    if ((destination_bit & m_white_pawns_bit) != 0)
+                        score += 1;
+                    else if ((destination_bit & m_white_knights_bit) != 0)
+                        score += 2;
+                    else if ((destination_bit & m_white_bishops_bit) != 0)
+                        score += 3;
+                    else if ((destination_bit & m_white_rooks_bit) != 0)
+                        score += 4;
+                    else
+                        score += 5;
+                }
+                // Move safety
+                if ((origin_bit & m_black_knights_bit) != 0) // Moving knight
+                {
+                    if ((destination_bit & ~m_squares_attacked_by_white_pawns) == 0) // Unsafe
+                        score -= 2;
+                }
+                else if ((origin_bit & m_black_bishops_bit) != 0) // Moving bishop
+                {
+                    if ((destination_bit & ~m_squares_attacked_by_white_pawns) == 0) // Unsafe
+                        score -= 2;
+                }
+                else if ((origin_bit & m_black_rooks_bit) != 0) // Moving rook
+                {
+                    if ((destination_bit & ~m_squares_attacked_by_white_pawns & ~m_squares_attacked_by_white_knights & ~m_squares_attacked_by_white_bishops) == 0) // Unsafe
+                        score -= 3;
+                }
+                else if ((origin_bit & m_black_queens_bit) != 0) // Moving queen
+                {
+                    if ((destination_bit & ~m_squares_attacked_by_white_pawns & ~m_squares_attacked_by_white_knights & ~m_squares_attacked_by_white_bishops & ~m_squares_attacked_by_white_rooks) == 0) // Unsafe
+                        score -= 3;
+                }
+                moves_scores.emplace_back(move, score);
             }
-            else if ((origin_bit & m_black_bishops_bit) != 0) // Moving bishop
-            {
-                if ((destination_bit & ~m_squares_attacked_by_white_pawns) == 0) // Unsafe
-                    score -= 2;
-            }
-            else if ((origin_bit & m_black_rooks_bit) != 0) // Moving rook
-            {
-                if ((destination_bit & ~m_squares_attacked_by_white_pawns & ~m_squares_attacked_by_white_knights & ~m_squares_attacked_by_white_bishops) == 0) // Unsafe
-                    score -= 3;
-            }
-            else if ((origin_bit & m_black_queens_bit) != 0) // Moving queen
-            {
-                if ((destination_bit & ~m_squares_attacked_by_white_pawns & ~m_squares_attacked_by_white_knights & ~m_squares_attacked_by_white_bishops & ~m_squares_attacked_by_white_rooks) == 0) // Unsafe
-                    score -= 3;
-            }
-            moves_scores.emplace_back(move, score);
+            
         }
     }
     // Order moves
@@ -2206,7 +2221,7 @@ std::vector<Move> BitPosition::orderAllMoves(std::vector<Move> &moves) const
     return moves; // Return the sorted moves
 }
 
-std::vector<Move> BitPosition::orderAllMovesOnFirstIteration(std::vector<Move> &moves, Move bestMove) const
+std::vector<Move> BitPosition::orderAllMovesOnFirstIteration(std::vector<Move> &moves, Move bestMove, Move ttMove) const
 {
     std::vector<std::pair<Move, int>> moves_scores;
     moves_scores.reserve(moves.size()); // Reserve space to avoid reallocations
@@ -2217,6 +2232,10 @@ std::vector<Move> BitPosition::orderAllMovesOnFirstIteration(std::vector<Move> &
             if (move.getData() == bestMove.getData() && move.getData() != 0)
             {
                 moves_scores.emplace_back(move, 100);
+            }
+            else if (move.getData() == ttMove.getData() && move.getData() != 0)
+            {
+                moves_scores.emplace_back(move, 99);
             }
             else
             {
@@ -2271,6 +2290,10 @@ std::vector<Move> BitPosition::orderAllMovesOnFirstIteration(std::vector<Move> &
             if (move.getData() == bestMove.getData() && move.getData() != 0)
             {
                 moves_scores.emplace_back(move, 100);
+            }
+            else if (move.getData() == ttMove.getData() && move.getData() != 0)
+            {
+                moves_scores.emplace_back(move, 99);
             }
             else
             {

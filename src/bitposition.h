@@ -168,8 +168,8 @@ public:
     std::vector<Move> orderedCaptures() const;
     std::vector<Move> inCheckAllMoves() const;
     std::vector<Move> allMoves() const;
-    std::vector<Move> orderAllMoves(std::vector<Move> &moves) const;
-    std::vector<Move> orderAllMovesOnFirstIteration(std::vector<Move> &moves, Move bestMove) const;
+    std::vector<Move> orderAllMoves(std::vector<Move> &moves, Move ttMove) const;
+    std::vector<Move> orderAllMovesOnFirstIteration(std::vector<Move> &moves, Move bestMove, Move ttMove) const;
     std::vector<Move> inCheckMoves() const;
     std::vector<Move> nonCaptureMoves() const;
 
@@ -288,7 +288,9 @@ public:
 
     bool getTurn() const { return m_turn; }
 
-    bool getIsCheck() const { return (m_is_check); }
+    bool getIsCheck() const { return m_is_check; }
+
+    uint64_t getZobristKey() const { return m_zobrist_key; }
 
     void printBitboards() const
     {

@@ -8,9 +8,11 @@
 #include <cstdint>
 #include <chrono>
 #include <algorithm> // For std::max
+#include "ttable.h"
+
+extern TranspositionTable globalTT;
 
 bool ENGINEISWHITE;
-
 
 // Constants for material values
 const int MATERIAL_VALUES[] = {10, 32, 33, 50, 90, 100, -10, -32, -33, -50, -90, -100};
@@ -373,10 +375,36 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
 }
 
 int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int16_t beta, bool our_turn)
-// This search is done when depth is more than 0 and considers all moves
+// This search is done when depth is more than 0 and considers all moves and stores positions in the transposition table
 {
     if (position.isThreeFold())
         return 0;
+
+    TTEntry *ttEntry = globalTT.probe(position.getZobristKey());
+
+    Move tt_move;
+    // If position is stored
+    if (ttEntry != nullptr)
+    {
+        // At ttable's shalower depth we get the best move
+        if (ttEntry->getDepth() < depth)
+            tt_move = ttEntry->getMove();
+        // Exact value at deeper depth 
+        else if (ttEntry->getDepth() >= depth && ttEntry->getIsExact())
+            return ttEntry->getValue();
+        // Lower bound at deeper depth
+        else if (ttEntry->getDepth() >= depth && our_turn)
+        {
+            tt_move = ttEntry->getMove();
+            alpha = ttEntry->getValue();
+        }
+        // Upper bound at deeper depth
+        else
+        {
+            tt_move = ttEntry->getMove();
+            beta = ttEntry->getValue();
+        }
+    }
 
     if (depth <= 0)
         return quiesenceSearch(position, alpha, beta, our_turn);
@@ -387,27 +415,32 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
     {
         position.setChecksAndPinsBits();
         moves = position.inCheckAllMoves();
-        moves = position.orderAllMoves(moves);
+        moves = position.orderAllMoves(moves, tt_move);
     }
     else
     {
         position.setPinsBits();
         moves = position.allMoves();
-        moves = position.orderAllMoves(moves);
+        moves = position.orderAllMoves(moves, tt_move);
     }
     if (moves.size() == 0)
     {
-        if (not position.getIsCheck()) // Stalemate
+        // Stalemate
+        if (not position.getIsCheck())
             return 0;
-        else if (our_turn) // Checkmate against us
+        // Checkmate against us
+        else if (our_turn)
             return -32764;
-        else // Checkmate against opponent
+        // Checkmate against opponent
+        else
             return 32764;
     }
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
     int16_t value{our_turn ? static_cast<int16_t>(-32765) : static_cast<int16_t>(32765)};
     Move best_move;
-    if (our_turn) // Maximize
+    bool cutoff{false};
+    // Maximize
+    if (our_turn)
     {
         for (Move move : moves)
         {
@@ -421,12 +454,16 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
             position.unmakeMove();
             if (value >= beta)
             {
+                cutoff = true;
+                if (depth >= 2)
+                    globalTT.save(position.getZobristKey(), value, depth, best_move, false);
                 break;
             }
             alpha = std::max(alpha, value);
         }
     }
-    else // Minimize
+    // Minimize
+    else
     {
         for (Move move : moves)
         {
@@ -440,12 +477,17 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
             position.unmakeMove();
             if (value <= alpha)
             {
+                cutoff = true;
+                if (depth >= 2)
+                    globalTT.save(position.getZobristKey(), value, depth, best_move, false);
                 break;
             }
             beta = std::min(beta, value);
         }
     }
-
+    // Saving an exact value
+    if (not cutoff && depth >= 2)
+        globalTT.save(position.getZobristKey(), value, depth, best_move, true);
     return value;
 }
 
@@ -453,23 +495,50 @@ std::pair<Move, int16_t> firstMoveSearch(BitPosition &position, int8_t depth, in
 // This search is done when depth is more than 0 and considers all moves
 {
     position.setAttackedSquaresAfterMove();
+    TTEntry *ttEntry = globalTT.probe(position.getZobristKey());
+
+    Move tt_move;
+    // If position is stored
+    if (ttEntry != nullptr)
+    {
+        // At ttable's shalower depth we get the best move
+        if (ttEntry->getDepth() < depth)
+            tt_move = ttEntry->getMove();
+        // Exact value at deeper depth
+        else if (ttEntry->getDepth() >= depth && ttEntry->getIsExact())
+            return std::pair<Move, int16_t> (ttEntry->getMove(), ttEntry->getValue());
+        // Lower bound at deeper depth
+        else if (ttEntry->getDepth() >= depth && our_turn)
+        {
+            tt_move = ttEntry->getMove();
+            alpha = ttEntry->getValue();
+        }
+        // Upper bound at deeper depth
+        else
+        {
+            tt_move = ttEntry->getMove();
+            beta = ttEntry->getValue();
+        }
+    }
     std::vector<Move> moves;
     if (position.isCheck())
     {
         position.setChecksAndPinsBits();
         moves = position.inCheckAllMoves();
-        moves = position.orderAllMovesOnFirstIteration(moves, last_best_move);
+        moves = position.orderAllMovesOnFirstIteration(moves, last_best_move, tt_move);
     }
     else
     {
         position.setPinsBits();
         moves = position.allMoves();
-        moves = position.orderAllMovesOnFirstIteration(moves, last_best_move);
+        moves = position.orderAllMovesOnFirstIteration(moves, last_best_move, tt_move);
     }
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
     int16_t value{our_turn ? static_cast<int16_t>(-32765) : static_cast<int16_t>(32765)};
     Move best_move;
-    if (our_turn) // Maximize
+    bool cutoff{false};
+    // Maximize
+    if (our_turn)
     {
         for (Move move : moves)
         {
@@ -483,12 +552,16 @@ std::pair<Move, int16_t> firstMoveSearch(BitPosition &position, int8_t depth, in
             position.unmakeMove();
             if (value >= beta)
             {
+                cutoff = true;
+                if (depth >= 2)
+                    globalTT.save(position.getZobristKey(), value, depth, best_move, false);
                 break;
             }
             alpha = std::max(alpha, value);
         }
     }
-    else // Minimize
+    // Minimize
+    else
     {
         for (Move move : moves)
         {
@@ -502,11 +575,17 @@ std::pair<Move, int16_t> firstMoveSearch(BitPosition &position, int8_t depth, in
             position.unmakeMove();
             if (value <= alpha)
             {
+                cutoff = true;
+                if (depth >= 2)
+                    globalTT.save(position.getZobristKey(), value, depth, best_move, false);
                 break;
             }
             beta = std::min(beta, value);
         }
     }
+    // Saving an exact value
+    if (not cutoff && depth >= 2)
+        globalTT.save(position.getZobristKey(), value, depth, best_move, true);
 
     return std::pair<Move, int16_t>(best_move, value);
 }
