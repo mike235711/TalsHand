@@ -314,6 +314,7 @@ int main()
             }
             std::cout << "bestmove " << bestMove.toString() << "\n"
                       << std::flush;
+            globalTT.printTableMemory();
         }
         else if (inputLine == "capturesPerftTests")
         {
@@ -351,27 +352,11 @@ int main()
 
             auto start = std::chrono::high_resolution_clock::now(); // Start timing
 
-            for (int8_t depth = 1; depth <= 4; ++depth)
+            for (int8_t depth = 1; depth <= 5; ++depth)
             {
                 // It's important to output the results of the tests to verify correctness
                 std::cout << "Depth " << unsigned(depth) << ":\n";
                 BitPosition position_1{fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
-                position_1.makeNormalMove(findNormalMoveFromString(std::string{"g1f3"}, position_1));
-                std::cout << position_1.isThreeFold();
-                position_1.makeNormalMove(findNormalMoveFromString(std::string{"g8f6"}, position_1));
-                std::cout << position_1.isThreeFold();
-                position_1.makeNormalMove(findNormalMoveFromString(std::string{"f3g1"}, position_1));
-                std::cout << position_1.isThreeFold();
-                position_1.makeNormalMove(findNormalMoveFromString(std::string{"f6g8"}, position_1));
-                std::cout << position_1.isThreeFold();
-                position_1.makeNormalMove(findNormalMoveFromString(std::string{"g1f3"}, position_1));
-                std::cout << position_1.isThreeFold();
-                position_1.makeNormalMove(findNormalMoveFromString(std::string{"g8f6"}, position_1));
-                std::cout << position_1.isThreeFold();
-                position_1.makeNormalMove(findNormalMoveFromString(std::string{"f3g1"}, position_1));
-                std::cout << position_1.isThreeFold();
-                position_1.makeNormalMove(findNormalMoveFromString(std::string{"f6g8"}, position_1));
-                std::cout << position_1.isThreeFold();
                 std::cout << "Position 1: \n" << runNormalPerftTest(position_1, depth) << " moves\n";
                 BitPosition position_2{fenToBitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")};
                 std::cout << "Position 2: \n" << runNormalPerftTest(position_2, depth) << " moves\n";

@@ -1592,8 +1592,22 @@ std::vector<Move> BitPosition::inCheckAllMoves() const
             // Captures from square being captured
             unsigned short destination_square{getLeastSignificantBitIndex(checks_bit)};
             // Pawn captures
-            for (unsigned short origin_square : getBitIndices(precomputed_moves::black_pawn_attacks[destination_square] & m_white_pawns_bit & ~m_all_pins))
-                moves.emplace_back(origin_square, destination_square);
+            if (destination_square < 56)
+            {
+                for (unsigned short origin_square : getBitIndices(precomputed_moves::black_pawn_attacks[destination_square] & m_white_pawns_bit & ~m_all_pins))
+                    moves.emplace_back(origin_square, destination_square);
+            }
+            else
+            {
+                for (unsigned short origin_square : getBitIndices(precomputed_moves::black_pawn_attacks[destination_square] & m_white_pawns_bit & ~m_all_pins))
+                {
+                    moves.push_back(Move::promotingMove(origin_square, destination_square, 1));
+                    moves.push_back(Move::promotingMove(origin_square, destination_square, 2));
+                    moves.push_back(Move::promotingMove(origin_square, destination_square, 3));
+                    moves.push_back(Move::promotingMove(origin_square, destination_square, 4));
+                }
+            }
+            
             // Knight captures
             for (unsigned short origin_square : getBitIndices(precomputed_moves::knight_moves[destination_square] & m_white_knights_bit & ~m_all_pins))
                 moves.emplace_back(origin_square, destination_square);
@@ -1606,6 +1620,13 @@ std::vector<Move> BitPosition::inCheckAllMoves() const
             // Queen captures
             for (unsigned short origin_square : getBitIndices((BmagicNOMASK(destination_square, precomputed_moves::bishop_unfull_rays[destination_square] & m_all_pieces_bit) | RmagicNOMASK(destination_square, precomputed_moves::rook_unfull_rays[destination_square] & m_all_pieces_bit)) & m_white_queens_bit & ~m_all_pins))
                 moves.emplace_back(origin_square, destination_square);
+            
+            // Passant capture (If pawn giving check can be en passant captured)
+            if (m_psquare != 0 && (m_pawn_checks & (passant_bitboards[m_psquare] >> 8)) != 0)
+            {
+                for (unsigned short origin_square : getBitIndices(precomputed_moves::black_pawn_attacks[m_psquare] & m_white_pawns_bit))
+                    moves.emplace_back(origin_square, m_psquare);
+            }
             
             // Blocks
             if (m_check_rays != 0)
@@ -1672,8 +1693,21 @@ std::vector<Move> BitPosition::inCheckAllMoves() const
             // Captures from square being captured
             unsigned short destination_square{getLeastSignificantBitIndex(checks_bit)};
             // Pawn captures
-            for (unsigned short origin_square : getBitIndices(precomputed_moves::white_pawn_attacks[destination_square] & m_black_pawns_bit & ~m_all_pins))
-                moves.emplace_back(origin_square, destination_square);
+            if (destination_square > 7)
+            {
+                for (unsigned short origin_square : getBitIndices(precomputed_moves::white_pawn_attacks[destination_square] & m_black_pawns_bit & ~m_all_pins))
+                    moves.emplace_back(origin_square, destination_square);
+            }
+            else
+            {
+                for (unsigned short origin_square : getBitIndices(precomputed_moves::white_pawn_attacks[destination_square] & m_black_pawns_bit & ~m_all_pins))
+                {
+                    moves.push_back(Move::promotingMove(origin_square, destination_square, 1));
+                    moves.push_back(Move::promotingMove(origin_square, destination_square, 2));
+                    moves.push_back(Move::promotingMove(origin_square, destination_square, 3));
+                    moves.push_back(Move::promotingMove(origin_square, destination_square, 4));
+                }
+            }
             // Knight captures
             for (unsigned short origin_square : getBitIndices(precomputed_moves::knight_moves[destination_square] & m_black_knights_bit & ~m_all_pins))
                 moves.emplace_back(origin_square, destination_square);
@@ -1686,6 +1720,13 @@ std::vector<Move> BitPosition::inCheckAllMoves() const
             // Queen captures
             for (unsigned short origin_square : getBitIndices((BmagicNOMASK(destination_square, precomputed_moves::bishop_unfull_rays[destination_square] & m_all_pieces_bit) | RmagicNOMASK(destination_square, precomputed_moves::rook_unfull_rays[destination_square] & m_all_pieces_bit)) & m_black_queens_bit & ~m_all_pins))
                 moves.emplace_back(origin_square, destination_square);
+
+            // Passant capture (If pawn giving check can be en passant captured)
+            if (m_psquare != 0 && (m_pawn_checks & (passant_bitboards[m_psquare] << 8)) != 0)
+            {
+                for (unsigned short origin_square : getBitIndices(precomputed_moves::white_pawn_attacks[m_psquare] & m_black_pawns_bit))
+                    moves.emplace_back(origin_square, m_psquare);
+            }
 
             // Blocks
             if (m_check_rays != 0)
@@ -2469,7 +2510,7 @@ void BitPosition::makeNormalMove(Move move)
 
         BitPosition::setPiece(m_last_origin_bit, m_last_destination_bit);
         unsigned short psquare{0};
-        // Captures
+        // Captures (Non passant)
         if ((m_last_destination_bit & m_black_pieces_bit) != 0)
             BitPosition::removePiece(m_last_destination_bit);
         
@@ -2583,7 +2624,7 @@ void BitPosition::makeNormalMove(Move move)
 
         BitPosition::setPiece(m_last_origin_bit, m_last_destination_bit);
         unsigned short psquare{0};
-        // 2) Captures
+        // 2) Captures (Non passant)
         if ((m_last_destination_bit & m_white_pieces_bit) != 0) // 1100000000000000
             BitPosition::removePiece(m_last_destination_bit);
 
@@ -2592,7 +2633,7 @@ void BitPosition::makeNormalMove(Move move)
             psquare = origin_square - 8;
 
         // 4) Passant Captures
-        else if (((move.getData() & 49152) == 49152) && (m_last_destination_bit == passant_bitboards[m_psquare])) // 1100000000000000
+        else if (m_moved_piece == 0 && (m_last_destination_bit == passant_bitboards[m_psquare])) // 1100000000000000
         {
             // Remove captured piece
             m_white_pawns_bit &= ~precomputed_moves::one_one_bits[m_psquare + 8];

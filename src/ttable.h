@@ -84,12 +84,40 @@ public:
     {
         size_t index = z_key % tableSize;
 
-        // Example replacement strategy: always replace m
-        table[index].z_key = z_key;
-        table[index].depth = depth;
-        table[index].value = value;
-        table[index].move = move;
-        table[index].isExact = isExact;
+        // If the position was already stored we only replace by a deeper depth
+        if (table[index].z_key != 0 && table[index].depth < depth) 
+            {
+                table[index].z_key = z_key;
+                table[index].depth = depth;
+                table[index].value = value;
+                table[index].move = move;
+                table[index].isExact = isExact;
+            }
+        // If the position was not stored, we store it regardless the depth
+        else if (table[index].z_key == 0)
+        {
+            table[index].z_key = z_key;
+            table[index].depth = depth;
+            table[index].value = value;
+            table[index].move = move;
+            table[index].isExact = isExact;
+        }
+    }
+
+    void printTableMemory()
+    {
+        size_t entriesInUse = 0;
+        for (size_t i = 0; i < tableSize; ++i)
+        {
+            if (table[i].z_key != 0)
+            { // Assuming an unused entry has a key of 0
+                ++entriesInUse;
+            }
+        }
+
+        std::cout << "Table memory: " << tableSize * sizeof(TTEntry) << " bytes\n";
+        std::cout << "Entries in use: " << entriesInUse << " out of " << tableSize << "\n";
+        std::cout << "Active memory usage: " << entriesInUse * sizeof(TTEntry) << " bytes\n";
     }
 
 private:
