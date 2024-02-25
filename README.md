@@ -31,3 +31,4 @@ To do:
 * 50 move rule
 * Killer moves
 * Null move pruning
+* Time manager
