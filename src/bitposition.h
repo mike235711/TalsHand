@@ -5,6 +5,7 @@
 #include "bit_utils.h" // Bit utility functions
 #include "move.h"
 #include <iostream>
+#include <armadillo>
 class BitPosition
 {
 private:
@@ -135,6 +136,7 @@ private:
 
     std::array<uint64_t, 150> m_zobrist_keys_array{};
 
+
 public:
     // I define the short member functions here, the rest are defined in bitposition.cpp
     // Member function declarations (defined in bitposition.cpp)
@@ -181,6 +183,7 @@ public:
     void unmakeMove();
     void setSliderAttackedSquares();
     void setAttackedSquaresAfterMove();
+
     // Member function definitions
 
     void restorePlyInfo()
@@ -292,9 +295,29 @@ public:
 
     uint64_t getZobristKey() const { return m_zobrist_key; }
 
+    uint64_t getWhitePawnsBits() const { return m_white_pawns_bit; }
+    uint64_t getWhiteKnightsBits() const { return m_white_knights_bit; }
+    uint64_t getWhiteBishopsBits() const { return m_white_bishops_bit; }
+    uint64_t getWhiteRooksBits() const { return m_white_rooks_bit; }
+    uint64_t getWhiteQueensBits() const { return m_white_queens_bit; }
+    uint64_t getWhiteKingBits() const { return m_white_king_bit; }
+
+    uint64_t getBlackPawnsBits() const { return m_black_pawns_bit; }
+    uint64_t getBlackKnightsBits() const { return m_black_knights_bit; }
+    uint64_t getBlackBishopsBits() const { return m_black_bishops_bit; }
+    uint64_t getBlackRooksBits() const { return m_black_rooks_bit; }
+    uint64_t getBlackQueensBits() const { return m_black_queens_bit; }
+    uint64_t getBlackKingBits() const { return m_black_king_bit; }
+
+    unsigned short getMovedPiece() const { return m_moved_piece; }
+    unsigned short getCapturedPiece() const { return m_captured_piece; }
+    unsigned short getPromotedPiece() const { return m_promoted_piece; }
+
+    void getNNUEInput() const { return; }
+
     void printBitboards() const
     {
-        std::cout << "White pawns "<< m_white_pawns_bit << "\n";
+        std::cout << "White pawns " << m_white_pawns_bit << "\n";
         std::cout << "White knights " << m_white_knights_bit << "\n";
         std::cout << "White bishops " << m_white_bishops_bit << "\n";
         std::cout << "White rooks " << m_white_rooks_bit << "\n";
@@ -307,6 +330,10 @@ public:
         std::cout << "Black rooks " << m_black_rooks_bit << "\n";
         std::cout << "Black queens " << m_black_queens_bit << "\n";
         std::cout << "Black king " << m_black_king_bit << "\n";
+
+        std::cout << "All Whites " << m_white_pieces_bit << "\n";
+        std::cout << "All Blacks " << m_black_pieces_bit << "\n";
+        std::cout << "All Pieces " << m_all_pieces_bit << "\n";
 
         std::cout << "psquare " << m_psquare << "\n";
     }
@@ -323,20 +350,6 @@ public:
         std::cout << "Number of checks " << m_num_checks << "\n";
         std::cout << "Is check " << m_is_check << "\n";
     }
-
-    uint64_t getWhitePawnsBits() const { return m_white_pawns_bit; }
-    uint64_t getWhiteKnightsBits() const { return m_white_knights_bit; }
-    uint64_t getWhiteBishopsBits() const { return m_white_bishops_bit; }
-    uint64_t getWhiteRooksBits() const { return m_white_rooks_bit; }
-    uint64_t getWhiteQueensBits() const { return m_white_queens_bit; }
-    uint64_t getWhiteKingBits() const { return m_white_king_bit; }
-
-    uint64_t getBlackPawnsBits() const { return m_black_pawns_bit; }
-    uint64_t getBlackKnightsBits() const { return m_black_knights_bit; }
-    uint64_t getBlackBishopsBits() const { return m_black_bishops_bit; }
-    uint64_t getBlackRooksBits() const { return m_black_rooks_bit; }
-    uint64_t getBlackQueensBits() const { return m_black_queens_bit; }
-    uint64_t getBlackKingBits() const { return m_black_king_bit; }
 
     std::string toFenString() const
     {

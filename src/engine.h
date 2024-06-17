@@ -9,301 +9,14 @@
 #include <chrono>
 #include <algorithm> // For std::max
 #include "ttable.h"
+#include <torch/script.h>
+#include <memory>
+#include "position_eval.h"
+
 
 extern TranspositionTable globalTT;
 
 bool ENGINEISWHITE;
-
-// Constants for material values
-const int MATERIAL_VALUES[] = {10, 32, 33, 50, 90, 100, -10, -32, -33, -50, -90, -100};
-
-// Constants for positional values
-const std::array<int, 64> WHITE_PAWNS = {0, 0, 0, 0, 0, 0, 0, 0,
-                                         5, 5, 5, 5, 5, 5, 5, 5,
-                                         1, 1, 2, 4, 4, 2, 1, 1,
-                                         1, 1, 1, 3, 3, 1, 1, 1,
-                                         1, 1, 1, 3, 3, 1, 1, 1,
-                                         1, 1, 1, 2, 2, 1, 1, 1,
-                                         5, 5, 1, 1, 1, 1, 1, 1,
-                                         0, 0, 0, 0, 0, 0, 0, 0}; 
-const std::array<int, 64> WHITE_KNIGHTS = {1, 2, 3, 3, 3, 3, 2, 1,
-                                           2, 3, 4, 4, 4, 4, 3, 2,
-                                           3, 4, 5, 5, 5, 5, 4, 3,
-                                           3, 4, 5, 5, 5, 5, 4, 3,
-                                           3, 4, 5, 5, 5, 5, 4, 3,
-                                           3, 4, 5, 5, 5, 5, 4, 3,
-                                           2, 3, 4, 4, 4, 4, 3, 2,
-                                           1, 2, 3, 3, 3, 3, 2, 1};
-const std::array<int, 64> WHITE_BISHOPS = {2, 3, 3, 3, 3, 3, 3, 2,
-                                           3, 4, 4, 4, 4, 4, 4, 3,
-                                           3, 4, 5, 5, 5, 5, 4, 3,
-                                           3, 4, 5, 5, 5, 5, 4, 3,
-                                           3, 4, 5, 5, 5, 5, 4, 3,
-                                           3, 4, 5, 5, 5, 5, 4, 3,
-                                           3, 4, 4, 4, 4, 4, 4, 3,
-                                           2, 3, 3, 3, 3, 3, 3, 2};
-const std::array<int, 64> WHITE_ROOKS = {1, 1, 1, 2, 2, 1, 1, 1,
-                                           2, 2, 2, 2, 2, 2, 2, 2,
-                                           1, 2, 2, 2, 2, 2, 2, 1,
-                                           1, 2, 2, 2, 2, 2, 2, 1,
-                                           1, 2, 2, 2, 2, 2, 2, 1,
-                                           1, 2, 2, 2, 2, 2, 2, 1,
-                                           1, 2, 2, 2, 2, 2, 2, 1,
-                                           1, 1, 2, 4, 4, 3, 1, 1};
-const std::array<int, 64> WHITE_QUEENS = {1, 1, 1, 1, 1, 1, 1, 1,
-                                           1, 1, 1, 1, 1, 1, 1, 1,
-                                           1, 1, 1, 1, 1, 1, 1, 1,
-                                           1, 1, 1, 1, 1, 1, 1, 1,
-                                           1, 1, 1, 1, 1, 1, 1, 1,
-                                           1, 1, 1, 1, 1, 1, 1, 1,
-                                           1, 1, 1, 1, 1, 1, 1, 1,
-                                           1, 1, 1, 1, 1, 1, 1, 1};
-const std::array<int, 64> WHITE_KING = {1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        4, 5, 5, 3, 3, 5, 5, 4};
-const std::array<int, 64> BLACK_PAWNS = {0, 0, 0, 0, 0, 0, 0, 0, 
-                                         1, 1, 1, 1, 1, 1, 5, 5, 
-                                         1, 1, 1, 2, 2, 1, 1, 1, 
-                                         1, 1, 1, 3, 3, 1, 1, 1, 
-                                         1, 1, 1, 3, 3, 1, 1, 1, 
-                                         1, 1, 2, 4, 4, 2, 1, 1, 
-                                         5, 5, 5, 5, 5, 5, 5, 5, 
-                                         0, 0, 0, 0, 0, 0, 0, 0};
-const std::array<int, 64> BLACK_KNIGHTS = {1, 2, 3, 3, 3, 3, 2, 1, 
-                                           2, 3, 4, 4, 4, 4, 3, 2, 
-                                           3, 4, 5, 5, 5, 5, 4, 3, 
-                                           3, 4, 5, 5, 5, 5, 4, 3, 
-                                           3, 4, 5, 5, 5, 5, 4, 3, 
-                                           3, 4, 5, 5, 5, 5, 4, 3, 
-                                           2, 3, 4, 4, 4, 4, 3, 2, 
-                                           1, 2, 3, 3, 3, 3, 2, 1};
-const std::array<int, 64> BLACK_BISHOPS = {2, 3, 3, 3, 3, 3, 3, 2, 
-                                           3, 4, 4, 4, 4, 4, 4, 3, 
-                                           3, 4, 5, 5, 5, 5, 4, 3, 
-                                           3, 4, 5, 5, 5, 5, 4, 3, 
-                                           3, 4, 5, 5, 5, 5, 4, 3, 
-                                           3, 4, 5, 5, 5, 5, 4, 3, 
-                                           3, 4, 4, 4, 4, 4, 4, 3, 
-                                           2, 3, 3, 3, 3, 3, 3, 2};
-const std::array<int, 64> BLACK_ROOKS = {1, 1, 3, 4, 4, 2, 1, 1, 
-                                         1, 2, 2, 2, 2, 2, 2, 1, 
-                                         1, 2, 2, 2, 2, 2, 2, 1, 
-                                         1, 2, 2, 2, 2, 2, 2, 1, 
-                                         1, 2, 2, 2, 2, 2, 2, 1, 
-                                         1, 2, 2, 2, 2, 2, 2, 1, 
-                                         2, 2, 2, 2, 2, 2, 2, 2, 
-                                         1, 1, 1, 2, 2, 1, 1, 1};
-const std::array<int, 64> BLACK_QUEENS = {1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1};
-const std::array<int, 64> BLACK_KING = {4, 5, 5, 3, 3, 5, 5, 4,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1,
-                                        1, 1, 1, 1, 1, 1, 1, 1};
-
-// Convert a bitboard to an array of positions
-std::array<bool, 64> bitboardToArray(uint64_t bitboard)
-{
-    std::array<bool, 64> result{};
-    for (int i = 0; i < 64; ++i)
-    {
-        result[i] = (bitboard & (1ULL << i)) != 0;
-    }
-    return result;
-}
-
-// Evaluation function for white
-int16_t evaluationFunctionWhite(const BitPosition &position)
-{
-    int16_t totalEval = 0;
-
-    for (unsigned short square : getBitIndices(position.getWhitePawnsBits()))
-    {
-        totalEval += MATERIAL_VALUES[0] + WHITE_PAWNS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getWhiteKnightsBits()))
-    {
-        totalEval += MATERIAL_VALUES[1] + WHITE_KNIGHTS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getWhiteBishopsBits()))
-    {
-        totalEval += MATERIAL_VALUES[2] + WHITE_BISHOPS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getWhiteRooksBits()))
-    {
-        totalEval += MATERIAL_VALUES[3] + WHITE_ROOKS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getWhiteQueensBits()))
-    {
-        totalEval += MATERIAL_VALUES[4] + WHITE_QUEENS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getWhiteKingBits()))
-    {
-        totalEval += MATERIAL_VALUES[5] + WHITE_KING[square];
-    }
-
-    for (unsigned short square : getBitIndices(position.getBlackPawnsBits()))
-    {
-        totalEval += MATERIAL_VALUES[6] - BLACK_PAWNS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getBlackKnightsBits()))
-    {
-        totalEval += MATERIAL_VALUES[7] - BLACK_KNIGHTS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getBlackBishopsBits()))
-    {
-        totalEval += MATERIAL_VALUES[8] - BLACK_BISHOPS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getBlackRooksBits()))
-    {
-        totalEval += MATERIAL_VALUES[9] - BLACK_ROOKS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getBlackQueensBits()))
-    {
-        totalEval += MATERIAL_VALUES[10] - BLACK_QUEENS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getBlackKingBits()))
-    {
-        totalEval += MATERIAL_VALUES[11] - BLACK_KING[square];
-    }
-    return totalEval;
-}
-
-// Evaluation function for black
-int16_t evaluationFunctionBlack(const BitPosition &position)
-{
-    int16_t totalEval = 0;
-
-    for (unsigned short square : getBitIndices(position.getWhitePawnsBits()))
-    {
-        totalEval += MATERIAL_VALUES[6] - WHITE_PAWNS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getWhiteKnightsBits()))
-    {
-        totalEval += MATERIAL_VALUES[7] - WHITE_KNIGHTS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getWhiteBishopsBits()))
-    {
-        totalEval += MATERIAL_VALUES[8] - WHITE_BISHOPS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getWhiteRooksBits()))
-    {
-        totalEval += MATERIAL_VALUES[9] - WHITE_ROOKS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getWhiteQueensBits()))
-    {
-        totalEval += MATERIAL_VALUES[10] - WHITE_QUEENS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getWhiteKingBits()))
-    {
-        totalEval += MATERIAL_VALUES[11] - WHITE_KING[square];
-    }
-
-    for (unsigned short square : getBitIndices(position.getBlackPawnsBits()))
-    {
-        totalEval += MATERIAL_VALUES[0] + BLACK_PAWNS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getBlackKnightsBits()))
-    {
-        totalEval += MATERIAL_VALUES[1] + BLACK_KNIGHTS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getBlackBishopsBits()))
-    {
-        totalEval += MATERIAL_VALUES[2] + BLACK_BISHOPS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getBlackRooksBits()))
-    {
-        totalEval += MATERIAL_VALUES[3] + BLACK_ROOKS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getBlackQueensBits()))
-    {
-        totalEval += MATERIAL_VALUES[4] + BLACK_QUEENS[square];
-    }
-    for (unsigned short square : getBitIndices(position.getBlackKingBits()))
-    {
-        totalEval += MATERIAL_VALUES[5] + BLACK_KING[square];
-    }
-
-    return totalEval;
-}
-int16_t simpleEvaluationFunctionWhite(BitPosition position)
-{
-    int16_t totalEval = 0;
-
-    for (unsigned short i : getBitIndices(position.getWhitePawnsBits()))
-        totalEval++;
-    for (unsigned short i : getBitIndices(position.getWhiteKnightsBits()))
-        totalEval+=2;
-    for (unsigned short i : getBitIndices(position.getWhiteBishopsBits()))
-        totalEval+=2;
-    for (unsigned short i : getBitIndices(position.getWhiteRooksBits()))
-        totalEval+=5;
-    for (unsigned short i : getBitIndices(position.getWhiteQueensBits()))
-        totalEval+=10;
-    for (unsigned short i : getBitIndices(position.getBlackPawnsBits()))
-        totalEval--;
-    for (unsigned short i : getBitIndices(position.getBlackKnightsBits()))
-        totalEval-=2;
-    for (unsigned short i : getBitIndices(position.getBlackBishopsBits()))
-        totalEval-=2;
-    for (unsigned short i : getBitIndices(position.getBlackRooksBits()))
-        totalEval-=5;
-    for (unsigned short i : getBitIndices(position.getBlackQueensBits()))
-        totalEval-=10;
-    return totalEval;
-}
-int16_t simpleEvaluationFunctionBlack(BitPosition position)
-{
-    int16_t totalEval = 0;
-
-    for (unsigned short i : getBitIndices(position.getWhitePawnsBits()))
-        totalEval--;
-    for (unsigned short i : getBitIndices(position.getWhiteKnightsBits()))
-        totalEval-=2;
-    for (unsigned short i : getBitIndices(position.getWhiteBishopsBits()))
-        totalEval-=2;
-    for (unsigned short i : getBitIndices(position.getWhiteRooksBits()))
-        totalEval-=5;
-    for (unsigned short i : getBitIndices(position.getWhiteQueensBits()))
-        totalEval-=10;
-    for (unsigned short i : getBitIndices(position.getBlackPawnsBits()))
-        totalEval++;
-    for (unsigned short i : getBitIndices(position.getBlackKnightsBits()))
-        totalEval+=2;
-    for (unsigned short i : getBitIndices(position.getBlackBishopsBits()))
-        totalEval+=2;
-    for (unsigned short i : getBitIndices(position.getBlackRooksBits()))
-        totalEval+=5;
-    for (unsigned short i : getBitIndices(position.getBlackQueensBits()))
-        totalEval+=10;
-    return totalEval;
-}
-// Main evaluation function
-int16_t evaluationFunction(const BitPosition &position)
-{
-    if (ENGINEISWHITE)
-    {
-        return evaluationFunctionWhite(position);
-    }
-    else
-    {
-        return evaluationFunctionBlack(position);
-    }
-}
 
 int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool our_turn)
 // This search is done when depth is less than or equal to 0 and considers only captures and promotions
@@ -495,6 +208,18 @@ std::pair<Move, int16_t> firstMoveSearch(BitPosition &position, int8_t depth, in
 // This search is done when depth is more than 0 and considers all moves
 {
     position.setAttackedSquaresAfterMove();
+    if (not position.getIsCheck())
+    {
+        for (Move move : position.allMoves())
+            std::cout << move.toString() << ", ";
+    }
+    else
+    {
+        for (Move move : position.inCheckMoves())
+            std::cout << move.toString() << ", ";
+    }  
+    std::cout << "\n";
+    
     TTEntry *ttEntry = globalTT.probe(position.getZobristKey());
 
     Move tt_move;
