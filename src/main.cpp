@@ -2,7 +2,6 @@
 #include <string>
 #include <sstream>
 #include "precomputed_moves.h"
-#include "magics.h"
 #include "bitposition.h"
 #include "tests.h"
 #include <chrono>
