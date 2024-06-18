@@ -140,8 +140,5 @@ namespace precomputed_moves
     // Used setPinsBits and setChecksAndPinsBits.
     inline constexpr std::array<std::array<uint64_t, 64>, 64> precomputedBishopMovesTableOneBlocker {getBishopOneBlockerTable()};
     inline constexpr std::array<std::array<uint64_t, 64>, 64> precomputedRookMovesTableOneBlocker {getRookOneBlockerTable()};
-
-    extern std::vector<std::map<uint64_t, uint64_t>> precomputedBishopMovesTable;
-    extern std::vector<std::map<uint64_t, uint64_t>> precomputedRookMovesTable;
 }
 #endif

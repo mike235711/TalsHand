@@ -33,4 +33,12 @@ int16_t evaluationFunction(const BitPosition &position);
 
 void initializeNNUEInput(const BitPosition position);
 
+// Declare functions to update efficiently NNUE input
+void addOnWhiteInput(int square, int pieceIndex, int whiteKingPosition);
+void removeOnWhiteInput(int square, int pieceIndex, int whiteKingPosition);
+void addOnBlackInput(int square, int pieceIndex, int blackKingPosition);
+void removeOnBlackInput(int square, int pieceIndex, int blackKingPosition);
+void moveWhiteKingNNUEInput(int newWhiteKingPosition, uint64_t whitePawnsBit, uint64_t whiteKnightsBit, uint64_t whiteBishopsBit, uint64_t whiteRooksBit, uint64_t whiteQueensBit);
+void moveBlackKingNNUEInput(int newBlackKingPosition, uint64_t blackPawnsBit, uint64_t blackKnightsBit, uint64_t blackBishopsBit, uint64_t blackRooksBit, uint64_t blackQueensBit);
+
 #endif // POSITION_EVAL_H

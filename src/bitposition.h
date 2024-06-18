@@ -175,8 +175,8 @@ public:
     std::vector<Move> inCheckMoves() const;
     std::vector<Move> nonCaptureMoves() const;
 
-    void setPiece(uint64_t origin_bit, uint64_t destination_bit);
-    void removePiece(uint64_t destination_bit);
+    void setPiece();
+    void removePiece();
     void storePlyInfo();
     void makeNormalMove(Move move);
     void makeCapture(Move move);
@@ -312,8 +312,8 @@ public:
     unsigned short getMovedPiece() const { return m_moved_piece; }
     unsigned short getCapturedPiece() const { return m_captured_piece; }
     unsigned short getPromotedPiece() const { return m_promoted_piece; }
-
-    void getNNUEInput() const { return; }
+    unsigned short getWhiteKingPosition() const { return m_white_king_position; }
+    unsigned short getBlackKingPosition() const { return m_black_king_position; }
 
     void printBitboards() const
     {

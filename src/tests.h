@@ -12,6 +12,8 @@ void printMove(const Move &move)
 }
 
 unsigned long long runCapturesPerftTest(BitPosition& position, int depth, int currentDepth = 0)
+// Function to test the captures and non captures move generators, it outputs the number of
+// final moves leading from each of the first legal moves (Perft Test)
 {
 
     if (depth == 0)
@@ -74,7 +76,11 @@ unsigned long long runCapturesPerftTest(BitPosition& position, int depth, int cu
     }
     return moveCount;
 }
+
+
 unsigned long long runNormalPerftTest(BitPosition &position, int depth, int currentDepth = 0)
+// Function to test the allMoves move generator, it outputs the number of
+// final moves leading from each of the first legal moves (Perft Test)
 {
 
     if (depth == 0)
