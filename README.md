@@ -1,4 +1,4 @@
-# Tals Hand [In progress]
+# Tals Hand [NNUE Version]
 In this project I will create a chess engine from scratch. Classical chess engines usually consist of 3 main parts:
 
 * A move generator, generating all legal moves in a chess position
