@@ -99,20 +99,6 @@ private:
     std::array<uint64_t, 150> m_diagonal_pins_array{};
     std::array<uint64_t, 150> m_straight_pins_array{};
 
-    std::array<uint64_t, 150> m_white_pawns_bits_array{};
-    std::array<uint64_t, 150> m_white_knights_bits_array{};
-    std::array<uint64_t, 150> m_white_bishops_bits_array{};
-    std::array<uint64_t, 150> m_white_rooks_bits_array{};
-    std::array<uint64_t, 150> m_white_queens_bits_array{};
-    std::array<uint64_t, 150> m_white_king_bits_array{};
-
-    std::array<uint64_t, 150> m_black_pawns_bits_array{};
-    std::array<uint64_t, 150> m_black_knights_bits_array{};
-    std::array<uint64_t, 150> m_black_bishops_bits_array{};
-    std::array<uint64_t, 150> m_black_rooks_bits_array{};
-    std::array<uint64_t, 150> m_black_queens_bits_array{};
-    std::array<uint64_t, 150> m_black_king_bits_array{};
-
     std::array<bool, 150> m_is_check_array{};
 
     std::array<unsigned short, 150> m_white_king_positions_array{};
@@ -136,6 +122,7 @@ private:
 
     std::array<uint64_t, 150> m_zobrist_keys_array{};
 
+    std::array<unsigned short, 150> m_captured_piece_array{};
 
 public:
     // I define the short member functions here, the rest are defined in bitposition.cpp
@@ -180,7 +167,8 @@ public:
     void storePlyInfo();
     void makeNormalMove(Move move);
     void makeCapture(Move move);
-    void unmakeMove();
+    void unmakeNormalMove(Move move);
+    void unmakeCapture(Move move);
     void setSliderAttackedSquares();
     void setAttackedSquaresAfterMove();
 
@@ -199,20 +187,6 @@ public:
         std::array<unsigned short, 150> m_psquare_array{};
         std::array<uint64_t, 150> m_diagonal_pins_array{};
         std::array<uint64_t, 150> m_straight_pins_array{};
-
-        std::array<uint64_t, 150> m_white_pawns_bits_array{};
-        std::array<uint64_t, 150> m_white_knights_bits_array{};
-        std::array<uint64_t, 150> m_white_bishops_bits_array{};
-        std::array<uint64_t, 150> m_white_rooks_bits_array{};
-        std::array<uint64_t, 150> m_white_queens_bits_array{};
-        std::array<uint64_t, 150> m_white_king_bits_array{};
-
-        std::array<uint64_t, 150> m_black_pawns_bits_array{};
-        std::array<uint64_t, 150> m_black_knights_bits_array{};
-        std::array<uint64_t, 150> m_black_bishops_bits_array{};
-        std::array<uint64_t, 150> m_black_rooks_bits_array{};
-        std::array<uint64_t, 150> m_black_queens_bits_array{};
-        std::array<uint64_t, 150> m_black_king_bits_array{};
 
         std::array<bool, 150> m_is_check_array{};
 
@@ -236,6 +210,8 @@ public:
         std::array<uint64_t, 150> m_all_squares_attacked_by_black_array{};
 
         std::array<uint64_t, 150> m_zobrist_keys_array{m_zobrist_key};
+
+        std::array<unsigned short, 150> m_captured_piece_array{};
     }
     bool isThreeFold()
     {

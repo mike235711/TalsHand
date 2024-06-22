@@ -58,7 +58,7 @@ float quiesenceSearch(BitPosition &position, float alpha, float beta, bool our_t
                 value = child_value;
                 best_move = move;
             }
-            position.unmakeMove();
+            position.unmakeCapture(move);
             if (value >= beta)
                 break;
             alpha = std::max(alpha, value);
@@ -75,7 +75,7 @@ float quiesenceSearch(BitPosition &position, float alpha, float beta, bool our_t
                 value = child_value;
                 best_move = move;
             }
-            position.unmakeMove();
+            position.unmakeCapture(move);
             if (value <= alpha)
                 break;
             beta = std::min(beta, value);
@@ -162,7 +162,7 @@ float alphaBetaSearch(BitPosition &position, int8_t depth, float alpha, float be
                 value = child_value;
                 best_move = move;
             }
-            position.unmakeMove();
+            position.unmakeNormalMove(move);
             if (value >= beta)
             {
                 cutoff = true;
@@ -185,7 +185,7 @@ float alphaBetaSearch(BitPosition &position, int8_t depth, float alpha, float be
                 value = child_value;
                 best_move = move;
             }
-            position.unmakeMove();
+            position.unmakeNormalMove(move);
             if (value <= alpha)
             {
                 cutoff = true;
@@ -261,7 +261,7 @@ std::pair<Move, float> firstMoveSearch(BitPosition &position, int8_t depth, floa
                 value = child_value;
                 best_move = move;
             }
-            position.unmakeMove();
+            position.unmakeNormalMove(move);
             if (value >= beta)
             {
                 cutoff = true;
@@ -284,7 +284,7 @@ std::pair<Move, float> firstMoveSearch(BitPosition &position, int8_t depth, floa
                 value = child_value;
                 best_move = move;
             }
-            position.unmakeMove();
+            position.unmakeNormalMove(move);
             if (value <= alpha)
             {
                 cutoff = true;

@@ -46,7 +46,7 @@ unsigned long long runCapturesPerftTest(BitPosition& position, int depth, int cu
 
         unsigned long long subCount = runCapturesPerftTest(position, depth - 1, currentDepth + 1);
         
-        position.unmakeMove();
+        position.unmakeCapture(move);
 
         if (currentDepth == 0)
         {
@@ -65,7 +65,7 @@ unsigned long long runCapturesPerftTest(BitPosition& position, int depth, int cu
 
         unsigned long long subCount = runCapturesPerftTest(position, depth - 1, currentDepth + 1);
 
-        position.unmakeMove();
+        position.unmakeNormalMove(move);
 
         if (currentDepth == 0)
         {
@@ -110,7 +110,7 @@ unsigned long long runNormalPerftTest(BitPosition &position, int depth, int curr
 
         unsigned long long subCount = runNormalPerftTest(position, depth - 1, currentDepth + 1);
 
-        position.unmakeMove();
+        position.unmakeNormalMove(move);
 
         if (currentDepth == 0)
         {
