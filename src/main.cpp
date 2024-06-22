@@ -16,10 +16,9 @@
 #include <vector>
 #include <armadillo>
 
-
-
 TranspositionTable globalTT;
-int TTSIZE {20};
+bool ENGINEISWHITE;
+int TTSIZE{20};
 
 // Function to convert a FEN string to a BitPosition object
 BitPosition fenToBitPosition(const std::string &fen)
@@ -238,10 +237,10 @@ int main()
     // Simple loop to read commands from the Python GUI following UCI communication protocol
     while (std::getline(std::cin, inputLine))
     {
+        // Process initial input from GUI
         std::istringstream iss(inputLine);
         std::string command;
         iss >> command;
-        // Process input from GUI
         if (command == "uci")
         {
             std::cout << "id name La_Mano_de_Tahl\n" << std::flush;
@@ -252,10 +251,14 @@ int main()
         {
             std::cout << "readyok\n";
         }
+
+        // End process if GUI asks kindly
         else if (command == "quit")
         {
             break;
         }
+
+        // Beginning a game
         else if (command == "position" && position_initialized == false)
         {
             iss >> command;
@@ -285,6 +288,9 @@ int main()
             {
                 position.makeNormalMove(move);
                 position.setAttackedSquaresAfterMove();
+
+                // If we make a capture we cant go back to previous positions so we empty
+                // the plyInfo (for threefold checking) in position and the TransPosition table
                 if (moveIsCapture(moveUci, position))
                 {
                     position.restorePlyInfo();
@@ -293,20 +299,28 @@ int main()
             }
             // Initialize NNUE input arma::vec
             initializeNNUEInput(position);
+
         }
-        else if (command == "position" && position_initialized == true)
+
         // Get the last move and make it (move made from other player)
+        else if (command == "position" && position_initialized == true)
         {
+            // Find the Move object from the string
             std::string moveUci;
             while (iss >> command)
             {
                 moveUci = command;
             }
             Move move{findNormalMoveFromString(moveUci, position)};
+
+            // Make oponent's move on BitPosition object
             if (move.getData() != 0)
             {
                 position.makeNormalMove(move);
                 position.setAttackedSquaresAfterMove();
+
+                // If we make a capture we cant go back to previous positions so we empty
+                // the plyInfo (for threefold checking) in position and the TransPosition table
                 if (moveIsCapture(moveUci, position))
                 {
                     position.restorePlyInfo();
@@ -314,20 +328,30 @@ int main()
                 }
             }
         }
+
+        // Thinking after opponent made move
         else if (inputLine.substr(0, 2) == "go")
         {
-            // Implement your move generation and evaluation logic here
-            // Placeholder for first non-capture move
-            Move bestMove = iterativeSearch(position, 800);
+            ENGINEISWHITE = position.getTurn();
+            // Call the engine on fixed time (WANT TO ADD A TIME MANAGER)
+            auto [bestMove, bestValue] {iterativeSearch(position, 800)};
             position.makeNormalMove(bestMove);
             position.setAttackedSquaresAfterMove();
+
+            // If we make a capture we cant go back to previous positions so we empty
+            // the plyInfo (for threefold checking) in position and the TransPosition table
             if (moveIsCapture(bestMove.toString(), position))
             {
                 globalTT.resize(TTSIZE);
                 position.restorePlyInfo();
             }
-            std::cout << "bestmove " << bestMove.toString() << "\n"
-                      << std::flush;
+
+            // Send our best move through a UCI command
+            std::cout << "Eval: " << bestValue << "\n";
+            std::cout << "Static Eval: " << evaluationFunction(position, false) << "\n";
+            std::cout << "bestmove " << bestMove.toString() << "\n" << std::flush;
+            
+            // Check transposition table memory
             globalTT.printTableMemory();
         }
 
@@ -339,40 +363,87 @@ int main()
         {
             std::cout << "Starting test\n";
 
-            auto start = std::chrono::high_resolution_clock::now(); // Start timing
+            // Initialize positions
+            BitPosition position_1{fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
+            BitPosition position_2{fenToBitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")};
+            BitPosition position_3{fenToBitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1")};
+            BitPosition position_4{fenToBitPosition("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1")};
+            BitPosition position_5{fenToBitPosition("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8")};
+            BitPosition position_6{fenToBitPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ")};
 
+            std::chrono::duration<double> duration{0};
+
+            // Position 1
+            std::cout << "Position 1 \n";
+            // Initialize NNUE input arma::vec
+            initializeNNUEInput(position_1);
+            auto start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= 4; ++depth)
             {
-                // It's important to output the results of the tests to verify correctness
-                std::cout << "Depth " << unsigned(depth) << ":\n";
-                BitPosition position_1 {fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_1);
-                std::cout << "Position 1: \n" << runCapturesPerftTest(position_1, depth) << " moves\n";
-                BitPosition position_2 {fenToBitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_2);
-                std::cout << "Position 2: \n" << runCapturesPerftTest(position_2, depth) << " moves\n";
-                BitPosition position_3{fenToBitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_3);
-                std::cout << "Position 3: \n" << runCapturesPerftTest(position_3, depth) << " moves\n";
-                BitPosition position_4{fenToBitPosition("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_4);
-                std::cout << "Position 4: \n" << runCapturesPerftTest(position_4, depth) << " moves\n";
-                BitPosition position_5{fenToBitPosition("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_5);
-                std::cout << "Position 5: \n" << runCapturesPerftTest(position_5, depth) << " moves\n";
-                BitPosition position_6{fenToBitPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_6);
-                std::cout << "Position 6: \n" << runCapturesPerftTest(position_6, depth) << " moves\n";
+                std::cout << runCapturesPerftTest(position_1, depth) << " moves\n";
             }
-
             auto end = std::chrono::high_resolution_clock::now(); // End timing
-            std::chrono::duration<double> duration = end - start; // Calculate duration
+            duration = end - start;                               // Calculate duration
+
+            // Position 2
+            std::cout << "Position 2 \n";
+            // Initialize NNUE input arma::vec
+            initializeNNUEInput(position_2);
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= 4; ++depth)
+            {
+                std::cout << runCapturesPerftTest(position_2, depth) << " moves\n";
+            }
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += end - start;                               // Calculate duration
+
+            // Position 3
+            std::cout << "Position 3 \n";
+            // Initialize NNUE input arma::vec
+            initializeNNUEInput(position_3);
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= 4; ++depth)
+            {
+                std::cout << runCapturesPerftTest(position_3, depth) << " moves\n";
+            }
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += end - start;                               // Calculate duration
+
+            // Position 4
+            std::cout << "Position 4 \n";
+            // Initialize NNUE input arma::vec
+            initializeNNUEInput(position_4);
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= 4; ++depth)
+            {
+                std::cout << runCapturesPerftTest(position_4, depth) << " moves\n";
+            }
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += end - start;                               // Calculate duration
+
+            // Position 5
+            std::cout << "Position 5 \n";
+            // Initialize NNUE input arma::vec
+            initializeNNUEInput(position_5);
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= 4; ++depth)
+            {
+                std::cout << runCapturesPerftTest(position_5, depth) << " moves\n";
+            }
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += end - start;                               // Calculate duration
+
+            // Position 6
+            std::cout << "Position 6 \n";
+            // Initialize NNUE input arma::vec
+            initializeNNUEInput(position_6);
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= 4; ++depth)
+            {
+                std::cout << runCapturesPerftTest(position_6, depth) << " moves\n";
+            }
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += end - start;                               // Calculate duration
 
             std::cout << "Time taken: " << duration.count() << " seconds\n";
         }
@@ -381,42 +452,87 @@ int main()
         {
             std::cout << "Starting test\n";
 
-            auto start = std::chrono::high_resolution_clock::now(); // Start timing
+            // Initialize positions
+            BitPosition position_1{fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
+            BitPosition position_2{fenToBitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")};
+            BitPosition position_3{fenToBitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1")};
+            BitPosition position_4{fenToBitPosition("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1")};
+            BitPosition position_5{fenToBitPosition("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8")};
+            BitPosition position_6{fenToBitPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ")};
 
+            std::chrono::duration<double> duration{0};
+
+            // Position 1
+            std::cout << "Position 1 \n";
+            // Initialize NNUE input arma::vec
+            initializeNNUEInput(position_1);
+            auto start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= 4; ++depth)
             {
-                // It's important to output the results of the tests to verify correctness
-                std::cout << "Depth " << unsigned(depth) << ":\n";
-                BitPosition position_1{fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_1);
-                std::cout << "Position 1: \n"
-                           << runNormalPerftTest(position_1, depth) << " moves\n";
-                BitPosition position_2{fenToBitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_2);
-                std::cout << "Position 2: \n" << runNormalPerftTest(position_2, depth) << " moves\n";
-                BitPosition position_3{fenToBitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_3);
-                std::cout << "Position 3: \n" << runNormalPerftTest(position_3, depth) << " moves\n";
-                BitPosition position_4{fenToBitPosition("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_4);
-                std::cout << "Position 4: \n" << runNormalPerftTest(position_4, depth) << " moves\n";
-                BitPosition position_5{fenToBitPosition("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_5);
-                std::cout << "Position 5: \n"
-                          << runNormalPerftTest(position_5, depth) << " moves\n";
-                BitPosition position_6{fenToBitPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_6);
-                std::cout << "Position 6: \n" << runNormalPerftTest(position_6, depth) << " moves\n";
+                std::cout << runNormalPerftTest(position_1, depth) << " moves\n";
             }
-
             auto end = std::chrono::high_resolution_clock::now(); // End timing
-            std::chrono::duration<double> duration = end - start; // Calculate duration
+            duration = end - start; // Calculate duration
+
+            // Position 2
+            std::cout << "Position 2 \n";
+            // Initialize NNUE input arma::vec
+            initializeNNUEInput(position_2);
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= 4; ++depth)
+            {
+                std::cout << runNormalPerftTest(position_2, depth) << " moves\n";
+            }
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += end - start;                               // Calculate duration
+
+            // Position 3
+            std::cout << "Position 3 \n";
+            // Initialize NNUE input arma::vec
+            initializeNNUEInput(position_3);
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= 4; ++depth)
+            {
+                std::cout << runNormalPerftTest(position_3, depth) << " moves\n";
+            }
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += end - start;                               // Calculate duration
+
+            // Position 4
+            std::cout << "Position 4 \n";
+            // Initialize NNUE input arma::vec
+            initializeNNUEInput(position_4);
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= 4; ++depth)
+            {
+                std::cout << runNormalPerftTest(position_4, depth) << " moves\n";
+            }
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += end - start;                               // Calculate duration
+
+            // Position 5
+            std::cout << "Position 5 \n";
+            // Initialize NNUE input arma::vec
+            initializeNNUEInput(position_5);
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= 4; ++depth)
+            {
+                std::cout << runNormalPerftTest(position_5, depth) << " moves\n";
+            }
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += end - start;                               // Calculate duration
+
+            // Position 6
+            std::cout << "Position 6 \n";
+            // Initialize NNUE input arma::vec
+            initializeNNUEInput(position_6);
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= 4; ++depth)
+            {
+                std::cout << runNormalPerftTest(position_6, depth) << " moves\n";
+            }
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += end - start;                               // Calculate duration
 
             std::cout << "Time taken: " << duration.count() << " seconds\n";
         }
@@ -424,59 +540,107 @@ int main()
         else if (inputLine == "tacticsTests")
         {
             std::cout << "Starting test\n";
+            // Initialize positions
+            BitPosition position_1{fenToBitPosition("kbK5/pp6/1P6/8/8/8/8/R7 w - - 0 1")};
+            BitPosition position_2{fenToBitPosition("rR6/p7/KnPk4/P7/8/8/8/8 w - - 0 1")};
+            BitPosition position_3{fenToBitPosition("1b1q4/8/P2p4/1N1Pp2p/5P1k/7P/1B1P3K/8 w - - 0 1")};
+            BitPosition position_4{fenToBitPosition("2r2rk1/1b3ppp/p1qpp3/1P6/1Pn1P2b/2NB1P1P/1BP1R1P1/R2Q2K1 b - - 0 19")};
+            BitPosition position_5{fenToBitPosition("rn2kb1r/1bq2pp1/pp3n1p/4p3/2PQ1B1P/2N3P1/PP2PPB1/2KR3R w kq - 0 12")};
+            BitPosition position_6{fenToBitPosition("3k2rr/4b3/p3Qpq1/P2pn3/1p1Nb3/6B1/1PP1B2P/3R1RK1 b - - 0 25")};
+            BitPosition position_7{fenToBitPosition("4k3/Q6n/8/8/8/8/PR5P/4K1NR w K - 0 1")};
 
+            std::chrono::duration<double> duration{0};
+
+            // Position 1
+            initializeNNUEInput(position_1);
+            std::cout << "Position 1: \n";
+            std::cout << "Best move should be a1a6 \n";
             auto start = std::chrono::high_resolution_clock::now(); // Start timing
-
             for (int8_t depth = 1; depth <= 4; ++depth)
             {
-                // It's important to output the results of the tests to verify correctness
                 std::cout << "Depth " << unsigned(depth) << ":\n";
-                BitPosition position_1{fenToBitPosition("kbK5/pp6/1P6/8/8/8/8/R7 w - - 0 1")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_1);
-                std::cout << "Position 1: \n"
-                          << iterativeSearch(position_1, 999999999, depth).toString() << "\n";
-                std::cout << "Best move should be a1a6 \n";
-                BitPosition position_2{fenToBitPosition("rR6/p7/KnPk4/P7/8/8/8/8 w - - 0 1")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_2);
-                std::cout << "Position 2: \n"
-                          << iterativeSearch(position_2, 999999999, depth).toString() << "\n";
-                std::cout << "Best move should be c6c7 \n";
-                BitPosition position_3{fenToBitPosition("1b1q4/8/P2p4/1N1Pp2p/5P1k/7P/1B1P3K/8 w - - 0 1")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_3);
-                std::cout << "Position 3: \n"
-                          << iterativeSearch(position_3, 999999999, depth).toString() << "\n";
-                std::cout << "Best move should be b2b4 \n";
-                BitPosition position_4{fenToBitPosition("2r2rk1/1b3ppp/p1qpp3/1P6/1Pn1P2b/2NB1P1P/1BP1R1P1/R2Q2K1 b - - 0 19")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_4);
-                std::cout << "Position 4: \n"
-                          << iterativeSearch(position_4, 999999999, depth).toString() << "\n";
-                std::cout << "Best move should be c6b6 \n";
-                BitPosition position_5{fenToBitPosition("rn2kb1r/1bq2pp1/pp3n1p/4p3/2PQ1B1P/2N3P1/PP2PPB1/2KR3R w kq - 0 12")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_5);
-                std::cout << "Position 5: \n"
-                          << iterativeSearch(position_5, 999999999, depth).toString() << "\n";
-                std::cout << "Best move should be f4e5 \n";
-                BitPosition position_6{fenToBitPosition("3k2rr/4b3/p3Qpq1/P2pn3/1p1Nb3/6B1/1PP1B2P/3R1RK1 b - - 0 25")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_6);
-                std::cout << "Position 6: \n"
-                          << iterativeSearch(position_6, 999999999, depth).toString() << "\n";
-                std::cout << "Best move should be h8h2 \n";
-                BitPosition position_7{fenToBitPosition("4k3/Q6n/8/8/8/8/PR5P/4K1NR w K - 0 1")};
-                // Initialize NNUE input arma::vec
-                initializeNNUEInput(position_7);
-                std::cout << "Position 7: \n"
-                          << iterativeSearch(position_7, 999999999, depth).toString() << "\n";
-                std::cout << "Best move should be b2b8 \n";
+                std::cout << iterativeSearch(position_1, 999999999, depth).first.toString() << "\n";
             }
-
             auto end = std::chrono::high_resolution_clock::now(); // End timing
-            std::chrono::duration<double> duration = end - start; // Calculate duration
+            duration += (end - start); // Calculate duration
+
+            // Position 2
+            initializeNNUEInput(position_2);
+            std::cout << "Position 2: \n";
+            std::cout << "Best move should be c6c7 \n";
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= 4; ++depth)
+            {
+                std::cout << "Depth " << unsigned(depth) << ":\n";
+                std::cout << iterativeSearch(position_2, 999999999, depth).first.toString() << "\n";
+            }
+            end = std::chrono::high_resolution_clock::now();    // End timing
+            duration += (end - start); // Calculate duration
+
+            // Position 3
+            initializeNNUEInput(position_3);
+            std::cout << "Position 3: \n";
+            std::cout << "Best move should be b2b4 \n";
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= 4; ++depth)
+            {
+                std::cout << "Depth " << unsigned(depth) << ":\n";
+                std::cout << iterativeSearch(position_3, 999999999, depth).first.toString() << "\n";
+            }
+            end = std::chrono::high_resolution_clock::now();    // End timing
+            duration += (end - start); // Calculate duration
+
+            // Position 4
+            initializeNNUEInput(position_4);
+            std::cout << "Position 4: \n";
+            std::cout << "Best move should be c6b6 \n";
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= 4; ++depth)
+            {
+                std::cout << "Depth " << unsigned(depth) << ":\n";
+                std::cout << iterativeSearch(position_4, 999999999, depth).first.toString() << "\n";
+            }
+            end = std::chrono::high_resolution_clock::now();    // End timing
+            duration += (end - start); // Calculate duration
+
+            // Position 5
+            initializeNNUEInput(position_5);
+            std::cout << "Position 5: \n";
+            std::cout << "Best move should be f4e5 \n";
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= 4; ++depth)
+            {
+                std::cout << "Depth " << unsigned(depth) << ":\n";
+                std::cout << iterativeSearch(position_5, 999999999, depth).first.toString() << "\n";
+            }
+            end = std::chrono::high_resolution_clock::now();    // End timing
+            duration += (end - start); // Calculate duration
+
+            // Position 6
+            initializeNNUEInput(position_6);
+            std::cout << "Position 6: \n";
+            std::cout << "Best move should be h8h2 \n";
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= 4; ++depth)
+            {
+                std::cout << "Depth " << unsigned(depth) << ":\n";
+                std::cout << iterativeSearch(position_6, 999999999, depth).first.toString() << "\n";
+            }
+            end = std::chrono::high_resolution_clock::now();    // End timing
+            duration += (end - start); // Calculate duration
+
+            // Position 7
+            initializeNNUEInput(position_7);
+            std::cout << "Position 7: \n";
+            std::cout << "Best move should be b2b8 \n";
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= 4; ++depth)
+            {
+                std::cout << "Depth " << unsigned(depth) << ":\n";
+                std::cout << iterativeSearch(position_7, 999999999, depth).first.toString() << "\n";
+            }
+            end = std::chrono::high_resolution_clock::now();    // End timing
+            duration += (end - start); // Calculate duration
 
             std::cout << "Time taken: " << duration.count() << " seconds\n";
         }

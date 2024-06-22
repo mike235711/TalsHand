@@ -22,7 +22,7 @@
 //
 // key                                                              16 bit
 // depth (max depth - current depth)                                8 bit
-// value                                                            16 bit
+// value                                                            float
 // best move                                                        16 bit
 // is exact (otherwise the turn determines if it lower or upper)    8 or 4 bit (boolean)
 
@@ -30,11 +30,11 @@ struct TTEntry
 {
 
     Move getMove() const { return Move(move); }
-    int16_t getValue() const { return value; }
+    float getValue() const { return value; }
     uint8_t getDepth() const { return depth; }
     int16_t getIsExact() const { return isExact; }
     // Implementation of TTEntry::save
-    void save(uint64_t z_k, int16_t v, uint8_t d, Move m, bool type)
+    void save(uint64_t z_k, float v, uint8_t d, Move m, bool type)
     {
         z_key = z_k;
         value = v;
@@ -49,7 +49,7 @@ private:
     uint64_t z_key;
     uint8_t depth;
     Move move;
-    int16_t value;
+    float value;
     bool isExact;
 };
 
@@ -80,7 +80,7 @@ public:
     }
 
     // Save a new entry to the table
-    void save(uint64_t z_key, int16_t value, uint8_t depth, Move move, bool isExact)
+    void save(uint64_t z_key, float value, uint8_t depth, Move move, bool isExact)
     {
         size_t index = z_key % tableSize;
 
