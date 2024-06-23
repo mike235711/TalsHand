@@ -19,7 +19,7 @@ extern TranspositionTable globalTT;
 float quiesenceSearch(BitPosition &position, float alpha, float beta, bool our_turn)
 // This search is done when depth is less than or equal to 0 and considers only captures and promotions
 {
-    std::vector<Move> moves;
+    std::vector<Capture> moves;
     position.setAttackedSquaresAfterMove();
     if (position.isCheck())
     {
@@ -46,10 +46,10 @@ float quiesenceSearch(BitPosition &position, float alpha, float beta, bool our_t
     }
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
     float value{evaluationFunction(position, our_turn)};
-    Move best_move;
+    Capture best_move;
     if (our_turn) // Maximize
     {
-        for (Move move : moves)
+        for (Capture move : moves)
         {
             position.makeCapture(move);
             float child_value{quiesenceSearch(position, alpha, beta, false)};
@@ -66,7 +66,7 @@ float quiesenceSearch(BitPosition &position, float alpha, float beta, bool our_t
     }
     else // Minimize
     {
-        for (Move move : moves)
+        for (Capture move : moves)
         {
             position.makeCapture(move);
             float child_value{quiesenceSearch(position, alpha, beta, true)};
@@ -81,7 +81,6 @@ float quiesenceSearch(BitPosition &position, float alpha, float beta, bool our_t
             beta = std::min(beta, value);
         }
     }
-
     return value;
 }
 

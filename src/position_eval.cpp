@@ -113,11 +113,12 @@ extern bool ENGINEISWHITE;
 
 void initNNUEParameters()
 {
+    const std::string modelDir = "models/quantized_model_0plus_v1_param_50_same_first/";
     // Load weights
-    std::vector<std::vector<int8_t>> firstLayerWeightsData = load_weights("models/quantized_model_0plus_v1_param_50_same_first/white_linear_weights.csv");
-    std::vector<std::vector<int8_t>> secondLayerWeightsData = load_weights("models/quantized_model_0plus_v1_param_50_same_first/second_layer_weights.csv");
-    std::vector<std::vector<int8_t>> thirdLayerWeightsData = load_weights("models/quantized_model_0plus_v1_param_50_same_first/third_layer_weights.csv");
-    std::vector<std::vector<int8_t>> finalLayerWeightsData = load_weights("models/quantized_model_0plus_v1_param_50_same_first/final_layer_weights.csv");
+    std::vector<std::vector<int8_t>> firstLayerWeightsData = load_weights(modelDir + "white_linear_weights.csv");
+    std::vector<std::vector<int8_t>> secondLayerWeightsData = load_weights(modelDir + "second_layer_weights.csv");
+    std::vector<std::vector<int8_t>> thirdLayerWeightsData = load_weights(modelDir + "third_layer_weights.csv");
+    std::vector<std::vector<int8_t>> finalLayerWeightsData = load_weights(modelDir + "final_layer_weights.csv");
 
     // Convert weights to Armadillo matrices
     firstLayerWeights = convertToArmaMatrix(firstLayerWeightsData);
@@ -132,10 +133,10 @@ void initNNUEParameters()
     std::cout << "Dimensions of finalLayerWeights: " << finalLayerWeights.n_rows << " x " << finalLayerWeights.n_cols << std::endl;
 
     // Load biases
-    std::vector<float> firstLayerBiasesData = load_biases("models/quantized_model_0plus_v1_param_50_same_first/white_linear_biases.csv");
-    std::vector<float> secondLayerBiasesData = load_biases("models/quantized_model_0plus_v1_param_50_same_first/second_layer_biases.csv");
-    std::vector<float> thirdLayerBiasesData = load_biases("models/quantized_model_0plus_v1_param_50_same_first/third_layer_biases.csv");
-    std::vector<float> finalLayerBiasesData = load_biases("models/quantized_model_0plus_v1_param_50_same_first/final_layer_biases.csv");
+    std::vector<float> firstLayerBiasesData = load_biases(modelDir + "white_linear_biases.csv");
+    std::vector<float> secondLayerBiasesData = load_biases(modelDir + "second_layer_biases.csv");
+    std::vector<float> thirdLayerBiasesData = load_biases(modelDir + "third_layer_biases.csv");
+    std::vector<float> finalLayerBiasesData = load_biases(modelDir + "final_layer_biases.csv");
 
     // Convert biases to Armadillo vectors
     firstLayerBiases = convertToArmaVec(firstLayerBiasesData);
@@ -150,14 +151,15 @@ void initNNUEParameters()
     std::cout << "Dimensions of finalLayerBiases: " << finalLayerBiases.n_elem << std::endl;
 
     // Load scales
-    firstLayerScale = load_scale("models/quantized_model_0plus_v1_param_50_same_first/white_linear_scales.csv");
-    secondLayerScale = load_scale("models/quantized_model_0plus_v1_param_50_same_first/second_layer_scales.csv");
-    thirdLayerScale = load_scale("models/quantized_model_0plus_v1_param_50_same_first/third_layer_scales.csv");
-    finalLayerScale = load_scale("models/quantized_model_0plus_v1_param_50_same_first/final_layer_scales.csv");
+    firstLayerScale = load_scale(modelDir + "white_linear_scales.csv");
+    secondLayerScale = load_scale(modelDir + "second_layer_scales.csv");
+    thirdLayerScale = load_scale(modelDir + "third_layer_scales.csv");
+    finalLayerScale = load_scale(modelDir + "final_layer_scales.csv");
 }
 
-// The engine is built to get an evaluation of the position with positive being good for the engine. 
-// The NNUE is built to give an evaluation of the position with positive being good for whose turn it is.
+// The engine is built to get an evaluation of the position with high values being good for the engine. 
+// The NNUE is built to give an evaluation of the position with high values being good for whose turn it is.
+// This function gives an evaluation with high values being good for engine.
 float evaluationFunction(const BitPosition &position, bool ourTurn)
 {
     arma::vec secondLayerOutput;
@@ -183,8 +185,8 @@ float evaluationFunction(const BitPosition &position, bool ourTurn)
 
 void initializeNNUEInput(const BitPosition position)
 {
-    std::vector<int8_t> whiteInputSTD(64 * 64 * 5, 0);
-    std::vector<int8_t> blackInputSTD(64 * 64 * 5, 0);
+    std::vector<int8_t> whiteInputLong(64 * 64 * 5, 0);
+    std::vector<int8_t> blackInputLong(64 * 64 * 5, 0);
 
     uint64_t whitePawnsBit = position.getWhitePawnsBits();
     uint64_t whiteKnightsBit = position.getWhiteKnightsBits();
@@ -204,29 +206,29 @@ void initializeNNUEInput(const BitPosition position)
     int blackOffset = blackKingPosition * 64 * 5;
 
     for (unsigned short index : getBitIndices(whitePawnsBit))
-        whiteInputSTD[whiteOffset + index] = 1;
+        whiteInputLong[whiteOffset + index] = 1;
     for (unsigned short index : getBitIndices(whiteKnightsBit))
-        whiteInputSTD[whiteOffset + 64 + index] = 1;
+        whiteInputLong[whiteOffset + 64 + index] = 1;
     for (unsigned short index : getBitIndices(whiteBishopsBit))
-        whiteInputSTD[whiteOffset + 128 + index] = 1;
+        whiteInputLong[whiteOffset + 128 + index] = 1;
     for (unsigned short index : getBitIndices(whiteRooksBit))
-        whiteInputSTD[whiteOffset + 192 + index] = 1;
+        whiteInputLong[whiteOffset + 192 + index] = 1;
     for (unsigned short index : getBitIndices(whiteQueensBit))
-        whiteInputSTD[whiteOffset + 256 + index] = 1;
+        whiteInputLong[whiteOffset + 256 + index] = 1;
 
     for (unsigned short index : getBitIndices(blackPawnsBit))
-        blackInputSTD[blackOffset + index] = 1;
+        blackInputLong[blackOffset + index] = 1;
     for (unsigned short index : getBitIndices(blackKnightsBit))
-        blackInputSTD[blackOffset + 64 + index] = 1;
+        blackInputLong[blackOffset + 64 + index] = 1;
     for (unsigned short index : getBitIndices(blackBishopsBit))
-        blackInputSTD[blackOffset + 128 + index] = 1;
+        blackInputLong[blackOffset + 128 + index] = 1;
     for (unsigned short index : getBitIndices(blackRooksBit))
-        blackInputSTD[blackOffset + 192 + index] = 1;
+        blackInputLong[blackOffset + 192 + index] = 1;
     for (unsigned short index : getBitIndices(blackQueensBit))
-        blackInputSTD[blackOffset + 256 + index] = 1;
+        blackInputLong[blackOffset + 256 + index] = 1;
 
-    whiteInput = (firstLayerWeights * convertToArmaVec(whiteInputSTD)) * firstLayerScale + firstLayerBiases;
-    blackInput = (firstLayerWeights * convertToArmaVec(blackInputSTD)) * firstLayerScale + firstLayerBiases;
+    whiteInput = (firstLayerWeights * convertToArmaVec(whiteInputLong)) * firstLayerScale + firstLayerBiases;
+    blackInput = (firstLayerWeights * convertToArmaVec(blackInputLong)) * firstLayerScale + firstLayerBiases;
 }
 
 // Helper functions to update the input vector
@@ -260,45 +262,42 @@ void removeOnBlackInput(int index)
 
 void moveWhiteKingNNUEInput(const BitPosition &position)
 {
-    arma::vec longWhiteInput(64 * 64 * 5);
+    arma::vec longWhiteInput(64 * 5);
 
     int whiteOffset = position.getWhiteKingPosition() * 64 * 5;
 
     // Update whiteInput for all pieces relative to the new white king's position
     for (unsigned short index : getBitIndices(position.getWhitePawnsBits()))
-        longWhiteInput(whiteOffset + index) = 1;
+        longWhiteInput(index) = 1;
     for (unsigned short index : getBitIndices(position.getWhiteKnightsBits()))
-        longWhiteInput(whiteOffset + 64 + index) = 1;
+        longWhiteInput(64 + index) = 1;
     for (unsigned short index : getBitIndices(position.getWhiteBishopsBits()))
-        longWhiteInput(whiteOffset + 128 + index) = 1;
+        longWhiteInput(128 + index) = 1;
     for (unsigned short index : getBitIndices(position.getWhiteRooksBits()))
-        longWhiteInput(whiteOffset + 192 + index) = 1;
+        longWhiteInput(192 + index) = 1;
     for (unsigned short index : getBitIndices(position.getWhiteQueensBits()))
-        longWhiteInput(whiteOffset + 256 + index) = 1;
+        longWhiteInput(256 + index) = 1;
 
-    whiteInput = (firstLayerWeights * longWhiteInput) * firstLayerScale + firstLayerBiases;
+    whiteInput = (firstLayerWeights.cols(whiteOffset, whiteOffset + 64 * 5 -1) * longWhiteInput) * firstLayerScale + firstLayerBiases;
 }
 
 void moveBlackKingNNUEInput(const BitPosition &position)
 {
-    arma::vec longBlackInput(64 * 64 * 5);
-
-    // Clear the black part of nnueInput
-    blackInput.zeros();
+    arma::vec longBlackInput(64 * 5);
 
     int blackOffset = position.getBlackKingPosition() * 64 * 5;
 
     // Update blackInput for all pieces relative to the new black king's position
     for (unsigned short index : getBitIndices(position.getBlackKingBits()))
-        longBlackInput(blackOffset + index) = 1;
+        longBlackInput(index) = 1;
     for (unsigned short index : getBitIndices(position.getBlackKingBits()))
-        longBlackInput(blackOffset + 64 + index) = 1;
+        longBlackInput(64 + index) = 1;
     for (unsigned short index : getBitIndices(position.getBlackBishopsBits()))
-        longBlackInput(blackOffset + 128 + index) = 1;
+        longBlackInput(128 + index) = 1;
     for (unsigned short index : getBitIndices(position.getBlackRooksBits()))
-        longBlackInput(blackOffset + 192 + index) = 1;
+        longBlackInput(192 + index) = 1;
     for (unsigned short index : getBitIndices(position.getBlackQueensBits()))
-        longBlackInput(blackOffset + 256 + index) = 1;
+        longBlackInput(256 + index) = 1;
 
-    blackInput = (firstLayerWeights * longBlackInput) * firstLayerScale + firstLayerBiases;
+    blackInput = (firstLayerWeights.cols(blackOffset, blackOffset + 64 * 5 - 1) * longBlackInput) * firstLayerScale + firstLayerBiases;
 }

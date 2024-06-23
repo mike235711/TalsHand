@@ -101,8 +101,6 @@ private:
 
     std::array<bool, 150> m_is_check_array{};
 
-    std::array<unsigned short, 150> m_white_king_positions_array{};
-    std::array<unsigned short, 150> m_black_king_positions_array{};
 
     std::array<uint64_t, 150> m_squares_attacked_by_white_pawns_array{};
     std::array<uint64_t, 150> m_squares_attacked_by_black_pawns_array{};
@@ -153,8 +151,8 @@ public:
     void setChecksAndPinsBits();
     bool kingIsSafeFromSliders(unsigned short destination_square) const;
     bool kingIsSafeAfterPassant(unsigned short removed_square_1, unsigned short removed_square_2) const;
-    std::vector<Move> inCheckOrderedCaptures() const;
-    std::vector<Move> orderedCaptures() const;
+    std::vector<Capture> inCheckOrderedCaptures() const;
+    std::vector<Capture> orderedCaptures() const;
     std::vector<Move> inCheckAllMoves() const;
     std::vector<Move> allMoves() const;
     std::vector<Move> orderAllMoves(std::vector<Move> &moves, Move ttMove) const;
@@ -166,9 +164,9 @@ public:
     void removePiece();
     void storePlyInfo();
     void makeNormalMove(Move move);
-    void makeCapture(Move move);
+    void makeCapture(Capture move);
     void unmakeNormalMove(Move move);
-    void unmakeCapture(Move move);
+    void unmakeCapture(Capture move);
     void setSliderAttackedSquares();
     void setAttackedSquaresAfterMove();
 

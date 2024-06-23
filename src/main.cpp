@@ -105,46 +105,6 @@ BitPosition fenToBitPosition(const std::string &fen)
     position.setKingPosition();
     return position;
 }
-Move findCaptureFromString(std::string moveString, BitPosition position)
-{
-    if (position.isCheck())
-    {
-        position.setChecksAndPinsBits();
-        for (Move move : position.inCheckMoves())
-        {
-            if (move.toString() == moveString)
-            {
-                return move;
-            }
-        }
-        for (Move move : position.inCheckOrderedCaptures())
-        {
-            if (move.toString() == moveString)
-            {
-                return move;
-            }
-        }
-    }
-    else
-    {
-        position.setPinsBits();
-        for (Move move : position.nonCaptureMoves())
-        {
-            if (move.toString() == moveString)
-            {
-                return move;
-            }
-        }
-        for (Move move : position.orderedCaptures())
-        {
-            if (move.toString() == moveString)
-            {
-                return move;
-            }
-        }
-    }
-    return Move(0);
-}
 Move findNormalMoveFromString(std::string moveString, BitPosition position)
 {
     position.setAttackedSquaresAfterMove();
@@ -188,7 +148,7 @@ bool moveIsCapture(std::string moveString, BitPosition position)
                 return false;
             }
         }
-        for (Move move : position.inCheckOrderedCaptures())
+        for (Capture move : position.inCheckOrderedCaptures())
         {
             if (move.toString() == moveString)
             {
@@ -206,7 +166,7 @@ bool moveIsCapture(std::string moveString, BitPosition position)
                 return false;
             }
         }
-        for (Move move : position.orderedCaptures())
+        for (Capture move : position.orderedCaptures())
         {
             if (move.toString() == moveString)
             {
@@ -299,7 +259,6 @@ int main()
             }
             // Initialize NNUE input arma::vec
             initializeNNUEInput(position);
-
         }
 
         // Get the last move and make it (move made from other player)
@@ -333,6 +292,7 @@ int main()
         else if (inputLine.substr(0, 2) == "go")
         {
             ENGINEISWHITE = position.getTurn();
+            std::cout << "Static Eval Before Move: " << evaluationFunction(position, true) << "\n";
             // Call the engine on fixed time (WANT TO ADD A TIME MANAGER)
             auto [bestMove, bestValue] {iterativeSearch(position, 800)};
             position.makeNormalMove(bestMove);
@@ -348,9 +308,12 @@ int main()
 
             // Send our best move through a UCI command
             std::cout << "Eval: " << bestValue << "\n";
-            std::cout << "Static Eval: " << evaluationFunction(position, false) << "\n";
-            std::cout << "bestmove " << bestMove.toString() << "\n" << std::flush;
-            
+            std::cout << "Static Eval After Move: " << evaluationFunction(position, false) << "\n";
+            initializeNNUEInput(position);
+            std::cout << "Static Eval After Move: " << evaluationFunction(position, false) << "\n";
+            std::cout << "bestmove " << bestMove.toString() << "\n"
+                      << std::flush;
+
             // Check transposition table memory
             globalTT.printTableMemory();
         }

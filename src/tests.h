@@ -10,6 +10,11 @@ void printMove(const Move &move)
     // Assuming you have a way to convert 'Move' to a string or standard notation
     std::cout << move.toString() << ": ";
 }
+void printMove(const Capture &move)
+{
+    // Assuming you have a way to convert 'Move' to a string or standard notation
+    std::cout << move.toString() << ": ";
+}
 
 unsigned long long runCapturesPerftTest(BitPosition& position, int depth, int currentDepth = 0)
 // Function to test the captures and non captures move generators, it outputs the number of
@@ -19,7 +24,7 @@ unsigned long long runCapturesPerftTest(BitPosition& position, int depth, int cu
     if (depth == 0)
         return 1;
 
-    std::vector<Move> captures;
+    std::vector<Capture> captures;
     std::vector<Move> non_captures;
     position.setAttackedSquaresAfterMove();
     if (position.isCheck())
@@ -36,7 +41,7 @@ unsigned long long runCapturesPerftTest(BitPosition& position, int depth, int cu
     }
 
     unsigned long long moveCount = 0;
-    for (const Move &move : captures)
+    for (const Capture &move : captures)
     {
         if (currentDepth == 0)
         {
