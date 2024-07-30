@@ -35,7 +35,7 @@ static unsigned short pieceTypeFromChar(char promotionChar)
 
 // Moves are represented by 16bit integers
 //
-// bit  0- 5: origin square (from 0 to 63)                                           0000000000111111
+// bit  0-5: origin square (from 0 to 63)                                            0000000000111111
 // bit  6-11: destination square (from 0 to 63)                                      0000111111000000
 // bit 12-13: promotion (00 knight, 01 bishop, 10 rook, 11 queen)                    0011000000000000
 // bit 14-15: special move flag (promotion/castling 01, pawn double 10, capture 11)  1100000000000000
@@ -71,7 +71,13 @@ public:
 
     std::string toString() const
     {
-        if ((data & 0xC000) == 0x4000) // Promotion move
+        // Castling move
+        if (data == 16772 || data == 16516 || data == 20412 || data == 20156)
+        {
+            return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare());
+        }
+        // Promotion move
+        else if ((data & 0xC000) == 0x4000)
         {
             char promotionChar = 'n';
             switch ((data >> 12) & 0b11)
@@ -91,13 +97,14 @@ public:
             }
             return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare()) + promotionChar;
         }
+        // Rest of moves
         return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare());
     }
 };
 
 // Captures are represented by 16bit integers
 //
-// bit  0- 5: origin square (from 0 to 63)          0000000000111111
+// bit  0-5: origin square (from 0 to 63)           0000000000111111
 // bit  6-11: destination square (from 0 to 63)     0000111111000000
 // bit 12-13: moving piece/promoting piece          0111000000000000
 // (000 pawn, 001 knight, 010 bishop, 011 rook, 100 queen, 101 king)

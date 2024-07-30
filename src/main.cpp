@@ -11,100 +11,21 @@
 #include "zobrist_keys.h"
 #include "ttable.h"
 #include "position_eval.h"
-
+#include "data_generator.h"
+#include "nnue_ttable.h"
 #include <fstream>
 #include <vector>
 #include <armadillo>
+#include <cstdlib> // For rand()
 
 TranspositionTable globalTT;
+TranspositionTableNNUE nnueTT; // For position generator
 bool ENGINEISWHITE;
+int OURTIME;
+int OURINC;
+std::chrono::time_point<std::chrono::high_resolution_clock> STARTTIME;
 int TTSIZE{20};
 
-// Function to convert a FEN string to a BitPosition object
-BitPosition fenToBitPosition(const std::string &fen)
-{
-    std::istringstream fenStream(fen);
-    std::string board, turn, castling, enPassant;
-    fenStream >> board >> turn >> castling >> enPassant;
-
-    // Initialize all bitboards to 0
-    uint64_t white_pawns = 0, white_knights = 0, white_bishops = 0, white_rooks = 0, white_queens = 0, white_king = 0;
-    uint64_t black_pawns = 0, black_knights = 0, black_bishops = 0, black_rooks = 0, black_queens = 0, black_king = 0;
-
-    int square = 56; // Start from the top-left corner of the chess board
-    for (char c : board)
-    {
-        if (c == '/')
-        {
-            square -= 16; // Move to the next row
-        }
-        else if (isdigit(c))
-        {
-            square += c - '0'; // Skip empty squares
-        }
-        else
-        {
-            uint64_t bit = 1ULL << square;
-            switch (c)
-            {
-            case 'P':
-                white_pawns |= bit;
-                break;
-            case 'N':
-                white_knights |= bit;
-                break;
-            case 'B':
-                white_bishops |= bit;
-                break;
-            case 'R':
-                white_rooks |= bit;
-                break;
-            case 'Q':
-                white_queens |= bit;
-                break;
-            case 'K':
-                white_king |= bit;
-                break;
-            case 'p':
-                black_pawns |= bit;
-                break;
-            case 'n':
-                black_knights |= bit;
-                break;
-            case 'b':
-                black_bishops |= bit;
-                break;
-            case 'r':
-                black_rooks |= bit;
-                break;
-            case 'q':
-                black_queens |= bit;
-                break;
-            case 'k':
-                black_king |= bit;
-                break;
-            }
-            square++;
-        }
-    }
-
-    // Determine which side is to move
-    bool whiteToMove = (turn == "w");
-
-    // Parse castling rights
-    bool whiteKingsideCastling = castling.find('K') != std::string::npos;
-    bool whiteQueensideCastling = castling.find('Q') != std::string::npos;
-    bool blackKingsideCastling = castling.find('k') != std::string::npos;
-    bool blackQueensideCastling = castling.find('q') != std::string::npos;
-    // Create and return a BitPosition object
-    BitPosition position{BitPosition(white_pawns, white_knights, white_bishops, white_rooks, white_queens, white_king,
-                       black_pawns, black_knights, black_bishops, black_rooks, black_queens, black_king,
-                       whiteToMove,
-                       whiteKingsideCastling, whiteQueensideCastling, blackKingsideCastling, blackQueensideCastling)};
-    position.setAllPiecesBits();
-    position.setKingPosition();
-    return position;
-}
 Move findNormalMoveFromString(std::string moveString, BitPosition position)
 {
     position.setAttackedSquaresAfterMove();
@@ -190,7 +111,7 @@ int main()
     // Initialize position object
     std::string inputLine;
     std::string lastFen; // Variable to store the last FEN string
-    BitPosition position {fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
+    BitPosition position {BitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
     bool position_initialized{false};
 
     globalTT.resize(1 << 20);
@@ -236,29 +157,31 @@ int main()
                 position_initialized = true;
             }
 
-            position = fenToBitPosition(fen);
+            position = BitPosition(fen);
+
+            // Initialize NNUE input arma::vec
+            initializeNNUEInput(position);
+            
             std::string moveUci;
             while (iss >> command)
             {
                 // Apply each move in the moves list
                 moveUci = command;
-            }
-            Move move{findNormalMoveFromString(moveUci, position)};
-            if (move.getData() != 0)
-            {
-                position.makeNormalMove(move);
-                position.setAttackedSquaresAfterMove();
-
-                // If we make a capture we cant go back to previous positions so we empty
-                // the plyInfo (for threefold checking) in position and the TransPosition table
-                if (moveIsCapture(moveUci, position))
+                Move move{findNormalMoveFromString(moveUci, position)};
+                if (move.getData() != 0)
                 {
-                    position.restorePlyInfo();
-                    globalTT.resize(TTSIZE);
+                    position.makeNormalMove(move);
+                    position.setAttackedSquaresAfterMove();
+
+                    // If we make a capture we cant go back to previous positions so we empty
+                    // the plyInfo (for threefold checking) in position and the TransPosition table
+                    if (moveIsCapture(moveUci, position))
+                    {
+                        position.restorePlyInfo();
+                        globalTT.resize(TTSIZE);
+                    }
                 }
             }
-            // Initialize NNUE input arma::vec
-            initializeNNUEInput(position);
         }
 
         // Get the last move and make it (move made from other player)
@@ -292,9 +215,21 @@ int main()
         else if (inputLine.substr(0, 2) == "go")
         {
             ENGINEISWHITE = position.getTurn();
+            // Get the time left and increment
+            while (iss >> command)
+            {
+                if (command == "wtime" && ENGINEISWHITE) iss >> OURTIME;
+                else if (command == "btime" && (ENGINEISWHITE == false))
+                    iss >> OURTIME;
+                else if (command == "winc" && ENGINEISWHITE)
+                    iss >> OURINC;
+                else if (command == "binc" && (ENGINEISWHITE==false))
+                    iss >> OURINC;
+            }
             std::cout << "Static Eval Before Move: " << evaluationFunction(position, true) << "\n";
-            // Call the engine on fixed time (WANT TO ADD A TIME MANAGER)
-            auto [bestMove, bestValue] {iterativeSearch(position, 800)};
+            // Call the engine
+            STARTTIME = std::chrono::high_resolution_clock::now();
+            auto [bestMove, bestValue]{iterativeSearch(position)};
             position.makeNormalMove(bestMove);
             position.setAttackedSquaresAfterMove();
 
@@ -322,17 +257,19 @@ int main()
         // Some tests to see efficiency and algorithm correctness
         ////////////////////////////////////////////////////////////
 
+
+        // Test to see orderedCatptures and inCheckOrderedCaptures generators efficiency
         else if (inputLine == "capturesPerftTests")
         {
             std::cout << "Starting test\n";
 
             // Initialize positions
-            BitPosition position_1{fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
-            BitPosition position_2{fenToBitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")};
-            BitPosition position_3{fenToBitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1")};
-            BitPosition position_4{fenToBitPosition("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1")};
-            BitPosition position_5{fenToBitPosition("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8")};
-            BitPosition position_6{fenToBitPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ")};
+            BitPosition position_1{BitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
+            BitPosition position_2{BitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")};
+            BitPosition position_3{BitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1")};
+            BitPosition position_4{BitPosition("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1")};
+            BitPosition position_5{BitPosition("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8")};
+            BitPosition position_6{BitPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ")};
 
             std::chrono::duration<double> duration{0};
 
@@ -411,17 +348,19 @@ int main()
             std::cout << "Time taken: " << duration.count() << " seconds\n";
         }
 
+        // Test to see allMoves and inCheckAllMoves generators efficiency
         else if (inputLine == "normalPerftTests")
         {
             std::cout << "Starting test\n";
+            int maxDepth{5};
 
             // Initialize positions
-            BitPosition position_1{fenToBitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
-            BitPosition position_2{fenToBitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")};
-            BitPosition position_3{fenToBitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1")};
-            BitPosition position_4{fenToBitPosition("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1")};
-            BitPosition position_5{fenToBitPosition("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8")};
-            BitPosition position_6{fenToBitPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ")};
+            BitPosition position_1{BitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
+            BitPosition position_2{BitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")};
+            BitPosition position_3{BitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1")};
+            BitPosition position_4{BitPosition("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1")};
+            BitPosition position_5{BitPosition("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8")};
+            BitPosition position_6{BitPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ")};
 
             std::chrono::duration<double> duration{0};
 
@@ -430,7 +369,7 @@ int main()
             // Initialize NNUE input arma::vec
             initializeNNUEInput(position_1);
             auto start = std::chrono::high_resolution_clock::now(); // Start timing
-            for (int8_t depth = 1; depth <= 4; ++depth)
+            for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
                 std::cout << runNormalPerftTest(position_1, depth) << " moves\n";
             }
@@ -442,7 +381,7 @@ int main()
             // Initialize NNUE input arma::vec
             initializeNNUEInput(position_2);
             start = std::chrono::high_resolution_clock::now(); // Start timing
-            for (int8_t depth = 1; depth <= 4; ++depth)
+            for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
                 std::cout << runNormalPerftTest(position_2, depth) << " moves\n";
             }
@@ -454,7 +393,7 @@ int main()
             // Initialize NNUE input arma::vec
             initializeNNUEInput(position_3);
             start = std::chrono::high_resolution_clock::now(); // Start timing
-            for (int8_t depth = 1; depth <= 4; ++depth)
+            for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
                 std::cout << runNormalPerftTest(position_3, depth) << " moves\n";
             }
@@ -466,7 +405,7 @@ int main()
             // Initialize NNUE input arma::vec
             initializeNNUEInput(position_4);
             start = std::chrono::high_resolution_clock::now(); // Start timing
-            for (int8_t depth = 1; depth <= 4; ++depth)
+            for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
                 std::cout << runNormalPerftTest(position_4, depth) << " moves\n";
             }
@@ -478,7 +417,7 @@ int main()
             // Initialize NNUE input arma::vec
             initializeNNUEInput(position_5);
             start = std::chrono::high_resolution_clock::now(); // Start timing
-            for (int8_t depth = 1; depth <= 4; ++depth)
+            for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
                 std::cout << runNormalPerftTest(position_5, depth) << " moves\n";
             }
@@ -490,7 +429,7 @@ int main()
             // Initialize NNUE input arma::vec
             initializeNNUEInput(position_6);
             start = std::chrono::high_resolution_clock::now(); // Start timing
-            for (int8_t depth = 1; depth <= 4; ++depth)
+            for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
                 std::cout << runNormalPerftTest(position_6, depth) << " moves\n";
             }
@@ -504,14 +443,19 @@ int main()
         {
             std::cout << "Starting test\n";
             // Initialize positions
-            BitPosition position_1{fenToBitPosition("kbK5/pp6/1P6/8/8/8/8/R7 w - - 0 1")};
-            BitPosition position_2{fenToBitPosition("rR6/p7/KnPk4/P7/8/8/8/8 w - - 0 1")};
-            BitPosition position_3{fenToBitPosition("1b1q4/8/P2p4/1N1Pp2p/5P1k/7P/1B1P3K/8 w - - 0 1")};
-            BitPosition position_4{fenToBitPosition("2r2rk1/1b3ppp/p1qpp3/1P6/1Pn1P2b/2NB1P1P/1BP1R1P1/R2Q2K1 b - - 0 19")};
-            BitPosition position_5{fenToBitPosition("rn2kb1r/1bq2pp1/pp3n1p/4p3/2PQ1B1P/2N3P1/PP2PPB1/2KR3R w kq - 0 12")};
-            BitPosition position_6{fenToBitPosition("3k2rr/4b3/p3Qpq1/P2pn3/1p1Nb3/6B1/1PP1B2P/3R1RK1 b - - 0 25")};
-            BitPosition position_7{fenToBitPosition("4k3/Q6n/8/8/8/8/PR5P/4K1NR w K - 0 1")};
+            BitPosition position_1{BitPosition("kbK5/pp6/1P6/8/8/8/8/R7 w - - 0 1")};
+            BitPosition position_2{BitPosition("rR6/p7/KnPk4/P7/8/8/8/8 w - - 0 1")};
+            BitPosition position_3{BitPosition("1b1q4/8/P2p4/1N1Pp2p/5P1k/7P/1B1P3K/8 w - - 0 1")};
+            BitPosition position_4{BitPosition("2r2rk1/1b3ppp/p1qpp3/1P6/1Pn1P2b/2NB1P1P/1BP1R1P1/R2Q2K1 b - - 0 19")};
+            BitPosition position_5{BitPosition("rn2kb1r/1bq2pp1/pp3n1p/4p3/2PQ1B1P/2N3P1/PP2PPB1/2KR3R w kq - 0 12")};
+            BitPosition position_6{BitPosition("3k2rr/4b3/p3Qpq1/P2pn3/1p1Nb3/6B1/1PP1B2P/3R1RK1 b - - 0 25")};
+            BitPosition position_7{BitPosition("4k3/Q6n/8/8/8/8/PR5P/4K1NR w K - 0 1")};
 
+            // Setting the time to not be the limit
+            OURTIME = 8000000;
+            OURINC = 0;
+
+            // Time duration of test
             std::chrono::duration<double> duration{0};
 
             // Position 1
@@ -522,7 +466,8 @@ int main()
             for (int8_t depth = 1; depth <= 4; ++depth)
             {
                 std::cout << "Depth " << unsigned(depth) << ":\n";
-                std::cout << iterativeSearch(position_1, 999999999, depth).first.toString() << "\n";
+                STARTTIME = std::chrono::high_resolution_clock::now();
+                std::cout << iterativeSearch(position_1, depth).first.toString() << "\n";
             }
             auto end = std::chrono::high_resolution_clock::now(); // End timing
             duration += (end - start); // Calculate duration
@@ -535,7 +480,8 @@ int main()
             for (int8_t depth = 1; depth <= 4; ++depth)
             {
                 std::cout << "Depth " << unsigned(depth) << ":\n";
-                std::cout << iterativeSearch(position_2, 999999999, depth).first.toString() << "\n";
+                STARTTIME = std::chrono::high_resolution_clock::now();
+                std::cout << iterativeSearch(position_2, depth).first.toString() << "\n";
             }
             end = std::chrono::high_resolution_clock::now();    // End timing
             duration += (end - start); // Calculate duration
@@ -548,7 +494,8 @@ int main()
             for (int8_t depth = 1; depth <= 4; ++depth)
             {
                 std::cout << "Depth " << unsigned(depth) << ":\n";
-                std::cout << iterativeSearch(position_3, 999999999, depth).first.toString() << "\n";
+                STARTTIME = std::chrono::high_resolution_clock::now();
+                std::cout << iterativeSearch(position_3, depth).first.toString() << "\n";
             }
             end = std::chrono::high_resolution_clock::now();    // End timing
             duration += (end - start); // Calculate duration
@@ -561,7 +508,8 @@ int main()
             for (int8_t depth = 1; depth <= 4; ++depth)
             {
                 std::cout << "Depth " << unsigned(depth) << ":\n";
-                std::cout << iterativeSearch(position_4, 999999999, depth).first.toString() << "\n";
+                STARTTIME = std::chrono::high_resolution_clock::now();
+                std::cout << iterativeSearch(position_4, depth).first.toString() << "\n";
             }
             end = std::chrono::high_resolution_clock::now();    // End timing
             duration += (end - start); // Calculate duration
@@ -574,7 +522,8 @@ int main()
             for (int8_t depth = 1; depth <= 4; ++depth)
             {
                 std::cout << "Depth " << unsigned(depth) << ":\n";
-                std::cout << iterativeSearch(position_5, 999999999, depth).first.toString() << "\n";
+                STARTTIME = std::chrono::high_resolution_clock::now();
+                std::cout << iterativeSearch(position_5, depth).first.toString() << "\n";
             }
             end = std::chrono::high_resolution_clock::now();    // End timing
             duration += (end - start); // Calculate duration
@@ -587,7 +536,8 @@ int main()
             for (int8_t depth = 1; depth <= 4; ++depth)
             {
                 std::cout << "Depth " << unsigned(depth) << ":\n";
-                std::cout << iterativeSearch(position_6, 999999999, depth).first.toString() << "\n";
+                STARTTIME = std::chrono::high_resolution_clock::now();
+                std::cout << iterativeSearch(position_6, depth).first.toString() << "\n";
             }
             end = std::chrono::high_resolution_clock::now();    // End timing
             duration += (end - start); // Calculate duration
@@ -600,14 +550,119 @@ int main()
             for (int8_t depth = 1; depth <= 4; ++depth)
             {
                 std::cout << "Depth " << unsigned(depth) << ":\n";
-                std::cout << iterativeSearch(position_7, 999999999, depth).first.toString() << "\n";
+                STARTTIME = std::chrono::high_resolution_clock::now();
+                std::cout << iterativeSearch(position_7, depth).first.toString() << "\n";
             }
             end = std::chrono::high_resolution_clock::now();    // End timing
             duration += (end - start); // Calculate duration
 
             std::cout << "Time taken: " << duration.count() << " seconds\n";
         }
-        
+        // Generate data for NNUE further training
+        else if (inputLine == "generateData")
+        {
+            int timeForMoveMilliseconds;
+            int numGames;
+            float minEvalDiff;
+            int minDepthSave;
+            std::string outFileName;
+
+            // Prompt for minimum evaluation difference
+            std::cout << "Minimum difference of evals from NNUE and depth search to save a position: \n";
+            while (!(std::cin >> minEvalDiff))
+            {
+                std::cin.clear();                                                   // clear the error flag
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // discard invalid input
+                std::cout << "Invalid input. Please enter a floating-point number for the minimum evaluation difference: \n";
+            }
+            // Prompt for minimum depth to save positions
+            std::cout << "Minimum depth to save positions if evaluation differs by more than the minimum difference: \n";
+            while (!(std::cin >> minDepthSave))
+            {
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                std::cout << "Invalid input. Please enter an integer for the minimum depth: \n";
+            }
+            // Prompt for file of positions to be played
+            std::cout << "Number of games to be played: \n";
+            while (!(std::cin >> numGames))
+            {
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                std::cout << "Invalid input. Please enter an integer for the minimum depth: \n";
+            }
+            // Prompt for time spent per move in milliseconds
+            std::cout << "Time spent per move in milliseconds: \n";
+            while (!(std::cin >> timeForMoveMilliseconds))
+            {
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                std::cout << "Invalid input. Please enter an integer for the time per move in milliseconds: \n";
+            }
+            // Prompt for output file name
+            std::cout << "Name of file in which to save data: \n";
+            std::cin.ignore();
+            std::getline(std::cin, outFileName);
+
+            // Check if the file already exists
+            if (FILE *file = fopen(outFileName.c_str(), "r"))
+            {
+                // File exists
+                fclose(file);
+                std::cout << "File already exists.\n";
+            }
+            else
+            {
+                // File doesn't exist, create it
+                std::ofstream outfile(outFileName.c_str());
+                if (outfile)
+                {
+                    std::cout << "File created successfully.\n";
+                }
+                else
+                {
+                    std::cerr << "Error creating file.\n";
+                }
+                outfile.close();
+            }
+
+            // Output the collected inputs (for verification)
+            std::cout << "Collected inputs:\n";
+            std::cout << "Number of games to play: " << numGames << "\n";
+            std::cout << "Minimum evaluation difference: " << minEvalDiff << "\n";
+            std::cout << "Minimum depth: " << minDepthSave << "\n";
+            std::cout << "Time per move in milliseconds: " << timeForMoveMilliseconds << "\n";
+            std::cout << "Output file name: " << outFileName << "\n";
+
+            for (int i = 0; i < numGames; ++i)
+            {
+                std::cout << "New initial position \n";
+                nnueTT.resize(1 << 21);
+                BitPosition position{"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"};
+                initializeNNUEInput(position);
+                bool gameEnded{false};
+                while (not gameEnded)
+                {
+                    Move move = iterativeSearchGen(position, timeForMoveMilliseconds, minEvalDiff, minDepthSave, outFileName).first;
+                    position.makeNormalMove(move);
+                    position.setAttackedSquaresAfterMove();
+                    if (position.isCheck())
+                    {
+                        position.setChecksAndPinsBits();
+                        if (position.inCheckAllMoves().size() == 0)
+                            gameEnded = true;
+                    }
+                    else
+                    {
+                        position.setPinsBits();
+                        if (position.allMoves().size() == 0)
+                            gameEnded = true;
+                    }
+                    if (position.isThreeFold())
+                        gameEnded = true;
+                }
+            }
+        }
     }
     return 0;
 }

@@ -25,40 +25,6 @@ std::array<uint64_t, 64> passant_bitboards{0, 0, 0, 0, 0, 0, 0, 0,
                                            0, 0, 0, 0, 0, 0, 0, 0};
 
 // Some more complex BitPosition member functions
-// Constructor
-BitPosition::BitPosition(uint64_t white_pawns_bit, uint64_t white_knights_bit, uint64_t white_bishops_bit,
-                         uint64_t white_rooks_bit, uint64_t white_queens_bit, uint64_t white_king_bit,
-                         uint64_t black_pawns_bit, uint64_t black_knights_bit, uint64_t black_bishops_bit,
-                         uint64_t black_rooks_bit, uint64_t black_queens_bit, uint64_t black_king_bit,
-                         bool turn,
-                         bool white_kingside_castling, bool white_queenside_castling, bool black_kingside_castling,
-                         bool black_queenside_castling)
-    : m_white_pawns_bit{white_pawns_bit}, m_white_knights_bit{white_knights_bit}, m_white_bishops_bit{white_bishops_bit}, m_white_rooks_bit{white_rooks_bit}, m_white_queens_bit{white_queens_bit}, m_white_king_bit{white_king_bit},
-      m_black_pawns_bit{black_pawns_bit}, m_black_knights_bit{black_knights_bit}, m_black_bishops_bit{black_bishops_bit}, m_black_rooks_bit{black_rooks_bit}, m_black_queens_bit{black_queens_bit}, m_black_king_bit{black_king_bit},
-      m_turn{turn}, m_white_kingside_castling{white_kingside_castling}, m_white_queenside_castling{white_queenside_castling}, m_black_kingside_castling{black_kingside_castling}, m_black_queenside_castling{black_queenside_castling},
-      m_white_pieces_bit{m_white_pawns_bit | m_white_knights_bit | m_white_bishops_bit | m_white_rooks_bit | m_white_queens_bit | white_king_bit}, m_black_pieces_bit{m_black_pawns_bit | m_black_knights_bit | m_black_bishops_bit | m_black_rooks_bit | m_black_queens_bit | black_king_bit},
-      m_all_pieces_bit{m_white_pieces_bit | m_black_pieces_bit}, m_all_pieces_bit_without_white_king{m_all_pieces_bit & ~m_white_king_bit}, m_all_pieces_bit_without_black_king{m_all_pieces_bit & ~m_black_king_bit}
-{
-    BitPosition::setKingPosition();
-    BitPosition::setBlackBishopsAttackedSquares();
-    BitPosition::setBlackRooksAttackedSquares();
-    BitPosition::setBlackQueensAttackedSquares();
-    BitPosition::setWhiteBishopsAttackedSquares();
-    BitPosition::setWhiteRooksAttackedSquares();
-    BitPosition::setWhiteQueensAttackedSquares();
-    BitPosition::setBlackKnightsAttackedSquares();
-    BitPosition::setBlackKingAttackedSquares();
-    BitPosition::setBlackPawnsAttackedSquares();
-    BitPosition::setWhiteKnightsAttackedSquares();
-    BitPosition::setWhiteKingAttackedSquares();
-    BitPosition::setWhitePawnsAttackedSquares();
-
-    m_all_squares_attacked_by_white = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens | m_squares_attacked_by_white_king;
-    m_all_squares_attacked_by_black = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens | m_squares_attacked_by_black_king;
-
-    BitPosition::initializeZobristKey();
-}
-
 
 void BitPosition::initializeZobristKey()
 {
@@ -729,6 +695,7 @@ std::vector<Capture> BitPosition::inCheckOrderedCaptures() const
             // Capturing with pawns
             for (unsigned short origin_square : getBitIndices(m_white_pawns_bit & ~m_all_pins))
             {
+                // For each opponent piece type
                 for (unsigned short i = 0; i <= 4; ++i)
                 {
                     if ((precomputed_moves::white_pawn_attacks[origin_square] & checks_array[i]) != 0)
@@ -1311,7 +1278,7 @@ void BitPosition::removePiece()
         // array of pointers to opponent pieces
         std::array<uint64_t *, 5> piece_arrays{&m_black_pawns_bit, &m_black_knights_bit, &m_black_bishops_bit, &m_black_rooks_bit, &m_black_queens_bit};
 
-        int count{};
+        int count{0};
         for (auto &piece_bit : piece_arrays)
         {
             if ((m_last_destination_bit & *piece_bit) != 0)
@@ -1328,7 +1295,7 @@ void BitPosition::removePiece()
         // array of pointers to opponent pieces
         std::array<uint64_t *, 5> piece_arrays{&m_white_pawns_bit, &m_white_knights_bit, &m_white_bishops_bit, &m_white_rooks_bit, &m_white_queens_bit};
 
-        int count{};
+        int count{0};
         for (auto &piece_bit : piece_arrays)
         {
             if ((m_last_destination_bit & *piece_bit) != 0)
@@ -1397,79 +1364,85 @@ void BitPosition::makeCapture(Capture move)
     {
         // Update NNUE Input after m_captured_piece is set in removePiece(), unless passant capture
         if (m_captured_piece != 7)
-            removeOnBlackInput(m_black_king_position * 64 * 5 + m_captured_piece * 64 + destination_square);
+        {
+            removeOnInput(m_white_king_position, m_black_king_position, (m_captured_piece + 5) * 64 + destination_square);
+        }
 
         if (destination_square == 63) // If we capture on h8
+        {
             m_black_kingside_castling = false;
+        }
 
         if (destination_square == 56) // If we capture on h1
+        {
             m_black_queenside_castling = false;
+        }
 
         if (move.isPromotion()) // Promotions
         {
             m_white_pawns_bit &= ~m_last_origin_bit;
-            removeOnWhiteInput(m_white_king_position * 64 * 5 + origin_square);
+            removeOnInput(m_white_king_position, m_black_king_position, origin_square);
 
             m_promoted_piece = m_moved_piece;
             if (m_promoted_piece == 1)
             {
                 m_white_knights_bit |= m_last_destination_bit;
-                addOnWhiteInput(m_white_king_position * 64 * 5 + 64 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 + destination_square);
             }
             else if (m_promoted_piece == 2)
             {
                 m_white_bishops_bit |= m_last_destination_bit;
-                addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 2 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 2 + destination_square);
             }
             else if (m_promoted_piece == 3)
             {
                 m_white_rooks_bit |= m_last_destination_bit;
-                addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 3 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 3 + destination_square);
             }
             else
             {
                 m_white_queens_bit |= m_last_destination_bit;
-                addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 4 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 4 + destination_square);
             }
             m_moved_piece = 0;
         }
-        else if (m_moved_piece == 0) // Moving Pawns (Non promotions)
+        else if (m_moved_piece == 0) // Moving White Pawns (Non promotions)
         {
             m_white_pawns_bit &= ~m_last_origin_bit;
             m_white_pawns_bit |= m_last_destination_bit;
 
             // Update NNUE Input
-            removeOnWhiteInput(m_white_king_position * 64 * 5 + origin_square);
-            addOnWhiteInput(m_white_king_position * 64 * 5 + destination_square);
+            removeOnInput(m_white_king_position, m_black_king_position, origin_square);
+            addOnInput(m_white_king_position, m_black_king_position, destination_square);
             if (destination_square == m_psquare) // Passant capture
             {
                 m_captured_piece = 0;
                 m_black_pawns_bit &= ~(m_last_destination_bit >> 8);
                 // Update NNUE Input
-                removeOnBlackInput(m_black_king_position * 64 * 5 + (destination_square - 8));
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 5 + destination_square - 8);
             }
             else if ((m_last_origin_bit << 16) == m_last_destination_bit) // Double move
                 psquare = origin_square + 8;
         }
-        else if (m_moved_piece == 1) // Moving knights
+        else if (m_moved_piece == 1) // Moving White knights
         {
             m_white_knights_bit &= ~m_last_origin_bit;
             m_white_knights_bit |= m_last_destination_bit;
 
             // Update NNUE Input
-            removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 + origin_square);
-            addOnWhiteInput(m_white_king_position * 64 * 5 + 64 + destination_square);
+            removeOnInput(m_white_king_position, m_black_king_position, 64 + origin_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 + destination_square);
         }
-        else if (m_moved_piece == 2) // Moving Bishops
+        else if (m_moved_piece == 2) // Moving White Bishops
         {
             m_white_bishops_bit &= ~m_last_origin_bit;
             m_white_bishops_bit |= m_last_destination_bit;
 
             // Update NNUE Input
-            removeOnWhiteInput(m_white_king_position * 64 * 5 + 2 * 64 + origin_square);
-            addOnWhiteInput(m_white_king_position * 64 * 5 + 2 * 64 + destination_square);
+            removeOnInput(m_white_king_position, m_black_king_position, 64 * 2 + origin_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * 2 + destination_square);
         }
-        else if (m_moved_piece == 3) // Moving Rooks
+        else if (m_moved_piece == 3) // Moving White Rooks
         {
             // Castiling rights removed
             if (origin_square == 7)
@@ -1482,17 +1455,17 @@ void BitPosition::makeCapture(Capture move)
             m_white_rooks_bit |= m_last_destination_bit;
 
             // Update NNUE Input
-            removeOnWhiteInput(m_white_king_position * 64 * 5 + 3 * 64 + origin_square);
-            addOnWhiteInput(m_white_king_position * 64 * 5 + 3 * 64 + destination_square);
+            removeOnInput(m_white_king_position, m_black_king_position, 64 * 3 + origin_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * 3 + destination_square);
         }
-        else if (m_moved_piece == 4) // Moving Queens
+        else if (m_moved_piece == 4) // Moving White Queens
         {
             m_white_queens_bit &= ~m_last_origin_bit;
             m_white_queens_bit |= m_last_destination_bit;
 
             // Update NNUE Input
-            removeOnWhiteInput(m_white_king_position * 64 * 5 + 4 * 64 + origin_square);
-            addOnWhiteInput(m_white_king_position * 64 * 5 + 4 * 64 + destination_square);
+            removeOnInput(m_white_king_position, m_black_king_position, 64 * 4 + origin_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * 4 + destination_square);
         }
         else // Moving king
         {
@@ -1509,7 +1482,9 @@ void BitPosition::makeCapture(Capture move)
     {
         // Update NNUE Input after m_captured_piece is set in removePiece(), unless passant capture
         if (m_captured_piece != 7)
-            removeOnWhiteInput(m_white_king_position * 64 * 5 + m_captured_piece * 64 + destination_square);
+        {
+            removeOnInput(m_white_king_position, m_black_king_position, m_captured_piece * 64 + destination_square);
+        }
 
         if (destination_square == 7) // If we capture on a8
             m_white_kingside_castling = false;
@@ -1520,70 +1495,70 @@ void BitPosition::makeCapture(Capture move)
         if (move.isPromotion()) // Promotions
         {
             m_black_pawns_bit &= ~m_last_origin_bit;
-            removeOnBlackInput(m_black_king_position * 64 * 5 + origin_square);
+            removeOnInput(m_white_king_position, m_black_king_position, 64 * 5 + origin_square);
 
             m_promoted_piece = m_moved_piece;
             if (m_promoted_piece == 1)
             {
                 m_black_knights_bit |= m_last_destination_bit;
-                addOnBlackInput(m_black_king_position * 64 * 5 + 64 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 6 + destination_square);
             }
             else if (m_promoted_piece == 2)
             {
                 m_black_bishops_bit |= m_last_destination_bit;
-                addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 2 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 7 + destination_square);
             }
             else if (m_promoted_piece == 3)
             {
                 m_black_rooks_bit |= m_last_destination_bit;
-                addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 3 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 8 + destination_square);
             }
             else
             {
                 m_black_queens_bit |= m_last_destination_bit;
-                addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 4 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 9 + destination_square);
             }
             m_moved_piece = 0;
         }
 
-        else if (m_moved_piece == 0) // Moving Pawns (Non promotions)
+        else if (m_moved_piece == 0) // Moving Black Pawns (Non promotions)
         {
             m_black_pawns_bit &= ~m_last_origin_bit;
             m_black_pawns_bit |= m_last_destination_bit;
 
             // Update NNUE Input
-            removeOnBlackInput(m_black_king_position * 64 * 5 + origin_square);
-            addOnBlackInput(m_black_king_position * 64 * 5 + destination_square);
+            removeOnInput(m_white_king_position, m_black_king_position, 64 * 5 + origin_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * 5 + destination_square);
 
             if (destination_square == m_psquare) // Passant capture
             {
                 m_captured_piece = 0;
                 m_white_pawns_bit &= ~(m_last_destination_bit << 8);
                 // Update NNUE Input
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + (destination_square + 8));
+                removeOnInput(m_white_king_position, m_black_king_position, destination_square + 8);
             }
             else if ((m_last_origin_bit >> 16) == m_last_destination_bit) // Double move
-                psquare = origin_square - 8;
+                psquare = destination_square + 8;
         }
-        else if (m_moved_piece == 1) // Moving knights
+        else if (m_moved_piece == 1) // Moving Black knights
         {
             m_black_knights_bit &= ~m_last_origin_bit;
             m_black_knights_bit |= m_last_destination_bit;
 
             // Update NNUE Input
-            removeOnBlackInput(m_black_king_position * 64 * 5 + 64 + origin_square);
-            addOnBlackInput(m_black_king_position * 64 * 5 + 64 + destination_square);
+            removeOnInput(m_white_king_position, m_black_king_position, 64 * 6 + origin_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * 6 + destination_square);
         }
-        else if (m_moved_piece == 2) // Moving bishops
+        else if (m_moved_piece == 2) // Moving Black bishops
         {
             m_black_bishops_bit &= ~m_last_origin_bit;
             m_black_bishops_bit |= m_last_destination_bit;
 
             // Update NNUE Input
-            removeOnBlackInput(m_black_king_position * 64 * 5 + 2 * 64 + origin_square);
-            addOnBlackInput(m_black_king_position * 64 * 5 + 2 * 64 + destination_square);
+            removeOnInput(m_white_king_position, m_black_king_position, 64 * 7 + origin_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * 7 + destination_square);
         }
-        else if (m_moved_piece == 3) // Moving rooks
+        else if (m_moved_piece == 3) // Moving black rooks
         {
             // Castling rights removed
             if (origin_square == 63)
@@ -1597,17 +1572,17 @@ void BitPosition::makeCapture(Capture move)
             m_black_rooks_bit |= m_last_destination_bit;
 
             // Update NNUE Input
-            removeOnBlackInput(m_black_king_position * 64 * 5 + 3 * 64 + origin_square);
-            addOnBlackInput(m_black_king_position * 64 * 5 + 3 * 64 + destination_square);
+            removeOnInput(m_white_king_position, m_black_king_position, 64 * 8 + origin_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * 8 + destination_square);
         }
-        else if (m_moved_piece == 4) // Moving queens
+        else if (m_moved_piece == 4) // Moving black queens
         {
             m_black_queens_bit &= ~m_last_origin_bit;
             m_black_queens_bit |= m_last_destination_bit;
 
             // Update NNUE Input
-            removeOnBlackInput(m_black_king_position * 64 * 5 + 4 * 64 + origin_square);
-            addOnBlackInput(m_black_king_position * 64 * 5 + 4 * 64 + destination_square);
+            removeOnInput(m_white_king_position, m_black_king_position, 64 * 9 + origin_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * 9 + destination_square);
         }
         else // Moving king
         {
@@ -1620,18 +1595,7 @@ void BitPosition::makeCapture(Capture move)
             moveBlackKingNNUEInput(*this);
         }
     }
-    // Debugging purposes
-    // float eval_1{evaluationFunction(*this, true)};
-    // initializeNNUEInput(*this);
-    // float eval_2{evaluationFunction(*this, true)};
-    // if (eval_1 != eval_2)
-    // {
-    //     std::cout << "Moved piece : " << m_moved_piece << "\n";
-    //     std::cout << "Origin square : " << origin_square << "\n";
-    //     std::cout << "Destination square : " << m_moved_piece << "\n";
-    //     std::cout << "Captured piece : " << m_captured_piece << "\n";
-    //     std::cout << "Capture move : " << move.toString() << "\n";
-    // }
+
     BitPosition::updateZobristKeyPiecePartAfterMove(origin_square, destination_square);
     m_captured_piece_array[m_ply] = m_captured_piece;
     m_turn = not m_turn;
@@ -1650,6 +1614,7 @@ void BitPosition::makeCapture(Capture move)
     m_psquare = psquare;
 
     BitPosition::setAllPiecesBits();
+
 }
 void BitPosition::unmakeCapture(Capture move)
 // Takes a move and undoes the move accordingly, updating all position attributes. When the engine transverses the tree of moves it will keep
@@ -1704,73 +1669,68 @@ void BitPosition::unmakeCapture(Capture move)
         // Unmaking promotions (own pawns part only)
         if (move.isPromotion())
         {
-            if (m_moved_piece == 4) // Unpromote queen
+            m_black_pawns_bit |= m_last_origin_bit;
+            addOnInput(m_white_king_position, m_black_king_position, 64 * 5 + origin_square);
+
+            if (m_moved_piece == 4) // Unpromote black queen
             {
                 m_black_queens_bit &= ~m_last_destination_bit;
-                m_black_pawns_bit |= m_last_origin_bit;
-                removeOnBlackInput(m_black_king_position * 64 * 5 + 64 * 4 + destination_square);
-                addOnBlackInput(m_black_king_position * 64 * 5 + origin_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 9 + destination_square);
             }
-            else if (m_moved_piece == 3) // Unpromote rook
+            else if (m_moved_piece == 3) // Unpromote black rook
             {
                 m_black_rooks_bit &= ~m_last_destination_bit;
-                m_black_pawns_bit |= m_last_origin_bit;
-                removeOnBlackInput(m_black_king_position * 64 * 5 + 64 * 3 + destination_square);
-                addOnBlackInput(m_black_king_position * 64 * 5 + origin_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 8 + destination_square);
             }
-            else if (m_moved_piece == 2) // Unpromote bishop
+            else if (m_moved_piece == 2) // Unpromote black bishop
             {
                 m_black_bishops_bit &= ~m_last_destination_bit;
-                m_black_pawns_bit |= m_last_origin_bit;
-                removeOnBlackInput(m_black_king_position * 64 * 5 + 64 * 2 + destination_square);
-                addOnBlackInput(m_black_king_position * 64 * 5 + origin_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 7 + destination_square);
             }
-            else // Unpromote knight
+            else // Unpromote black knight
             {
                 m_black_knights_bit &= ~m_last_destination_bit;
-                m_black_pawns_bit |= m_last_origin_bit;
-                removeOnBlackInput(m_black_king_position * 64 * 5 + 64 + destination_square);
-                addOnBlackInput(m_black_king_position * 64 * 5 + origin_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 6 + destination_square);
             }
         }
 
         // Unmaking normal captures (own pieces part only)
         else
         {
-            if (m_moved_piece == 0) // Unmove pawn
+            if (m_moved_piece == 0) // Unmove black pawn
             {
                 m_black_pawns_bit |= m_last_origin_bit;
                 m_black_pawns_bit &= ~m_last_destination_bit;
-                addOnBlackInput(m_black_king_position * 64 * 5 + origin_square);
-                removeOnBlackInput(m_black_king_position * 64 * 5 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 5 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 5 + origin_square);
             }
-            else if (m_moved_piece == 1) // Unmove knight
+            else if (m_moved_piece == 1) // Unmove black knight
             {
                 m_black_knights_bit |= m_last_origin_bit;
                 m_black_knights_bit &= ~m_last_destination_bit;
-                addOnBlackInput(m_black_king_position * 64 * 5 + 64 + origin_square);
-                removeOnBlackInput(m_black_king_position * 64 * 5 + 64 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 6 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 6 + origin_square);
             }
-            else if (m_moved_piece == 2) // Unmove bishop
+            else if (m_moved_piece == 2) // Unmove black bishop
             {
                 m_black_bishops_bit |= m_last_origin_bit;
                 m_black_bishops_bit &= ~m_last_destination_bit;
-                addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 2 + origin_square);
-                removeOnBlackInput(m_black_king_position * 64 * 5 + 64 * 2 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 7 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 7 + origin_square);
             }
-            else if (m_moved_piece == 3) // Unmove rook
+            else if (m_moved_piece == 3) // Unmove black rook
             {
                 m_black_rooks_bit |= m_last_origin_bit;
                 m_black_rooks_bit &= ~m_last_destination_bit;
-                addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 3 + origin_square);
-                removeOnBlackInput(m_black_king_position * 64 * 5 + 64 * 3 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 8 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 8 + origin_square);
             }
-            else if (m_moved_piece == 4) // Unmove queen
+            else if (m_moved_piece == 4) // Unmove black queen
             {
                 m_black_queens_bit |= m_last_origin_bit;
                 m_black_queens_bit &= ~m_last_destination_bit;
-                addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 4 + origin_square);
-                removeOnBlackInput(m_black_king_position * 64 * 5 + 64 * 4 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 9 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 9 + origin_square);
             }
             else // Unmove king
             {
@@ -1784,37 +1744,37 @@ void BitPosition::unmakeCapture(Capture move)
         if (previous_captured_piece == 0) // Uncapture pawn
         {
             // Unmake passant capture
-            if (m_last_destination_bit == (1ULL << m_psquare))
+            if (destination_square == m_psquare)
             {
                 m_white_pawns_bit |= (1ULL << (m_psquare + 8));
-                addOnWhiteInput(m_white_king_position * 64 * 5 + m_psquare + 8);
+                addOnInput(m_white_king_position, m_black_king_position, m_psquare + 8);
             }
             // Unmake normal pawn capture
             else
             {
                 m_white_pawns_bit |= m_last_destination_bit;
-                addOnWhiteInput(m_white_king_position * 64 * 5 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, destination_square);
             }
         }
         else if (previous_captured_piece == 1) // Uncapture knight
         {
             m_white_knights_bit |= m_last_destination_bit;
-            addOnWhiteInput(m_white_king_position * 64 * 5 + 64 + destination_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 + destination_square);
         }
         else if (previous_captured_piece == 2) // Uncapture bishop
         {
             m_white_bishops_bit |= m_last_destination_bit;
-            addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 2 + destination_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * 2 + destination_square);
         }
         else if (previous_captured_piece == 3) // Uncapture rook
         {
             m_white_rooks_bit |= m_last_destination_bit;
-            addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 3 + destination_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * 3 + destination_square);
         }
         else // Uncapture queen
         {
             m_white_queens_bit |= m_last_destination_bit;
-            addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 4 + destination_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * 4 + destination_square);
         }
     }
     else // Last move was white
@@ -1822,33 +1782,28 @@ void BitPosition::unmakeCapture(Capture move)
         // Unmaking promotions (own pawns part only)
         if (move.isPromotion())
         {
-            if (m_moved_piece == 4) // Unpromote queen
+            m_white_pawns_bit |= m_last_origin_bit;
+            addOnInput(m_white_king_position, m_black_king_position, origin_square);
+
+            if (m_moved_piece == 4) // Unpromote white queen
             {
                 m_white_queens_bit &= ~m_last_destination_bit;
-                m_white_pawns_bit |= m_last_origin_bit;
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 4 + destination_square);
-                addOnWhiteInput(m_white_king_position * 64 * 5 + origin_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 4 + destination_square);
             }
-            else if (m_moved_piece == 3) // Unpromote rook
+            else if (m_moved_piece == 3) // Unpromote white rook
             {
                 m_white_rooks_bit &= ~m_last_destination_bit;
-                m_white_pawns_bit |= m_last_origin_bit;
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 3 + destination_square);
-                addOnWhiteInput(m_white_king_position * 64 * 5 + origin_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 3 + destination_square);
             }
-            else if (m_moved_piece == 2) // Unpromote bishop
+            else if (m_moved_piece == 2) // Unpromote white bishop
             {
                 m_white_bishops_bit &= ~m_last_destination_bit;
-                m_white_pawns_bit |= m_last_origin_bit;
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 2 + destination_square);
-                addOnWhiteInput(m_white_king_position * 64 * 5 + origin_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 2 + destination_square);
             }
-            else // Unpromote knight
+            else // Unpromote white knight
             {
                 m_white_knights_bit &= ~m_last_destination_bit;
-                m_white_pawns_bit |= m_last_origin_bit;
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 + destination_square);
-                addOnWhiteInput(m_white_king_position * 64 * 5 + origin_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 + destination_square);
             }
         }
 
@@ -1859,36 +1814,36 @@ void BitPosition::unmakeCapture(Capture move)
             {
                 m_white_pawns_bit |= m_last_origin_bit;
                 m_white_pawns_bit &= ~m_last_destination_bit;
-                addOnWhiteInput(m_white_king_position * 64 * 5 + origin_square);
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, origin_square);
             }
             else if (m_moved_piece == 1) // Unmove knight
             {
                 m_white_knights_bit |= m_last_origin_bit;
                 m_white_knights_bit &= ~m_last_destination_bit;
-                addOnWhiteInput(m_white_king_position * 64 * 5 + 64 + origin_square);
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 + origin_square);
             }
             else if (m_moved_piece == 2) // Unmove bishop
             {
                 m_white_bishops_bit |= m_last_origin_bit;
                 m_white_bishops_bit &= ~m_last_destination_bit;
-                addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 2 + origin_square);
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 2 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 2 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 2 + origin_square);
             }
             else if (m_moved_piece == 3) // Unmove rook
             {
                 m_white_rooks_bit |= m_last_origin_bit;
                 m_white_rooks_bit &= ~m_last_destination_bit;
-                addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 3 + origin_square);
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 3 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 3 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 3 + origin_square);
             }
             else if (m_moved_piece == 4) // Unmove queen
             {
                 m_white_queens_bit |= m_last_origin_bit;
                 m_white_queens_bit &= ~m_last_destination_bit;
-                addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 4 + origin_square);
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 4 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 4 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 4 + origin_square);
             }
             else // Unmove king
             {
@@ -1902,47 +1857,39 @@ void BitPosition::unmakeCapture(Capture move)
         if (previous_captured_piece == 0) // Uncapture pawn
         {
             // Unmake passant capture
-            if (m_last_destination_bit == (1ULL << m_psquare))
+            if (destination_square == m_psquare)
             {
                 m_black_pawns_bit |= (1ULL << (m_psquare - 8));
-                addOnBlackInput(m_black_king_position * 64 * 5 + m_psquare - 8);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 5 + m_psquare - 8);
             }
             // Unmake normal pawn capture
             else
             {
                 m_black_pawns_bit |= m_last_destination_bit;
-                addOnBlackInput(m_black_king_position * 64 * 5 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 5 + destination_square);
             }
         }
         else if (previous_captured_piece == 1) // Uncapture knight
         {
             m_black_knights_bit |= m_last_destination_bit;
-            addOnBlackInput(m_black_king_position * 64 * 5 + 64 + destination_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * 6 + destination_square);
         }
         else if (previous_captured_piece == 2) // Uncapture bishop
         {
             m_black_bishops_bit |= m_last_destination_bit;
-            addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 2 + destination_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * 7 + destination_square);
         }
         else if (previous_captured_piece == 3) // Uncapture rook
         {
             m_black_rooks_bit |= m_last_destination_bit;
-            addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 3 + destination_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * 8 + destination_square);
         }
         else // Uncapture queen
         {
             m_black_queens_bit |= m_last_destination_bit;
-            addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 4 + destination_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * 9 + destination_square);
         }
     }
-    // Debugging purposes
-    // float eval_1{evaluationFunction(*this, true)};
-    // initializeNNUEInput(*this);
-    // float eval_2{evaluationFunction(*this, true)};
-    // if (eval_1 != eval_2)
-    // {
-    //     std::cout << "Unmake Capture move : " << move.toString() << "\n";
-    // }
 
     BitPosition::setAllPiecesBits();
     m_turn = not m_turn;
@@ -2539,15 +2486,15 @@ std::vector<Move> BitPosition::allMoves() const
 }
 std::vector<Move> BitPosition::orderAllMoves(std::vector<Move> &moves, Move ttMove) const
 {
-    std::vector<std::pair<Move, int>> moves_scores;
-    moves_scores.reserve(moves.size()); // Reserve space to avoid reallocations
+    std::vector<std::pair<Move, int>> moves_and_scores;
+    moves_and_scores.reserve(moves.size()); // Reserve space to avoid reallocations
     if (m_turn) // Whites turn
     {
         for (Move move : moves)
         {
             if (move.getData() == ttMove.getData() && move.getData() != 0)
             {
-                moves_scores.emplace_back(move, 100);
+                moves_and_scores.emplace_back(move, 63);
             }
             else
             {
@@ -2591,7 +2538,7 @@ std::vector<Move> BitPosition::orderAllMoves(std::vector<Move> &moves, Move ttMo
                     if ((destination_bit & ~m_squares_attacked_by_black_pawns & ~m_squares_attacked_by_black_knights & ~m_squares_attacked_by_black_bishops & ~m_squares_attacked_by_black_rooks) == 0) // Unsafe
                         score -= 3;
                 }
-                moves_scores.emplace_back(move, score);
+                moves_and_scores.emplace_back(move, score);
             }
         }
     }
@@ -2601,7 +2548,7 @@ std::vector<Move> BitPosition::orderAllMoves(std::vector<Move> &moves, Move ttMo
         {
             if (move.getData() == ttMove.getData() && move.getData() != 0)
             {
-                moves_scores.emplace_back(move, 100);
+                moves_and_scores.emplace_back(move, 63);
             }
             else
             {
@@ -2645,14 +2592,14 @@ std::vector<Move> BitPosition::orderAllMoves(std::vector<Move> &moves, Move ttMo
                     if ((destination_bit & ~m_squares_attacked_by_white_pawns & ~m_squares_attacked_by_white_knights & ~m_squares_attacked_by_white_bishops & ~m_squares_attacked_by_white_rooks) == 0) // Unsafe
                         score -= 3;
                 }
-                moves_scores.emplace_back(move, score);
+                moves_and_scores.emplace_back(move, score);
             }
             
         }
     }
     // Order moves
     // Sort the pair vector by scores, highest first
-    std::sort(moves_scores.begin(), moves_scores.end(),
+    std::sort(moves_and_scores.begin(), moves_and_scores.end(),
               [](const std::pair<Move, int> &a, const std::pair<Move, int> &b)
               {
                   return a.second > b.second; // Sort by score in descending order
@@ -2660,10 +2607,10 @@ std::vector<Move> BitPosition::orderAllMoves(std::vector<Move> &moves, Move ttMo
 
     // Clear the original moves vector and repopulate it with sorted moves
     moves.clear();                      // Clear the input vector if modifying it directly
-    moves.reserve(moves_scores.size()); // Reserve space to avoid reallocations
+    moves.reserve(moves_and_scores.size()); // Reserve space to avoid reallocations
 
     // Unpack the sorted moves into the vector
-    for (const auto &move_score : moves_scores)
+    for (const auto &move_score : moves_and_scores)
     {
         moves.push_back(move_score.first); // Note: first is the Move
     }
@@ -2671,22 +2618,20 @@ std::vector<Move> BitPosition::orderAllMoves(std::vector<Move> &moves, Move ttMo
     return moves; // Return the sorted moves
 }
 
-std::vector<Move> BitPosition::orderAllMovesOnFirstIteration(std::vector<Move> &moves, Move bestMove, Move ttMove) const
-// This is the same as orderAllMoves but we place the last best move (found during iteratove deepening) first.
+std::vector<Move> BitPosition::orderAllMovesOnFirstIterationFirstTime(std::vector<Move> &moves, Move ttMove) const
+// This is the same as orderAllMoves but we have a ttMove which is the best move found at a better depth but incomplete search due to cutoff.
 {
-    std::vector<std::pair<Move, int>> moves_scores;
-    moves_scores.reserve(moves.size()); // Reserve space to avoid reallocations
-    if (m_turn)                         // Whites turn
+    std::vector<std::pair<Move, int>> moves_and_scores;
+    moves_and_scores.reserve(moves.size()); // Reserve space to avoid reallocations
+
+    if (m_turn) // Whites turn
     {
         for (Move move : moves)
         {
-            if (move.getData() == bestMove.getData() && move.getData() != 0)
+            // If move was found on ttable at a better depth to be the best move (although the search might have been cutoff, so we can't blindly use this move)
+            if (move.getData() == ttMove.getData() && move.getData() != 0)
             {
-                moves_scores.emplace_back(move, 100);
-            }
-            else if (move.getData() == ttMove.getData() && move.getData() != 0)
-            {
-                moves_scores.emplace_back(move, 99);
+                moves_and_scores.emplace_back(move, 62);
             }
             else
             {
@@ -2730,7 +2675,7 @@ std::vector<Move> BitPosition::orderAllMovesOnFirstIteration(std::vector<Move> &
                     if ((destination_bit & ~m_squares_attacked_by_black_pawns & ~m_squares_attacked_by_black_knights & ~m_squares_attacked_by_black_bishops & ~m_squares_attacked_by_black_rooks) == 0) // Unsafe
                         score -= 3;
                 }
-                moves_scores.emplace_back(move, score);
+                moves_and_scores.emplace_back(move, score);
             }
         }
     }
@@ -2738,13 +2683,9 @@ std::vector<Move> BitPosition::orderAllMovesOnFirstIteration(std::vector<Move> &
     {
         for (Move move : moves)
         {
-            if (move.getData() == bestMove.getData() && move.getData() != 0)
+            if (move.getData() == ttMove.getData() && move.getData() != 0)
             {
-                moves_scores.emplace_back(move, 100);
-            }
-            else if (move.getData() == ttMove.getData() && move.getData() != 0)
-            {
-                moves_scores.emplace_back(move, 99);
+                moves_and_scores.emplace_back(move, 62);
             }
             else
             {
@@ -2788,14 +2729,14 @@ std::vector<Move> BitPosition::orderAllMovesOnFirstIteration(std::vector<Move> &
                     if ((destination_bit & ~m_squares_attacked_by_white_pawns & ~m_squares_attacked_by_white_knights & ~m_squares_attacked_by_white_bishops & ~m_squares_attacked_by_white_rooks) == 0) // Unsafe
                         score -= 3;
                 }
-                moves_scores.emplace_back(move, score);
+                moves_and_scores.emplace_back(move, score);
             }
             
         }
     }
     // Order moves
     // Sort the pair vector by scores, highest first
-    std::sort(moves_scores.begin(), moves_scores.end(),
+    std::sort(moves_and_scores.begin(), moves_and_scores.end(),
               [](const std::pair<Move, int> &a, const std::pair<Move, int> &b)
               {
                   return a.second > b.second; // Sort by score in descending order
@@ -2803,15 +2744,42 @@ std::vector<Move> BitPosition::orderAllMovesOnFirstIteration(std::vector<Move> &
 
     // Clear the original moves vector and repopulate it with sorted moves
     moves.clear();                      // Clear the input vector if modifying it directly
-    moves.reserve(moves_scores.size()); // Reserve space to avoid reallocations
+    moves.reserve(moves_and_scores.size()); // Reserve space to avoid reallocations
 
     // Unpack the sorted moves into the vector
-    for (const auto &move_score : moves_scores)
+    for (const auto &move_score : moves_and_scores)
     {
         moves.push_back(move_score.first); // Note: first is the Move
     }
 
     return moves; // Return the sorted moves
+}
+
+std::pair <std::vector<Move>, std::vector<float>> BitPosition::orderAllMovesOnFirstIteration(std::vector<Move> &moves, std::vector<float> &scores) const
+{
+    // Create a vector of indices
+    std::vector<int> indices(moves.size());
+    for (int i = 0; i < indices.size(); ++i)
+    {
+        indices[i] = i;
+    }
+
+    // Sort the indices based on the scores in descending order
+    std::sort(indices.begin(), indices.end(), [&scores](int a, int b)
+              { return scores[a] > scores[b]; });
+
+    // Create a new vector for the sorted moves
+    std::vector<Move> sortedMoves;
+    std::vector<float> sortedScores;
+    sortedMoves.reserve(moves.size());
+    sortedScores.reserve(moves.size());
+    for (int index : indices)
+    {
+        sortedMoves.push_back(moves[index]);
+        sortedScores.push_back(scores[index]);
+    }
+
+    return std::pair<std::vector<Move>, std::vector<float>> {sortedMoves, sortedScores}; // Return the sorted moves
 }
 
 void BitPosition::setPiece()
@@ -2930,8 +2898,8 @@ void BitPosition::makeNormalMove(Move move)
         {
             BitPosition::setPiece();
             // Set NNUE input
-            removeOnWhiteInput(m_white_king_position * 64 * 5 + origin_square + m_moved_piece * 64);
-            addOnWhiteInput(m_white_king_position * 64 * 5 + destination_square + m_moved_piece * 64);
+            removeOnInput(m_white_king_position, m_black_king_position, 64 * m_moved_piece + origin_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * m_moved_piece + destination_square);
         }
 
         // Special Moves (4 types)
@@ -2942,7 +2910,7 @@ void BitPosition::makeNormalMove(Move move)
         {
             BitPosition::removePiece();
             // Set NNUE input
-            removeOnBlackInput(m_black_king_position * 64 * 5 + destination_square + m_captured_piece * 64);
+            removeOnInput(m_white_king_position, m_black_king_position, 64 * (m_captured_piece + 5) + destination_square);
         }
         // 2) Double pawn moves
         else if ((move.getData() & 49152) == 32768) // 1000000000000000
@@ -2955,7 +2923,7 @@ void BitPosition::makeNormalMove(Move move)
             m_black_pawns_bit &= ~(1ULL << (m_psquare - 8));
             m_captured_piece = 0;
             // Set NNUE input
-            removeOnBlackInput(m_black_king_position * 64 * 5 + (m_psquare-8));
+            removeOnInput(m_white_king_position, m_black_king_position, 64 * 5 + m_psquare - 8);
         }
         // 4) Promotions and Castling
         if ((move.getData() & 0b1100000000000000) == 0b0100000000000000) // 0100000000000000
@@ -2967,8 +2935,8 @@ void BitPosition::makeNormalMove(Move move)
 
                 m_moved_piece = 3; // Moved rook so we need to recompute the rook attacked squares
                 // Set NNUE input
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + 7 + 3 * 64);
-                addOnWhiteInput(m_white_king_position * 64 * 5 + 5 + 3 * 64);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 3 + 7);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 3 + 5);
             }
             else if (move.getData() == 16516) // White queenside castling
             {
@@ -2977,14 +2945,14 @@ void BitPosition::makeNormalMove(Move move)
 
                 m_moved_piece = 3; // Moved rook so we need to recompute the rook attacked squares
                 // Set NNUE input
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + 3 * 64);
-                addOnWhiteInput(m_white_king_position * 64 * 5 + 3 + 3 * 64);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 3);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 3 + 3);
             }
             else // Promotions
             {
                 m_white_pawns_bit &= ~m_last_destination_bit;
                 // Set NNUE input
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, destination_square);
 
                 uint16_t promoting_piece{static_cast<uint16_t>(move.getData() & 12288)};
                 if (promoting_piece == 12288) // Queen promotion
@@ -2992,28 +2960,28 @@ void BitPosition::makeNormalMove(Move move)
                     m_promoted_piece = 4;
                     m_white_queens_bit |= m_last_destination_bit;
                     // Set NNUE input
-                    addOnWhiteInput(m_white_king_position * 64 * 5 + destination_square + 4 * 64);
+                    addOnInput(m_white_king_position, m_black_king_position, 64 * 4 + destination_square);
                 }
                 else if (promoting_piece == 8192) // Rook promotion
                 {
                     m_promoted_piece = 3;
                     m_white_rooks_bit |= m_last_destination_bit;
                     // Set NNUE input
-                    addOnWhiteInput(m_white_king_position * 64 * 5 + destination_square + 3 * 64);
+                    addOnInput(m_white_king_position, m_black_king_position, 64 * 3 + destination_square);
                 }
                 else if (promoting_piece == 4096) // Bishop promotion
                 {
                     m_promoted_piece = 2;
                     m_white_bishops_bit |= m_last_destination_bit;
                     // Set NNUE input
-                    addOnWhiteInput(m_white_king_position * 64 * 5 + destination_square + 2 * 64);
+                    addOnInput(m_white_king_position, m_black_king_position, 64 * 2 + destination_square);
                 }
                 else // Knight promotion
                 {
                     m_promoted_piece = 1;
                     m_white_knights_bit |= m_last_destination_bit;
                     // Set NNUE input
-                    addOnWhiteInput(m_white_king_position * 64 * 5 + destination_square + 1 * 64);
+                    addOnInput(m_white_king_position, m_black_king_position, 64 + destination_square);
                 }
             }
         }
@@ -3077,11 +3045,11 @@ void BitPosition::makeNormalMove(Move move)
         }
         // Moving any piece except the king
         else
-        { 
+        {
             BitPosition::setPiece();
             // Set NNUE input
-            removeOnBlackInput(m_black_king_position * 64 * 5 + origin_square + m_moved_piece * 64);
-            addOnBlackInput(m_black_king_position * 64 * 5 + destination_square + m_moved_piece * 64);
+            removeOnInput(m_white_king_position, m_black_king_position, 64 * (5 + m_moved_piece) + origin_square);
+            addOnInput(m_white_king_position, m_black_king_position, 64 * (5 + m_moved_piece) + destination_square);
         }
 
         // Special Moves (4 types)
@@ -3092,7 +3060,7 @@ void BitPosition::makeNormalMove(Move move)
         {
             BitPosition::removePiece();
             // Set NNUE input
-            removeOnWhiteInput(m_white_king_position * 64 * 5 + destination_square + m_captured_piece * 64);
+            removeOnInput(m_white_king_position, m_black_king_position, 64 * m_captured_piece + destination_square);
         }
 
         // 2) Double pawn moves
@@ -3107,7 +3075,7 @@ void BitPosition::makeNormalMove(Move move)
             m_captured_piece = 0;
 
             // Set NNUE input
-            removeOnWhiteInput(m_white_king_position * 64 * 5 + (m_psquare + 8));
+            removeOnInput(m_white_king_position, m_black_king_position, m_psquare + 8);
         }
         // 4) Promotions and Castling
         if ((move.getData() & 0b1100000000000000) == 0b0100000000000000) // 0100000000000000
@@ -3119,8 +3087,8 @@ void BitPosition::makeNormalMove(Move move)
 
                 m_moved_piece = 3; // Moved rook so we need to recompute the rook attacked squares
                 // Set NNUE input
-                removeOnBlackInput(m_black_king_position * 64 * 5 + 63 + 3 * 64);
-                addOnBlackInput(m_black_king_position * 64 * 5 + 61 + 3 * 64);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 8 + 63);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 8 + 61);
             }
             else if (move.getData() == 20156) // Black queenside castling
             {
@@ -3129,14 +3097,14 @@ void BitPosition::makeNormalMove(Move move)
 
                 m_moved_piece = 3; // Moved rook so we need to recompute the rook attacked squares
                 // Set NNUE input
-                removeOnBlackInput(m_black_king_position * 64 * 5 + 56 + 3 * 64);
-                addOnBlackInput(m_black_king_position * 64 * 5 + 59 + 3 * 64);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 8 + 56);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 8 + 59);
             }
             else // Promotions
             {
                 m_black_pawns_bit &= ~m_last_destination_bit;
                 // Set NNUE input
-                removeOnBlackInput(m_black_king_position * 64 * 5 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 5 + destination_square);
 
                 uint16_t promoting_piece{static_cast<uint16_t>(move.getData() & 12288)};
                 if (promoting_piece == 12288) // Queen promotion
@@ -3144,28 +3112,28 @@ void BitPosition::makeNormalMove(Move move)
                     m_promoted_piece = 4;
                     m_black_queens_bit |= m_last_destination_bit;
                     // Set NNUE input
-                    addOnBlackInput(m_black_king_position * 64 * 5 + destination_square + 4 * 64);
+                    addOnInput(m_white_king_position, m_black_king_position, 64 * 9 + destination_square);
                 }
                 else if (promoting_piece == 8192) // Rook promotion
                 {
                     m_promoted_piece = 3;
                     m_black_rooks_bit |= m_last_destination_bit;
                     // Set NNUE input
-                    addOnBlackInput(m_black_king_position * 64 * 5 + destination_square + 3 * 64);
+                    addOnInput(m_white_king_position, m_black_king_position, 64 * 8 + destination_square);
                 }
                 else if (promoting_piece == 4096) // Bishop promotion
                 {
                     m_promoted_piece = 2;
                     m_black_bishops_bit |= m_last_destination_bit;
                     // Set NNUE input
-                    addOnBlackInput(m_black_king_position * 64 * 5 + destination_square + 2 * 64);
+                    addOnInput(m_white_king_position, m_black_king_position, 64 * 7 + destination_square);
                 }
                 else // Knight promotion
                 {
                     m_promoted_piece = 1;
                     m_black_knights_bit |= m_last_destination_bit;
                     // Set NNUE input
-                    addOnBlackInput(m_black_king_position * 64 * 5 + destination_square + 64);
+                    addOnInput(m_white_king_position, m_black_king_position, 64 * 6 + destination_square);
                 }
             }
         }
@@ -3173,20 +3141,12 @@ void BitPosition::makeNormalMove(Move move)
         m_psquare = psquare;
         m_zobrist_key ^= zobrist_keys::passantSquaresZobristNumbers[m_psquare];
     }
-    // Debugging purposes
-    // float eval_1{evaluationFunction(*this, true)};
-    // initializeNNUEInput(*this);
-    // float eval_2{evaluationFunction(*this, true)};
-    // if (eval_1 != eval_2)
-    // {
-    //     std::cout << "Normal move : " << move.toString() << "\n";
-    // }
     m_turn = not m_turn;
     BitPosition::updateZobristKeyPiecePartAfterMove(origin_square, destination_square);
     m_zobrist_key ^= zobrist_keys::blackToMoveZobristNumber;
     // Note, we store the zobrist key in it's array when making the move. However the rest of the ply info
     // is stored when making the next move to be able to go back.
-    // Note we store it m_ply+1 position because the initial position (or position after capture) is the m_ply 0.
+    // So we store it in the m_ply+1 position because the initial position (or position after capture) is the m_ply 0.
     m_zobrist_keys_array[m_ply + 1] = m_zobrist_key;
 
     m_captured_piece_array[m_ply] = m_captured_piece;
@@ -3204,6 +3164,7 @@ void BitPosition::makeNormalMove(Move move)
     m_ply++;
 
     BitPosition::setAllPiecesBits();
+
 }
 
 void BitPosition::unmakeNormalMove(Move move)
@@ -3266,7 +3227,8 @@ void BitPosition::unmakeNormalMove(Move move)
                 m_black_rooks_bit &= ~(1ULL << 61);
                 m_black_king_position = 60;
 
-                // Update NNUE Input
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 8 + 63);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 8 + 61);
                 moveBlackKingNNUEInput(*this);
             }
 
@@ -3278,45 +3240,38 @@ void BitPosition::unmakeNormalMove(Move move)
                 m_black_rooks_bit &= ~(1ULL << 59);
                 m_black_king_position = 60;
 
-                // Update NNUE Input
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 8 + 56);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 8 + 59);
                 moveBlackKingNNUEInput(*this);
             }
 
-            // Unmaking promotions
+            // Unmaking black promotions
             else
             {
                 uint16_t promoting_piece{static_cast<uint16_t>(move.getData() & 12288)};
+
+                m_black_pawns_bit |= m_last_origin_bit;
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 5 + origin_square);
+
                 if (promoting_piece == 12288) // Unpromote queen
                 {
                     m_black_queens_bit &= ~m_last_destination_bit;
-                    m_black_pawns_bit |= m_last_origin_bit;
-
-                    removeOnBlackInput(m_black_king_position * 64 * 5 + 4 * 64 + destination_square);
-                    addOnBlackInput(m_black_king_position * 64 * 5 + origin_square);
+                    removeOnInput(m_white_king_position, m_black_king_position, 64 * 9 + destination_square);
                 }
                 else if (promoting_piece == 8192) // Unpromote rook
                 {
                     m_black_rooks_bit &= ~m_last_destination_bit;
-                    m_black_pawns_bit |= m_last_origin_bit;
-
-                    removeOnBlackInput(m_black_king_position * 64 * 5 + 3 * 64 + destination_square);
-                    addOnBlackInput(m_black_king_position * 64 * 5 + origin_square);
+                    removeOnInput(m_white_king_position, m_black_king_position, 64 * 8 + destination_square);
                 }
                 else if (promoting_piece == 4096) // Unpromote bishop
                 {
                     m_black_bishops_bit &= ~m_last_destination_bit;
-                    m_black_pawns_bit |= m_last_origin_bit;
-
-                    removeOnBlackInput(m_black_king_position * 64 * 5 + 2 * 64 + destination_square);
-                    addOnBlackInput(m_black_king_position * 64 * 5 + origin_square);
+                    removeOnInput(m_white_king_position, m_black_king_position, 64 * 7 + destination_square);
                 }
                 else // Unpromote knight
                 {
                     m_black_knights_bit &= ~m_last_destination_bit;
-                    m_black_pawns_bit |= m_last_origin_bit;
-
-                    removeOnBlackInput(m_black_king_position * 64 * 5 + 1 * 64 + destination_square);
-                    addOnBlackInput(m_black_king_position * 64 * 5 + origin_square);
+                    removeOnInput(m_white_king_position, m_black_king_position, 64 * 6 + destination_square);
                 }
                 // Unmaking captures in promotions
                 if (previous_captured_piece != 7)
@@ -3324,22 +3279,22 @@ void BitPosition::unmakeNormalMove(Move move)
                     if (previous_captured_piece == 1) // Uncapture knight
                     {
                         m_white_knights_bit |= m_last_destination_bit;
-                        addOnWhiteInput(m_white_king_position * 64 * 5 + 64 + destination_square);
+                        addOnInput(m_white_king_position, m_black_king_position, 64 + destination_square);
                     }
                     else if (previous_captured_piece == 2) // Uncapture bishop
                     {
                         m_white_bishops_bit |= m_last_destination_bit;
-                        addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 2 + destination_square);
+                        addOnInput(m_white_king_position, m_black_king_position, 64 * 2 + destination_square);
                     }
                     else if (previous_captured_piece == 3) // Uncapture rook
                     {
                         m_white_rooks_bit |= m_last_destination_bit;
-                        addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 3 + destination_square);
+                        addOnInput(m_white_king_position, m_black_king_position, 64 * 3 + destination_square);
                     }
                     else // Uncapture queen
                     {
                         m_white_queens_bit |= m_last_destination_bit;
-                        addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 4 + destination_square);
+                        addOnInput(m_white_king_position, m_black_king_position, 64 * 4 + destination_square);
                     }
                 }
             }
@@ -3352,36 +3307,36 @@ void BitPosition::unmakeNormalMove(Move move)
             {
                 m_black_pawns_bit |= m_last_origin_bit;
                 m_black_pawns_bit &= ~m_last_destination_bit;
-                addOnBlackInput(m_black_king_position * 64 * 5 + origin_square);
-                removeOnBlackInput(m_black_king_position * 64 * 5 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 5 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 5 + origin_square);
             }
             else if ((m_last_destination_bit & m_black_knights_bit) != 0) // Unmove knight
             {
                 m_black_knights_bit |= m_last_origin_bit;
                 m_black_knights_bit &= ~m_last_destination_bit;
-                addOnBlackInput(m_black_king_position * 64 * 5 + 64 + origin_square);
-                removeOnBlackInput(m_black_king_position * 64 * 5 + 64 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 6 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 6 + origin_square);
             }
             else if ((m_last_destination_bit & m_black_bishops_bit) != 0) // Unmove bishop
             {
                 m_black_bishops_bit |= m_last_origin_bit;
                 m_black_bishops_bit &= ~m_last_destination_bit;
-                addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 2 + origin_square);
-                removeOnBlackInput(m_black_king_position * 64 * 5 + 64 * 2 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 7 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 7 + origin_square);
             }
             else if ((m_last_destination_bit & m_black_rooks_bit) != 0) // Unmove rook
             {
                 m_black_rooks_bit |= m_last_origin_bit;
                 m_black_rooks_bit &= ~m_last_destination_bit;
-                addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 3 + origin_square);
-                removeOnBlackInput(m_black_king_position * 64 * 5 + 64 * 3 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 8 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 8 + origin_square);
             }
             else if ((m_last_destination_bit & m_black_queens_bit) != 0) // Unmove queen
             {
                 m_black_queens_bit |= m_last_origin_bit;
                 m_black_queens_bit &= ~m_last_destination_bit;
-                addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 4 + origin_square);
-                removeOnBlackInput(m_black_king_position * 64 * 5 + 64 * 4 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 9 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 9 + origin_square);
             }
             else // Unmove king
             {
@@ -3396,37 +3351,37 @@ void BitPosition::unmakeNormalMove(Move move)
                 if (previous_captured_piece == 0) // Uncapture pawn
                 {
                     // Unmake passant capture
-                    if (m_last_destination_bit == (1ULL << m_psquare))
+                    if (destination_square == m_psquare)
                     {
                         m_white_pawns_bit |= (1ULL << (m_psquare + 8));
-                        addOnWhiteInput(m_white_king_position * 64 * 5 + m_psquare + 8);
+                        addOnInput(m_white_king_position, m_black_king_position, m_psquare + 8);
                     }
                     // Unmake normal pawn capture
                     else
                     {
                         m_white_pawns_bit |= m_last_destination_bit;
-                        addOnWhiteInput(m_white_king_position * 64 * 5 + destination_square);
+                        addOnInput(m_white_king_position, m_black_king_position, destination_square);
                     }
                 }
                 else if (previous_captured_piece == 1) // Uncapture knight
                 {
                     m_white_knights_bit |= m_last_destination_bit;
-                    addOnWhiteInput(m_white_king_position * 64 * 5 + 64 + destination_square);
+                    addOnInput(m_white_king_position, m_black_king_position, 64 + destination_square);
                 }
                 else if (previous_captured_piece == 2) // Uncapture bishop
                 {
                     m_white_bishops_bit |= m_last_destination_bit;
-                    addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 2 + destination_square);
+                    addOnInput(m_white_king_position, m_black_king_position, 64 * 2 + destination_square);
                 }
                 else if (previous_captured_piece == 3) // Uncapture rook
                 {
                     m_white_rooks_bit |= m_last_destination_bit;
-                    addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 3 + destination_square);
+                    addOnInput(m_white_king_position, m_black_king_position, 64 * 3 + destination_square);
                 }
                 else // Uncapture queen
                 {
                     m_white_queens_bit |= m_last_destination_bit;
-                    addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 4 + destination_square);
+                    addOnInput(m_white_king_position, m_black_king_position, 64 * 4 + destination_square);
                 }
             }
         }
@@ -3444,6 +3399,8 @@ void BitPosition::unmakeNormalMove(Move move)
                 m_white_rooks_bit &= ~(1ULL << 5);
                 m_white_king_position = 4;
 
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 3 + 7);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 3 + 5);
                 moveWhiteKingNNUEInput(*this);
             }
 
@@ -3455,6 +3412,8 @@ void BitPosition::unmakeNormalMove(Move move)
                 m_white_rooks_bit &= ~(1ULL << 3);
                 m_white_king_position = 4;
 
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 3);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 3 + 3);
                 moveWhiteKingNNUEInput(*this);
             }
 
@@ -3462,37 +3421,29 @@ void BitPosition::unmakeNormalMove(Move move)
             else
             {
                 uint16_t promoting_piece{static_cast<uint16_t>(move.getData() & 12288)};
+
+                m_white_pawns_bit |= m_last_origin_bit;
+                addOnInput(m_white_king_position, m_black_king_position, origin_square);
+
                 if (promoting_piece == 12288) // Unpromote queen
                 {
                     m_white_queens_bit &= ~m_last_destination_bit;
-                    m_white_pawns_bit |= m_last_origin_bit;
-
-                    removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 4 + destination_square);
-                    addOnWhiteInput(m_white_king_position * 64 * 5 + origin_square);
+                    removeOnInput(m_white_king_position, m_black_king_position, 64 * 4 + destination_square);
                 }
                 else if (promoting_piece == 8192) // Unpromote rook
                 {
                     m_white_rooks_bit &= ~m_last_destination_bit;
-                    m_white_pawns_bit |= m_last_origin_bit;
-
-                    removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 3 + destination_square);
-                    addOnWhiteInput(m_white_king_position * 64 * 5 + origin_square);
+                    removeOnInput(m_white_king_position, m_black_king_position, 64 * 3 + destination_square);
                 }
                 else if (promoting_piece == 4096) // Unpromote bishop
                 {
                     m_white_bishops_bit &= ~m_last_destination_bit;
-                    m_white_pawns_bit |= m_last_origin_bit;
-
-                    removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 2 + destination_square);
-                    addOnWhiteInput(m_white_king_position * 64 * 5 + origin_square);
+                    removeOnInput(m_white_king_position, m_black_king_position, 64 * 2 + destination_square);
                 }
                 else // Unpromote knight
                 {
                     m_white_knights_bit &= ~m_last_destination_bit;
-                    m_white_pawns_bit |= m_last_origin_bit;
-
-                    removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 4 + destination_square);
-                    addOnWhiteInput(m_white_king_position * 64 * 5 + origin_square);
+                    removeOnInput(m_white_king_position, m_black_king_position, 64 + destination_square);
                 }
                 // Unmaking captures in promotions
                 if (previous_captured_piece != 7)
@@ -3500,22 +3451,22 @@ void BitPosition::unmakeNormalMove(Move move)
                     if (previous_captured_piece == 1) // Uncapture knight
                     {
                         m_black_knights_bit |= m_last_destination_bit;
-                        addOnBlackInput(m_black_king_position * 64 * 5 + 64 + destination_square);
+                        addOnInput(m_white_king_position, m_black_king_position, 64 * 6 + destination_square);
                     }
                     else if (previous_captured_piece == 2) // Uncapture bishop
                     {
                         m_black_bishops_bit |= m_last_destination_bit;
-                        addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 2 + destination_square);
+                        addOnInput(m_white_king_position, m_black_king_position, 64 * 7 + destination_square);
                     }
                     else if (previous_captured_piece == 3) // Uncapture rook
                     {
                         m_black_rooks_bit |= m_last_destination_bit;
-                        addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 3 + destination_square);
+                        addOnInput(m_white_king_position, m_black_king_position, 64 * 8 + destination_square);
                     }
                     else // Uncapture queen
                     {
                         m_black_queens_bit |= m_last_destination_bit;
-                        addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 4 + destination_square);
+                        addOnInput(m_white_king_position, m_black_king_position, 64 * 9 + destination_square);
                     }
                 }
             }
@@ -3529,40 +3480,40 @@ void BitPosition::unmakeNormalMove(Move move)
                 m_white_pawns_bit |= m_last_origin_bit;
                 m_white_pawns_bit &= ~m_last_destination_bit;
 
-                addOnWhiteInput(m_white_king_position * 64 * 5 + origin_square);
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, origin_square);
             }
             else if ((m_last_destination_bit & m_white_knights_bit) != 0) // Unmove knight
             {
                 m_white_knights_bit |= m_last_origin_bit;
                 m_white_knights_bit &= ~m_last_destination_bit;
 
-                addOnWhiteInput(m_white_king_position * 64 * 5 + 64 + origin_square);
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 + origin_square);
             }
             else if ((m_last_destination_bit & m_white_bishops_bit) != 0) // Unmove bishop
             {
                 m_white_bishops_bit |= m_last_origin_bit;
                 m_white_bishops_bit &= ~m_last_destination_bit;
 
-                addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 2 + origin_square);
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 2 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 2 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 2 + origin_square);
             }
             else if ((m_last_destination_bit & m_white_rooks_bit) != 0) // Unmove rook
             {
                 m_white_rooks_bit |= m_last_origin_bit;
                 m_white_rooks_bit &= ~m_last_destination_bit;
 
-                addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 3 + origin_square);
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 3 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 3 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 3 + origin_square);
             }
             else if ((m_last_destination_bit & m_white_queens_bit) != 0) // Unmove queen
             {
                 m_white_queens_bit |= m_last_origin_bit;
                 m_white_queens_bit &= ~m_last_destination_bit;
 
-                addOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 4 + origin_square);
-                removeOnWhiteInput(m_white_king_position * 64 * 5 + 64 * 4 + destination_square);
+                removeOnInput(m_white_king_position, m_black_king_position, 64 * 4 + destination_square);
+                addOnInput(m_white_king_position, m_black_king_position, 64 * 4 + origin_square);
             }
             else // Unmove king
             {
@@ -3577,50 +3528,41 @@ void BitPosition::unmakeNormalMove(Move move)
                 if (previous_captured_piece == 0) // Uncapture pawn
                 {
                     // Unmake passant capture
-                    if (m_last_destination_bit == (1ULL << m_psquare))
+                    if (destination_square == m_psquare)
                     {
                         m_black_pawns_bit |= (1ULL << (m_psquare - 8));
-                        addOnBlackInput(m_black_king_position * 64 * 5 + m_psquare - 8);
+                        addOnInput(m_white_king_position, m_black_king_position, 64 * 5 + m_psquare - 8);
                     }
                     // Unmake normal pawn capture
                     else
                     {
                         m_black_pawns_bit |= m_last_destination_bit;
-                        addOnBlackInput(m_black_king_position * 64 * 5 + destination_square);
+                        addOnInput(m_white_king_position, m_black_king_position, 64 * 5 + destination_square);
                     }
                 }
                 else if (previous_captured_piece == 1) // Uncapture knight
                 {
                     m_black_knights_bit |= m_last_destination_bit;
-                    addOnBlackInput(m_black_king_position * 64 * 5 + 64 + destination_square);
+                    addOnInput(m_white_king_position, m_black_king_position, 64 * 6 + destination_square);
                 }
                 else if (previous_captured_piece == 2) // Uncapture bishop
                 {
                     m_black_bishops_bit |= m_last_destination_bit;
-                    addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 2 + destination_square);
+                    addOnInput(m_white_king_position, m_black_king_position, 64 * 7 + destination_square);
                 }
                 else if (previous_captured_piece == 3) // Uncapture rook
                 {
                     m_black_rooks_bit |= m_last_destination_bit;
-                    addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 3 + destination_square);
+                    addOnInput(m_white_king_position, m_black_king_position, 64 * 8 + destination_square);
                 }
                 else // Uncapture queen
                 {
                     m_black_queens_bit |= m_last_destination_bit;
-                    addOnBlackInput(m_black_king_position * 64 * 5 + 64 * 4 + destination_square);
+                    addOnInput(m_white_king_position, m_black_king_position, 64 * 9 + destination_square);
                 }
             }
         }
     }
-    // Debugging purposes
-    // float eval_1{evaluationFunction(*this, true)};
-    // initializeNNUEInput(*this);
-    // float eval_2{evaluationFunction(*this, true)};
-    // if (eval_1 != eval_2)
-    // {
-    //     std::cout << "Unmake Normal move : " << move.toString() << "\n";
-    // }
-
     BitPosition::setAllPiecesBits();
     m_turn = not m_turn;
 }
@@ -3964,4 +3906,286 @@ std::vector<Move> BitPosition::inCheckMoves() const
                 moves.emplace_back(m_black_king_position, destination_square);
     }
     return moves;
+}
+
+void BitPosition::makeNormalMoveWithoutNNUE(Move move)
+// Move piece and switch white and black roles, without rotating the board.
+// After making move, set pins and checks to 0.
+{
+    unsigned short origin_square{move.getOriginSquare()};
+    m_last_origin_bit = (1ULL << origin_square);
+    unsigned short destination_square{move.getDestinationSquare()};
+    m_last_destination_bit = (1ULL << destination_square);
+    m_captured_piece = 7; // Representing no capture
+    m_promoted_piece = 7; // Representing no promotion
+
+    if (m_turn) // White's move
+    {
+        if (origin_square == 0) // Moving from a1
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            m_white_queenside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+
+        else if (origin_square == 7) // Moving from h1
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            m_white_kingside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+
+        if (destination_square == 63) // Capturing on a8
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            m_black_kingside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+
+        else if (destination_square == 56) // Capturing on h8
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            m_black_queenside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+
+        if (m_last_origin_bit == m_white_king_bit) // Moving king
+        {
+            // Remove castling zobrist part
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+
+            m_white_kingside_castling = false;
+            m_white_queenside_castling = false;
+
+            // Set new castling zobrist part
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+
+            // Update king bit and king position
+            m_white_king_bit = m_last_destination_bit;
+            m_white_king_position = destination_square;
+            m_moved_piece = 5;
+        }
+        // Moving any piece except king
+        else
+        {
+            BitPosition::setPiece();
+        }
+
+        // Special Moves (4 types)
+        unsigned short psquare{0};
+
+        // 1) Captures (Non passant)
+        if ((m_last_destination_bit & m_black_pieces_bit) != 0)
+        {
+            BitPosition::removePiece();
+        }
+        // 2) Double pawn moves
+        else if ((move.getData() & 49152) == 32768) // 1000000000000000
+            psquare = origin_square + 8;
+
+        // 3) Passant Captures
+        else if (m_moved_piece == 0 && (m_last_destination_bit == passant_bitboards[m_psquare]))
+        {
+            // Remove captured piece
+            m_black_pawns_bit &= ~(1ULL << (m_psquare - 8));
+            m_captured_piece = 0;
+        }
+        // 4) Promotions and Castling
+        if ((move.getData() & 0b1100000000000000) == 0b0100000000000000) // 0100000000000000
+        {
+            if (move.getData() == 16772) // White kingside castling
+            {
+                m_white_rooks_bit &= ~128;
+                m_white_rooks_bit |= 32;
+
+                m_moved_piece = 3; // Moved rook so we need to recompute the rook attacked squares
+            }
+            else if (move.getData() == 16516) // White queenside castling
+            {
+                m_white_rooks_bit &= ~1;
+                m_white_rooks_bit |= 8;
+
+                m_moved_piece = 3; // Moved rook so we need to recompute the rook attacked squares
+            }
+            else // Promotions
+            {
+                m_white_pawns_bit &= ~m_last_destination_bit;
+
+                uint16_t promoting_piece{static_cast<uint16_t>(move.getData() & 12288)};
+                if (promoting_piece == 12288) // Queen promotion
+                {
+                    m_promoted_piece = 4;
+                    m_white_queens_bit |= m_last_destination_bit;
+                }
+                else if (promoting_piece == 8192) // Rook promotion
+                {
+                    m_promoted_piece = 3;
+                    m_white_rooks_bit |= m_last_destination_bit;
+                }
+                else if (promoting_piece == 4096) // Bishop promotion
+                {
+                    m_promoted_piece = 2;
+                    m_white_bishops_bit |= m_last_destination_bit;
+                }
+                else // Knight promotion
+                {
+                    m_promoted_piece = 1;
+                    m_white_knights_bit |= m_last_destination_bit;
+                }
+            }
+        }
+        m_zobrist_key ^= zobrist_keys::passantSquaresZobristNumbers[m_psquare];
+        m_psquare = psquare;
+        m_zobrist_key ^= zobrist_keys::passantSquaresZobristNumbers[m_psquare];
+    }
+    else // Black's move
+    {
+        if (origin_square == 56) // Moving from a8
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            m_black_queenside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+
+        else if (origin_square == 63) // Moving from h8
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            m_black_kingside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+
+        if (destination_square == 0) // Capturing on a1
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            m_white_queenside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+
+        else if (destination_square == 7) // Capturing on h1
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            m_white_kingside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+
+        if (m_last_origin_bit == m_black_king_bit) // Moving king
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            m_black_kingside_castling = false;
+            m_black_queenside_castling = false;
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            m_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+
+            m_black_king_bit = m_last_destination_bit;
+            m_black_king_position = destination_square;
+            m_moved_piece = 5;
+        }
+        // Moving any piece except the king
+        else
+        {
+            BitPosition::setPiece();
+        }
+
+        // Special Moves (4 types)
+        unsigned short psquare{0};
+
+        // 1) Captures (Non passant)
+        if ((m_last_destination_bit & m_white_pieces_bit) != 0) // 1100000000000000
+        {
+            BitPosition::removePiece();
+        }
+
+        // 2) Double pawn moves
+        else if ((move.getData() & 49152) == 32768) // 1000000000000000
+            psquare = origin_square - 8;
+
+        // 3) Passant Captures
+        else if (m_moved_piece == 0 && (m_last_destination_bit == passant_bitboards[m_psquare])) // 1100000000000000
+        {
+            // Remove captured piece
+            m_white_pawns_bit &= ~(1ULL << (m_psquare + 8));
+            m_captured_piece = 0;
+        }
+        // 4) Promotions and Castling
+        if ((move.getData() & 0b1100000000000000) == 0b0100000000000000) // 0100000000000000
+        {
+            if (move.getData() == 20412) // Black kingside castling
+            {
+                m_black_rooks_bit &= ~9223372036854775808ULL;
+                m_black_rooks_bit |= 2305843009213693952ULL;
+
+                m_moved_piece = 3; // Moved rook so we need to recompute the rook attacked squares
+            }
+            else if (move.getData() == 20156) // Black queenside castling
+            {
+                m_black_rooks_bit &= ~72057594037927936ULL;
+                m_black_rooks_bit |= 576460752303423488ULL;
+
+                m_moved_piece = 3; // Moved rook so we need to recompute the rook attacked squares
+            }
+            else // Promotions
+            {
+                m_black_pawns_bit &= ~m_last_destination_bit;
+
+                uint16_t promoting_piece{static_cast<uint16_t>(move.getData() & 12288)};
+                if (promoting_piece == 12288) // Queen promotion
+                {
+                    m_promoted_piece = 4;
+                    m_black_queens_bit |= m_last_destination_bit;
+                }
+                else if (promoting_piece == 8192) // Rook promotion
+                {
+                    m_promoted_piece = 3;
+                    m_black_rooks_bit |= m_last_destination_bit;
+                }
+                else if (promoting_piece == 4096) // Bishop promotion
+                {
+                    m_promoted_piece = 2;
+                    m_black_bishops_bit |= m_last_destination_bit;
+                }
+                else // Knight promotion
+                {
+                    m_promoted_piece = 1;
+                    m_black_knights_bit |= m_last_destination_bit;
+                }
+            }
+        }
+        m_zobrist_key ^= zobrist_keys::passantSquaresZobristNumbers[m_psquare];
+        m_psquare = psquare;
+        m_zobrist_key ^= zobrist_keys::passantSquaresZobristNumbers[m_psquare];
+    }
+    m_turn = not m_turn;
+
+    m_diagonal_pins = 0;
+    m_straight_pins = 0;
+    m_all_pins = 0;
+    m_pawn_checks = 0;
+    m_knight_checks = 0;
+    m_bishop_checks = 0;
+    m_rook_checks = 0;
+    m_queen_checks = 0;
+    m_check_rays = 0;
+    m_num_checks = 0;
+    m_ply++;
+
+    BitPosition::setAllPiecesBits();
 }

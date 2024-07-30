@@ -10,32 +10,32 @@ class BitPosition
 {
 private:
     // 64-bit to represent pieces on board
-    uint64_t m_white_pawns_bit;
-    uint64_t m_white_knights_bit;
-    uint64_t m_white_bishops_bit;
-    uint64_t m_white_rooks_bit;
-    uint64_t m_white_queens_bit;
-    uint64_t m_white_king_bit;
-    uint64_t m_black_pawns_bit;
-    uint64_t m_black_knights_bit;
-    uint64_t m_black_bishops_bit;
-    uint64_t m_black_rooks_bit;
-    uint64_t m_black_queens_bit;
-    uint64_t m_black_king_bit;
+    uint64_t m_white_pawns_bit{};
+    uint64_t m_white_knights_bit{};
+    uint64_t m_white_bishops_bit{};
+    uint64_t m_white_rooks_bit{};
+    uint64_t m_white_queens_bit{};
+    uint64_t m_white_king_bit{};
+    uint64_t m_black_pawns_bit{};
+    uint64_t m_black_knights_bit{};
+    uint64_t m_black_bishops_bit{};
+    uint64_t m_black_rooks_bit{};
+    uint64_t m_black_queens_bit{};
+    uint64_t m_black_king_bit{};
     // True white's turn, False black's
-    bool m_turn;                    
+    bool m_turn{};
     // Booleans representing castling rights
-    bool m_white_kingside_castling;
-    bool m_white_queenside_castling;
-    bool m_black_kingside_castling;
-    bool m_black_queenside_castling;
-    // index of passant square a1 = 0, h8 = 63
+    bool m_white_kingside_castling{};
+    bool m_white_queenside_castling{};
+    bool m_black_kingside_castling{};
+    bool m_black_queenside_castling{};
+    // Index of passant square a1 = 0, h8 = 63
     uint64_t m_psquare{};
-    // bits representing the straight pinned squares including pinning piece's square and excluding the king's square
+    // Bits representing the pinned squares
     uint64_t m_diagonal_pins{};
     uint64_t m_straight_pins{};
-    uint64_t m_all_pins{m_diagonal_pins | m_straight_pins};
-    // bits representing where the pieces giving checks are
+    uint64_t m_all_pins{};
+    // Bits representing checks
     uint64_t m_pawn_checks{};
     uint64_t m_knight_checks{};
     uint64_t m_bishop_checks{};
@@ -43,18 +43,18 @@ private:
     uint64_t m_queen_checks{};
     uint64_t m_check_rays{};
     unsigned short m_num_checks{};
-    bool m_is_check{false};
-    // bits to represent all pieces of each player
-    uint64_t m_white_pieces_bit{m_white_pawns_bit | m_white_knights_bit | m_white_bishops_bit | m_white_rooks_bit | m_white_queens_bit | m_white_king_bit};
-    uint64_t m_black_pieces_bit{m_black_pawns_bit | m_black_knights_bit | m_black_bishops_bit | m_black_rooks_bit | m_black_queens_bit | m_black_king_bit};
-    uint64_t m_all_pieces_bit{m_white_pieces_bit | m_black_pieces_bit};
-    uint64_t m_all_pieces_bit_without_white_king{m_all_pieces_bit & ~m_white_king_bit};
-    uint64_t m_all_pieces_bit_without_black_king{m_all_pieces_bit & ~m_black_king_bit};
-    // unsigned short representing kings position
+    bool m_is_check{};
+    // Bits to represent all pieces of each player
+    uint64_t m_white_pieces_bit{};
+    uint64_t m_black_pieces_bit{};
+    uint64_t m_all_pieces_bit{};
+    uint64_t m_all_pieces_bit_without_white_king{};
+    uint64_t m_all_pieces_bit_without_black_king{};
+    // Unsigned short representing kings' positions
     unsigned short m_white_king_position{};
     unsigned short m_black_king_position{};
 
-    // Used for computing attacked squares efficently
+    // Used for computing attacked squares efficiently
     unsigned short m_moved_piece{};
     unsigned short m_captured_piece{7};
     unsigned short m_promoted_piece{7};
@@ -86,11 +86,9 @@ private:
     bool m_black_queens_attacked_squares_set{false};
 
     uint64_t m_zobrist_key{};
-    // ply number
-    // WE HAVE TO MAKE SURE WE RESET IT TO 0 AFTER THE ENGINE GIVES A MOVE.
+    // Ply number
     unsigned short m_ply{};
-    // ply info arrays (these is the info used on non capture moves, 
-    // since captured moves will all have already benn generated before unmaking move)
+    // Ply info arrays
     std::array<bool, 150> m_wkcastling_array{};
     std::array<bool, 150> m_wqcastling_array{};
     std::array<bool, 150> m_bkcastling_array{};
@@ -100,7 +98,6 @@ private:
     std::array<uint64_t, 150> m_straight_pins_array{};
 
     std::array<bool, 150> m_is_check_array{};
-
 
     std::array<uint64_t, 150> m_squares_attacked_by_white_pawns_array{};
     std::array<uint64_t, 150> m_squares_attacked_by_black_pawns_array{};
@@ -128,9 +125,157 @@ public:
     BitPosition(uint64_t white_pawns_bit, uint64_t white_knights_bit, uint64_t white_bishops_bit,
                 uint64_t white_rooks_bit, uint64_t white_queens_bit, uint64_t white_king_bit,
                 uint64_t black_pawns_bit, uint64_t black_knights_bit, uint64_t black_bishops_bit,
-                uint64_t black_rooks_bit, uint64_t black_queens_bit, uint64_t black_king_bit, 
-                bool turn, bool white_kingside_castling, bool white_queenside_castling, 
-                bool black_kingside_castling, bool black_queenside_castling);
+                uint64_t black_rooks_bit, uint64_t black_queens_bit, uint64_t black_king_bit,
+                bool turn, bool white_kingside_castling, bool white_queenside_castling,
+                bool black_kingside_castling, bool black_queenside_castling)
+        : m_white_pawns_bit(white_pawns_bit),
+          m_white_knights_bit(white_knights_bit),
+          m_white_bishops_bit(white_bishops_bit),
+          m_white_rooks_bit(white_rooks_bit),
+          m_white_queens_bit(white_queens_bit),
+          m_white_king_bit(white_king_bit),
+          m_black_pawns_bit(black_pawns_bit),
+          m_black_knights_bit(black_knights_bit),
+          m_black_bishops_bit(black_bishops_bit),
+          m_black_rooks_bit(black_rooks_bit),
+          m_black_queens_bit(black_queens_bit),
+          m_black_king_bit(black_king_bit),
+          m_turn(turn),
+          m_white_kingside_castling(white_kingside_castling),
+          m_white_queenside_castling(white_queenside_castling),
+          m_black_kingside_castling(black_kingside_castling),
+          m_black_queenside_castling(black_queenside_castling)
+    {
+        m_white_pieces_bit = m_white_pawns_bit | m_white_knights_bit | m_white_bishops_bit | m_white_rooks_bit | m_white_queens_bit | m_white_king_bit;
+        m_black_pieces_bit = m_black_pawns_bit | m_black_knights_bit | m_black_bishops_bit | m_black_rooks_bit | m_black_queens_bit | m_black_king_bit;
+        m_all_pieces_bit = m_white_pieces_bit | m_black_pieces_bit;
+        m_all_pieces_bit_without_white_king = m_all_pieces_bit & ~m_white_king_bit;
+        m_all_pieces_bit_without_black_king = m_all_pieces_bit & ~m_black_king_bit;
+
+        setKingPosition();
+        setBlackBishopsAttackedSquares();
+        setBlackRooksAttackedSquares();
+        setBlackQueensAttackedSquares();
+        setWhiteBishopsAttackedSquares();
+        setWhiteRooksAttackedSquares();
+        setWhiteQueensAttackedSquares();
+        setBlackKnightsAttackedSquares();
+        setBlackKingAttackedSquares();
+        setBlackPawnsAttackedSquares();
+        setWhiteKnightsAttackedSquares();
+        setWhiteKingAttackedSquares();
+        setWhitePawnsAttackedSquares();
+
+        m_all_squares_attacked_by_white = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens | m_squares_attacked_by_white_king;
+        m_all_squares_attacked_by_black = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens | m_squares_attacked_by_black_king;
+
+        initializeZobristKey();
+    }
+    // Function to convert a FEN string to a BitPosition object
+    BitPosition(const std::string &fen)
+    {
+        std::istringstream fenStream(fen);
+        std::string board, turn, castling, enPassant;
+        fenStream >> board >> turn >> castling >> enPassant;
+
+        // Initialize all bitboards to 0
+        m_white_pawns_bit = 0, m_white_knights_bit = 0, m_white_bishops_bit = 0, m_white_rooks_bit = 0, m_white_queens_bit = 0, m_white_king_bit = 0;
+        m_black_pawns_bit = 0, m_black_knights_bit = 0, m_black_bishops_bit = 0, m_black_rooks_bit = 0, m_black_queens_bit = 0, m_black_king_bit = 0;
+
+        int square = 56; // Start from the top-left corner of the chess board
+        for (char c : board)
+        {
+            if (c == '/')
+            {
+                square -= 16; // Move to the next row
+            }
+            else if (isdigit(c))
+            {
+                square += c - '0'; // Skip empty squares
+            }
+            else
+            {
+                uint64_t bit = 1ULL << square;
+                switch (c)
+                {
+                case 'P':
+                    m_white_pawns_bit |= bit;
+                    break;
+                case 'N':
+                    m_white_knights_bit |= bit;
+                    break;
+                case 'B':
+                    m_white_bishops_bit |= bit;
+                    break;
+                case 'R':
+                    m_white_rooks_bit |= bit;
+                    break;
+                case 'Q':
+                    m_white_queens_bit |= bit;
+                    break;
+                case 'K':
+                    m_white_king_bit |= bit;
+                    break;
+                case 'p':
+                    m_black_pawns_bit |= bit;
+                    break;
+                case 'n':
+                    m_black_knights_bit |= bit;
+                    break;
+                case 'b':
+                    m_black_bishops_bit |= bit;
+                    break;
+                case 'r':
+                    m_black_rooks_bit |= bit;
+                    break;
+                case 'q':
+                    m_black_queens_bit |= bit;
+                    break;
+                case 'k':
+                    m_black_king_bit |= bit;
+                    break;
+                }
+                square++;
+            }
+        }
+
+        // Determine which side is to move
+        m_turn = (turn == "w");
+
+        // Parse castling rights
+        m_white_kingside_castling = castling.find('K') != std::string::npos;
+        m_white_queenside_castling = castling.find('Q') != std::string::npos;
+        m_black_kingside_castling = castling.find('k') != std::string::npos;
+        m_black_queenside_castling = castling.find('q') != std::string::npos;
+
+        setAllPiecesBits();
+        setKingPosition();
+
+        m_white_pieces_bit = m_white_pawns_bit | m_white_knights_bit | m_white_bishops_bit | m_white_rooks_bit | m_white_queens_bit | m_white_king_bit;
+        m_black_pieces_bit = m_black_pawns_bit | m_black_knights_bit | m_black_bishops_bit | m_black_rooks_bit | m_black_queens_bit | m_black_king_bit;
+        m_all_pieces_bit = m_white_pieces_bit | m_black_pieces_bit;
+        m_all_pieces_bit_without_white_king = m_all_pieces_bit & ~m_white_king_bit;
+        m_all_pieces_bit_without_black_king = m_all_pieces_bit & ~m_black_king_bit;
+
+        setKingPosition();
+        setBlackBishopsAttackedSquares();
+        setBlackRooksAttackedSquares();
+        setBlackQueensAttackedSquares();
+        setWhiteBishopsAttackedSquares();
+        setWhiteRooksAttackedSquares();
+        setWhiteQueensAttackedSquares();
+        setBlackKnightsAttackedSquares();
+        setBlackKingAttackedSquares();
+        setBlackPawnsAttackedSquares();
+        setWhiteKnightsAttackedSquares();
+        setWhiteKingAttackedSquares();
+        setWhitePawnsAttackedSquares();
+
+        m_all_squares_attacked_by_white = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens | m_squares_attacked_by_white_king;
+        m_all_squares_attacked_by_black = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens | m_squares_attacked_by_black_king;
+
+        initializeZobristKey();
+    }
 
     void initializeZobristKey();
     void updateZobristKeyPiecePartAfterMove(unsigned short origin_square, unsigned short destination_square);
@@ -156,7 +301,8 @@ public:
     std::vector<Move> inCheckAllMoves() const;
     std::vector<Move> allMoves() const;
     std::vector<Move> orderAllMoves(std::vector<Move> &moves, Move ttMove) const;
-    std::vector<Move> orderAllMovesOnFirstIteration(std::vector<Move> &moves, Move bestMove, Move ttMove) const;
+    std::vector<Move> orderAllMovesOnFirstIterationFirstTime(std::vector<Move> &moves, Move ttMove) const;
+    std::pair<std::vector<Move>, std::vector<float>> orderAllMovesOnFirstIteration(std::vector<Move> &moves, std::vector<float> &scores) const;
     std::vector<Move> inCheckMoves() const;
     std::vector<Move> nonCaptureMoves() const;
 
@@ -167,6 +313,7 @@ public:
     void makeCapture(Capture move);
     void unmakeNormalMove(Move move);
     void unmakeCapture(Capture move);
+    void makeNormalMoveWithoutNNUE(Move move);
     void setSliderAttackedSquares();
     void setAttackedSquaresAfterMove();
 
@@ -283,6 +430,12 @@ public:
     uint64_t getBlackQueensBits() const { return m_black_queens_bit; }
     uint64_t getBlackKingBits() const { return m_black_king_bit; }
 
+    uint64_t getAllWhitePiecesBits() const { return m_white_pieces_bit; }
+    uint64_t getAllBlackPiecesBits() const { return m_black_pieces_bit; }
+
+    uint64_t getWhiteAttackedSquaresBits() const { return m_all_squares_attacked_by_white; }
+    uint64_t getBlackAttackedSquaresBits() const { return m_all_squares_attacked_by_black; }
+
     unsigned short getMovedPiece() const { return m_moved_piece; }
     unsigned short getCapturedPiece() const { return m_captured_piece; }
     unsigned short getPromotedPiece() const { return m_promoted_piece; }
@@ -328,6 +481,7 @@ public:
     std::string toFenString() const
     {
         std::string fen;
+        // Pieces part
         for (int row = 7; row >= 0; --row)
         {
             int emptyCount = 0;
@@ -414,4 +568,5 @@ public:
         return fen;
     }
 };
-#endif
+
+#endif // BITPOSITION_H

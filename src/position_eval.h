@@ -6,19 +6,31 @@
 #include "bitposition.h"
 
 // Global variables for NNUE parameters
-extern arma::vec whiteInput;
-extern arma::vec blackInput;
-extern arma::mat firstLayerWeights;
+// extern arma::vec whiteTurnBlock;
+// extern arma::vec blackTurnBlock;
+
+extern arma::vec whiteInputTurn;
+extern arma::vec blackInputTurn;
+extern arma::vec whiteInputNotTurn;
+extern arma::vec blackInputNotTurn;
+
+extern arma::mat firstLayer1Weights;
+extern arma::mat firstLayer2Weights;
+extern arma::mat firstLayer1InvertedWeights;
+extern arma::mat firstLayer2InvertedWeights;
+
 extern arma::mat secondLayerWeights;
 extern arma::mat thirdLayerWeights;
 extern arma::mat finalLayerWeights;
 
-extern arma::vec firstLayerBiases;
+extern arma::vec firstLayer1Biases;
+extern arma::vec firstLayer2Biases;
 extern arma::vec secondLayerBiases;
 extern arma::vec thirdLayerBiases;
 extern arma::vec finalLayerBiases;
 
-extern float firstLayerScale;
+extern float firstLayer1Scale;
+extern float firstLayer2Scale;
 extern float secondLayerScale;
 extern float thirdLayerScale;
 extern float finalLayerScale;
@@ -42,11 +54,9 @@ float evaluationFunction(const BitPosition &position, bool ourTurn);
 void initializeNNUEInput(const BitPosition position);
 
 // Declare functions to update efficiently NNUE input
-void addOnWhiteInput(int index);
-void removeOnWhiteInput(int index);
-void addOnBlackInput(int index);
-void removeOnBlackInput(int index);
-void moveWhiteKingNNUEInput(const BitPosition &position);
-void moveBlackKingNNUEInput(const BitPosition &position);
+void addOnInput(int whiteKingPosition, int blackKingPosition, int subIndex);
+void removeOnInput(int whiteKingPosition, int blackKingPosition, int subIndex);
+void moveWhiteKingNNUEInput(BitPosition &position);
+void moveBlackKingNNUEInput(BitPosition &position);
 
 #endif // POSITION_EVAL_H

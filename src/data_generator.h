@@ -1,5 +1,6 @@
-#ifndef ENGINE_H
-#define ENGINE_H
+#ifndef DATAGENERATOR_H
+#define DATAGENERATOR_H
+
 #include "bitposition.h"
 #include <vector>
 #include <utility> // For std::pair
@@ -12,14 +13,52 @@
 #include <torch/script.h>
 #include <memory>
 #include "position_eval.h"
+#include "nnue_ttable.h"
 
+// We are going to make the engine play against itself on some initial positions.
+// At some points in the search the engine will reach positions and evaluate them with the NNUE,
+// we store the zobrist keys and evaluations of these positions in a Table.
+// Then when we perform another search if these positions show up at a depth higher than or equal to minDepthSave,
+// if the new evaluations we get differ by the NNUE evaluations by more than minEvalDiff, we store the positions in a file.
 
 extern TranspositionTable globalTT;
-extern int OURTIME;
-extern int OURINC;
-extern std::chrono::time_point<std::chrono::high_resolution_clock> STARTTIME;
+extern TranspositionTableNNUE nnueTT;
 
-float quiesenceSearch(BitPosition &position, float alpha, float beta, bool our_turn)
+// Globals for this file
+float MIN_EVAL_DIFF;
+int MIN_DEPTH_SAVE;
+std::string OUT_FILE_NAME;
+
+bool valuesDiffer(float evalSearch, int evalSearchType, float evalNNUE)
+// Return true if we want to save the position and value.
+// evalSearchType = 0 : exact, 1 : lower bound, 2 : upper bound.
+{
+    // If evalSearch is exact or a lower bound, and evalSearch is higher than evallNNUE by more than the minEvalDiff
+    if ((evalSearchType == 0 || evalSearchType == 1) && ((evalSearch - evalNNUE) >= MIN_EVAL_DIFF))
+        return true;
+    // If evalSearch is exact or a upper bound, and evalSearch is lower than evallNNUE by more than the minEvalDiff
+    else if ((evalSearchType == 0 || evalSearchType == 1) && ((evalNNUE - evalSearch) >= MIN_EVAL_DIFF))
+        return true;
+    return false;
+}
+
+void saveFenAndNNUEValue(BitPosition &position, float evalNNUE)
+{
+    // Open the file
+    std::ofstream outFile(OUT_FILE_NAME);
+    // Check if the file opened successfully
+    if (!outFile)
+    {
+        std::cerr << "Error opening file: " << OUT_FILE_NAME << std::endl;
+        return;
+    }
+    // Write the position and evaluation value to the file
+    outFile << position.toFenString() << "," << evalNNUE << "\n";
+    // Close the file
+    outFile.close();
+}
+
+float quiesenceSearchGen(BitPosition &position, float alpha, float beta, bool our_turn)
 // This search is done when depth is less than or equal to 0 and considers only captures and promotions
 {
     std::vector<Capture> captures;
@@ -53,7 +92,11 @@ float quiesenceSearch(BitPosition &position, float alpha, float beta, bool our_t
             }
             // In check quiet position
             else
-                return evaluationFunction(position, our_turn);
+            {
+                float eval{evaluationFunction(position, our_turn)};
+                nnueTT.save(position.getZobristKey(), eval); // Save eval given by NNUE
+                return eval;
+            }
         }
         // If there is no check
         else
@@ -63,18 +106,23 @@ float quiesenceSearch(BitPosition &position, float alpha, float beta, bool our_t
                 return 0;
             // Quiet position
             else
-                return evaluationFunction(position, our_turn);
+            {
+                float eval{evaluationFunction(position, our_turn)};
+                nnueTT.save(position.getZobristKey(), eval); // Save eval given by NNUE
+                return eval;
+            }
         }
     }
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
     float value{evaluationFunction(position, our_turn)};
+    nnueTT.save(position.getZobristKey(), value); // Save eval given by NNUE
     Capture best_move;
     if (our_turn) // Maximize
     {
         for (Capture capture : captures)
         {
             position.makeCapture(capture);
-            float child_value{quiesenceSearch(position, alpha, beta, false)};
+            float child_value{quiesenceSearchGen(position, alpha, beta, false)};
             if (child_value > value)
             {
                 value = child_value;
@@ -91,7 +139,7 @@ float quiesenceSearch(BitPosition &position, float alpha, float beta, bool our_t
         for (Capture capture : captures)
         {
             position.makeCapture(capture);
-            float child_value{quiesenceSearch(position, alpha, beta, true)};
+            float child_value{quiesenceSearchGen(position, alpha, beta, true)};
             if (child_value < value)
             {
                 value = child_value;
@@ -106,7 +154,7 @@ float quiesenceSearch(BitPosition &position, float alpha, float beta, bool our_t
     return value;
 }
 
-float alphaBetaSearch(BitPosition &position, int8_t depth, float alpha, float beta, bool our_turn)
+float alphaBetaSearchGen(BitPosition &position, int8_t depth, float alpha, float beta, bool our_turn)
 // This search is done when depth is more than 0 and considers all moves and stores positions in the transposition table
 {
     // Threefold repetition
@@ -121,7 +169,7 @@ float alphaBetaSearch(BitPosition &position, int8_t depth, float alpha, float be
         // At ttable's shalower depth we get the best move
         if (ttEntry->getDepth() < depth)
             tt_move = ttEntry->getMove();
-        // Exact value at deeper depth
+        // Exact value at deeper depth 
         else if (ttEntry->getDepth() >= depth && ttEntry->getIsExact())
             return ttEntry->getValue();
         // Lower bound at deeper depth
@@ -139,7 +187,7 @@ float alphaBetaSearch(BitPosition &position, int8_t depth, float alpha, float be
     }
     // At depths <= 0 we enter quiscence search
     if (depth <= 0)
-        return quiesenceSearch(position, alpha, beta, our_turn);
+        return quiesenceSearchGen(position, alpha, beta, our_turn);
     // Get the legal moves
     position.setAttackedSquaresAfterMove();
     std::vector<Move> moves;
@@ -169,7 +217,7 @@ float alphaBetaSearch(BitPosition &position, int8_t depth, float alpha, float be
             return 30000;
     }
     // Baseline evaluation
-    float value{our_turn ? static_cast<float>(-30001) : static_cast<float>(30001)};
+    float value{our_turn ? static_cast <float>(-30001) : static_cast <float>(30001)};
     Move best_move;
     bool cutoff{false};
     // Maximize
@@ -178,7 +226,7 @@ float alphaBetaSearch(BitPosition &position, int8_t depth, float alpha, float be
         for (Move move : moves)
         {
             position.makeNormalMove(move);
-            float child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
+            float child_value{alphaBetaSearchGen(position, depth - 1, alpha, beta, false)};
             if (child_value > value)
             {
                 value = child_value;
@@ -201,7 +249,7 @@ float alphaBetaSearch(BitPosition &position, int8_t depth, float alpha, float be
         for (Move move : moves)
         {
             position.makeNormalMove(move);
-            float child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
+            float child_value{alphaBetaSearchGen(position, depth - 1, alpha, beta, true)};
             if (child_value < value)
             {
                 value = child_value;
@@ -221,12 +269,36 @@ float alphaBetaSearch(BitPosition &position, int8_t depth, float alpha, float be
     // Saving an exact value
     if (not cutoff && depth >= 2)
         globalTT.save(position.getZobristKey(), value, depth, best_move, true);
+
+    // Check if this position has been evaluated by the NNUE and if the eval was far from the one we got, save fen and eval
+    if (depth >= MIN_DEPTH_SAVE)
+    {
+        TTNNUEEntry *ttnnueEntry = nnueTT.probe(position.getZobristKey());
+        // If position is stored in NNUE transposition table
+        if (ttnnueEntry != nullptr)
+        {
+            if (our_turn && cutoff) // Lower bound
+            {
+                if (valuesDiffer(value, 0, ttnnueEntry->getValue()))
+                    saveFenAndNNUEValue(position, value);
+            }
+            else if (not our_turn && cutoff) // Upper bound
+            {
+                if (valuesDiffer(value, 0, ttnnueEntry->getValue()))
+                    saveFenAndNNUEValue(position, value);
+            }
+            else // Exact value
+            {   
+                if (valuesDiffer(value, 0, ttnnueEntry->getValue()))
+                    saveFenAndNNUEValue(position, value);
+            };
+        }
+    }
     return value;
 }
 
-std::tuple<Move, float, std::vector<float>> firstMoveSearch(BitPosition &position, int8_t depth, float alpha, float beta, bool our_turn, std::vector<float> &first_moves_scores, std::chrono::milliseconds timeForMoveMS)
+std::tuple<Move, float, std::vector<float>> firstMoveSearchGen(BitPosition &position, int8_t depth, float alpha, float beta, bool our_turn, std::vector<float> &first_moves_scores, std::chrono::milliseconds timeForMoveMS, std::chrono::high_resolution_clock::time_point startTime)
 // This search is done when depth is more than 0 and considers all moves
-// Note that here we have no alpha/beta cutoffs, since we are only applying the first move.
 {
     position.setAttackedSquaresAfterMove();
     
@@ -266,7 +338,7 @@ std::tuple<Move, float, std::vector<float>> firstMoveSearch(BitPosition &positio
     else
     {
         position.setPinsBits();
-        moves = position.allMoves();            
+        moves = position.allMoves();
     }
     // Order the moves based on scores
     if (first_moves_scores.empty())
@@ -292,7 +364,7 @@ std::tuple<Move, float, std::vector<float>> firstMoveSearch(BitPosition &positio
         {
             Move move{moves[i]};
             position.makeNormalMove(move);
-            float child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
+            float child_value{alphaBetaSearchGen(position, depth - 1, alpha, beta, false)};
             first_moves_scores[i] = child_value;
             if (child_value > value)
             {
@@ -303,7 +375,7 @@ std::tuple<Move, float, std::vector<float>> firstMoveSearch(BitPosition &positio
             alpha = std::max(alpha, value);
 
             // Calculate the elapsed time in milliseconds
-            std::chrono::duration<double, std::milli> duration = std::chrono::high_resolution_clock::now() - STARTTIME;
+            std::chrono::duration<double, std::milli> duration = std::chrono::high_resolution_clock::now() - startTime;
             // Check if the duration has been exceeded
             if (duration >= timeForMoveMS)
                 break;
@@ -316,7 +388,7 @@ std::tuple<Move, float, std::vector<float>> firstMoveSearch(BitPosition &positio
         {
             Move move{moves[i]};
             position.makeNormalMove(move);
-            float child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
+            float child_value{alphaBetaSearchGen(position, depth - 1, alpha, beta, true)};
             first_moves_scores[i] = child_value;
             if (child_value < value)
             {
@@ -325,24 +397,41 @@ std::tuple<Move, float, std::vector<float>> firstMoveSearch(BitPosition &positio
             }
             position.unmakeNormalMove(move);
             beta = std::min(beta, value);
-
             // Calculate the elapsed time in milliseconds
-            std::chrono::duration<double, std::milli> duration = std::chrono::high_resolution_clock::now() - STARTTIME;
+            std::chrono::duration<double, std::milli> duration = std::chrono::high_resolution_clock::now() - startTime;
             // Check if the duration has been exceeded
             if (duration >= timeForMoveMS)
                 break;
         }
     }
-    // Saving an exact value
+    // Saving an exact value in ttable
     if (depth >= 2)
         globalTT.save(position.getZobristKey(), value, depth, best_move, true);
+
+    // Check if this position has been evaluated by the NNUE and if the eval was far from the one we got, save fen and eval
+    if (depth >= MIN_DEPTH_SAVE)
+    {
+        TTNNUEEntry *ttnnueEntry = nnueTT.probe(position.getZobristKey());
+        // If position is stored in NNUE transposition table
+        if (ttnnueEntry != nullptr)
+        {
+            // If the NNUE failed 
+            if (valuesDiffer(value, 0, ttnnueEntry->getValue()))
+                saveFenAndNNUEValue(position, value);
+        }
+    }
 
     return std::tuple<Move, float, std::vector<float>>(best_move, value, first_moves_scores);
 }
 
-std::pair <Move, float> iterativeSearch(BitPosition position, int8_t fixed_max_depth = 100)
+std::pair<Move, float> iterativeSearchGen(BitPosition position, int timeForMoveMilliseconds, float minEvalDiff, int minDepthSave, std::string outFileName, int8_t fixed_max_depth = 100)
 {
-    std::chrono::milliseconds timeForMoveMS{(OURTIME + OURINC) / 20};
+    std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
+    startTime = std::chrono::high_resolution_clock::now();
+    std::chrono::milliseconds timeForMoveMS(timeForMoveMilliseconds);
+    MIN_EVAL_DIFF = minEvalDiff;
+    MIN_DEPTH_SAVE = minDepthSave;
+    OUT_FILE_NAME = outFileName;
     Move bestMove{};
     float bestValue;
     std::tuple<Move, float, std::vector<float>> tuple;
@@ -353,20 +442,22 @@ std::pair <Move, float> iterativeSearch(BitPosition position, int8_t fixed_max_d
         float beta{30002};
 
         // Search
-        tuple = firstMoveSearch(position, depth, alpha, beta, true, first_moves_scores, timeForMoveMS);
+        tuple = firstMoveSearchGen(position, depth, alpha, beta, true, first_moves_scores, timeForMoveMS, startTime);
         bestMove = std::get<0>(tuple);
         bestValue = std::get<1>(tuple);
         first_moves_scores = std::get<2>(tuple);
 
         // Calculate the elapsed time in milliseconds
-        std::chrono::duration<double, std::milli> duration = std::chrono::high_resolution_clock::now() - STARTTIME;
+        std::chrono::duration<double, std::milli> duration = std::chrono::high_resolution_clock::now() - startTime;
         // Check if the duration has been exceeded
         if (duration >= timeForMoveMS)
         {
+            nnueTT.printTableMemory();
             std::cout << "Depth: " << unsigned(depth) << "\n";
             break;
         }
     }
     return std::pair<Move, float>(bestMove, bestValue);
 }
-#endif
+
+#endif // DATAGENERATOR_H

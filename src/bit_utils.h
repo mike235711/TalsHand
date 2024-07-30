@@ -5,8 +5,11 @@
 // Here we use inline because this permits the compiler copy inline the function
 // definitions whenever the functions name appears in the project.
 
-
-
+inline int invertIndex(int index)
+{
+    int newRow{7 - (index / 8)};
+    return newRow * 8 + (index % 8);
+}
 inline unsigned short getLeastSignificantBitIndex(uint64_t bitboard) // Works
 // Give a bitboard get the index of the first 1 appearing in the bit
 {
