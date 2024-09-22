@@ -5,7 +5,8 @@
 #include "bit_utils.h" // Bit utility functions
 #include "move.h"
 #include <iostream>
-#include <armadillo>
+#include <sstream> 
+#include <vector>
 class BitPosition
 {
 private:
@@ -22,102 +23,73 @@ private:
     uint64_t m_black_rooks_bit{};
     uint64_t m_black_queens_bit{};
     uint64_t m_black_king_bit{};
+
+    // Bits to represent all pieces of each player
+    uint64_t m_white_pieces_bit{};
+    uint64_t m_black_pieces_bit{};
+    uint64_t m_all_pieces_bit{};
+
     // True white's turn, False black's
     bool m_turn{};
+
     // Booleans representing castling rights
     bool m_white_kingside_castling{};
     bool m_white_queenside_castling{};
     bool m_black_kingside_castling{};
     bool m_black_queenside_castling{};
+
     // Index of passant square a1 = 0, h8 = 63
-    uint64_t m_psquare{};
-    // Bits representing the pinned squares
-    uint64_t m_diagonal_pins{};
-    uint64_t m_straight_pins{};
-    uint64_t m_all_pins{};
-    // Bits representing checks
-    uint64_t m_pawn_checks{};
-    uint64_t m_knight_checks{};
-    uint64_t m_bishop_checks{};
-    uint64_t m_rook_checks{};
-    uint64_t m_queen_checks{};
-    uint64_t m_check_rays{};
-    unsigned short m_num_checks{};
-    bool m_is_check{};
-    // Bits to represent all pieces of each player
-    uint64_t m_white_pieces_bit{};
-    uint64_t m_black_pieces_bit{};
-    uint64_t m_all_pieces_bit{};
-    uint64_t m_all_pieces_bit_without_white_king{};
-    uint64_t m_all_pieces_bit_without_black_king{};
+    unsigned short m_psquare{};
+
     // Unsigned short representing kings' positions
     unsigned short m_white_king_position{};
     unsigned short m_black_king_position{};
 
-    // Used for computing attacked squares efficiently
-    unsigned short m_moved_piece{};
-    unsigned short m_captured_piece{7};
-    unsigned short m_promoted_piece{7};
-    uint64_t m_last_destination_bit{};
-    uint64_t m_last_origin_bit{};
-    uint64_t m_move_interference_bit_on_slider{};
+    // For ilegal moves
+    uint64_t m_straight_pins{};
+    uint64_t m_diagonal_pins{};
+    uint64_t m_all_pins{};
 
-    uint64_t m_squares_attacked_by_white_king{};
-    uint64_t m_squares_attacked_by_black_king{};
-    uint64_t m_squares_attacked_by_white_pawns{};
-    uint64_t m_squares_attacked_by_black_pawns{};
-    uint64_t m_squares_attacked_by_white_bishops{};
-    uint64_t m_squares_attacked_by_black_bishops{};
-    uint64_t m_squares_attacked_by_white_knights{};
-    uint64_t m_squares_attacked_by_black_knights{};
-    uint64_t m_squares_attacked_by_white_rooks{};
-    uint64_t m_squares_attacked_by_black_rooks{};
-    uint64_t m_squares_attacked_by_white_queens{};
-    uint64_t m_squares_attacked_by_black_queens{};
+    uint64_t m_unsafe_squares{};
 
-    uint64_t m_all_squares_attacked_by_white{};
-    uint64_t m_all_squares_attacked_by_black{};
+    uint64_t m_king_unsafe_squares{};
 
-    bool m_white_bishops_attacked_squares_set{false};
-    bool m_black_bishops_attacked_squares_set{false};
-    bool m_white_rooks_attacked_squares_set{false};
-    bool m_black_rooks_attacked_squares_set{false};
-    bool m_white_queens_attacked_squares_set{false};
-    bool m_black_queens_attacked_squares_set{false};
+    // For discovered checks
+    uint64_t m_blockers{};
+    bool m_blockers_set{false};
 
+    // Bits representing check info
+    bool m_is_check{false};
+    unsigned short m_check_square{65};
+    uint64_t m_check_rays{0};
+    unsigned short m_num_checks{0};
+
+    // For check info after move
+    unsigned short m_last_origin_square{};
+    unsigned short m_last_destination_square{};
+
+    // Used for zobrist key updates
     uint64_t m_zobrist_key{};
+    unsigned short m_moved_piece{}; // Used for setting check info after move
+    unsigned short m_promoted_piece{7}; // Used for setting checks info after move
+    unsigned short m_captured_piece{7}; // Used for unmakeMove too
+
     // Ply number
     unsigned short m_ply{};
+    
     // Ply info arrays
-    std::array<bool, 150> m_wkcastling_array{};
-    std::array<bool, 150> m_wqcastling_array{};
-    std::array<bool, 150> m_bkcastling_array{};
-    std::array<bool, 150> m_bqcastling_array{};
-    std::array<unsigned short, 150> m_psquare_array{};
-    std::array<uint64_t, 150> m_diagonal_pins_array{};
-    std::array<uint64_t, 150> m_straight_pins_array{};
+    std::array<bool, 128> m_wkcastling_array{};
+    std::array<bool, 128> m_wqcastling_array{};
+    std::array<bool, 128> m_bkcastling_array{};
+    std::array<bool, 128> m_bqcastling_array{};
 
-    std::array<bool, 150> m_is_check_array{};
+    std::array<uint64_t, 128> m_all_pins_array{};
+    std::array<uint64_t, 128> m_blockers_array{};
 
-    std::array<uint64_t, 150> m_squares_attacked_by_white_pawns_array{};
-    std::array<uint64_t, 150> m_squares_attacked_by_black_pawns_array{};
-    std::array<uint64_t, 150> m_squares_attacked_by_white_knights_array{};
-    std::array<uint64_t, 150> m_squares_attacked_by_black_knights_array{};
-    std::array<uint64_t, 150> m_squares_attacked_by_white_bishops_array{};
-    std::array<uint64_t, 150> m_squares_attacked_by_black_bishops_array{};
-    std::array<uint64_t, 150> m_squares_attacked_by_white_rooks_array{};
-    std::array<uint64_t, 150> m_squares_attacked_by_black_rooks_array{};
-    std::array<uint64_t, 150> m_squares_attacked_by_white_queens_array{};
-    std::array<uint64_t, 150> m_squares_attacked_by_black_queens_array{};
-    std::array<uint64_t, 150> m_squares_attacked_by_white_king_array{};
-    std::array<uint64_t, 150> m_squares_attacked_by_black_king_array{};
+    std::array<uint64_t, 128> m_zobrist_keys_array{};
 
-    std::array<uint64_t, 150> m_all_squares_attacked_by_white_array{};
-    std::array<uint64_t, 150> m_all_squares_attacked_by_black_array{};
+    std::array<unsigned short, 128> m_captured_piece_array{}; // For unmakeMove
 
-    std::array<uint64_t, 150> m_zobrist_keys_array{};
-
-    std::array<unsigned short, 150> m_captured_piece_array{};
 
 public:
     // I define the short member functions here, the rest are defined in bitposition.cpp
@@ -149,26 +121,12 @@ public:
         m_white_pieces_bit = m_white_pawns_bit | m_white_knights_bit | m_white_bishops_bit | m_white_rooks_bit | m_white_queens_bit | m_white_king_bit;
         m_black_pieces_bit = m_black_pawns_bit | m_black_knights_bit | m_black_bishops_bit | m_black_rooks_bit | m_black_queens_bit | m_black_king_bit;
         m_all_pieces_bit = m_white_pieces_bit | m_black_pieces_bit;
-        m_all_pieces_bit_without_white_king = m_all_pieces_bit & ~m_white_king_bit;
-        m_all_pieces_bit_without_black_king = m_all_pieces_bit & ~m_black_king_bit;
 
         setKingPosition();
-        setBlackBishopsAttackedSquares();
-        setBlackRooksAttackedSquares();
-        setBlackQueensAttackedSquares();
-        setWhiteBishopsAttackedSquares();
-        setWhiteRooksAttackedSquares();
-        setWhiteQueensAttackedSquares();
-        setBlackKnightsAttackedSquares();
-        setBlackKingAttackedSquares();
-        setBlackPawnsAttackedSquares();
-        setWhiteKnightsAttackedSquares();
-        setWhiteKingAttackedSquares();
-        setWhitePawnsAttackedSquares();
-
-        m_all_squares_attacked_by_white = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens | m_squares_attacked_by_white_king;
-        m_all_squares_attacked_by_black = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens | m_squares_attacked_by_black_king;
-
+        setIsCheckOnInitialization();
+        setCheckInfoOnInitialization();
+        setPins();
+        setAttackedSquares();
         initializeZobristKey();
     }
     // Function to convert a FEN string to a BitPosition object
@@ -254,144 +212,156 @@ public:
         m_white_pieces_bit = m_white_pawns_bit | m_white_knights_bit | m_white_bishops_bit | m_white_rooks_bit | m_white_queens_bit | m_white_king_bit;
         m_black_pieces_bit = m_black_pawns_bit | m_black_knights_bit | m_black_bishops_bit | m_black_rooks_bit | m_black_queens_bit | m_black_king_bit;
         m_all_pieces_bit = m_white_pieces_bit | m_black_pieces_bit;
-        m_all_pieces_bit_without_white_king = m_all_pieces_bit & ~m_white_king_bit;
-        m_all_pieces_bit_without_black_king = m_all_pieces_bit & ~m_black_king_bit;
 
         setKingPosition();
-        setBlackBishopsAttackedSquares();
-        setBlackRooksAttackedSquares();
-        setBlackQueensAttackedSquares();
-        setWhiteBishopsAttackedSquares();
-        setWhiteRooksAttackedSquares();
-        setWhiteQueensAttackedSquares();
-        setBlackKnightsAttackedSquares();
-        setBlackKingAttackedSquares();
-        setBlackPawnsAttackedSquares();
-        setWhiteKnightsAttackedSquares();
-        setWhiteKingAttackedSquares();
-        setWhitePawnsAttackedSquares();
-
-        m_all_squares_attacked_by_white = m_squares_attacked_by_white_pawns | m_squares_attacked_by_white_knights | m_squares_attacked_by_white_bishops | m_squares_attacked_by_white_rooks | m_squares_attacked_by_white_queens | m_squares_attacked_by_white_king;
-        m_all_squares_attacked_by_black = m_squares_attacked_by_black_pawns | m_squares_attacked_by_black_knights | m_squares_attacked_by_black_bishops | m_squares_attacked_by_black_rooks | m_squares_attacked_by_black_queens | m_squares_attacked_by_black_king;
-
+        setIsCheckOnInitialization();
+        setCheckInfoOnInitialization();
+        setPins();
+        setAttackedSquares();
         initializeZobristKey();
     }
+    
+    void setIsCheckOnInitialization();
+    void setCheckInfoOnInitialization();
 
     void initializeZobristKey();
     void updateZobristKeyPiecePartAfterMove(unsigned short origin_square, unsigned short destination_square);
-    void setBlackBishopsAttackedSquares();
-    void setBlackRooksAttackedSquares();
-    void setBlackQueensAttackedSquares();
-    void setWhiteBishopsAttackedSquares();
-    void setWhiteRooksAttackedSquares();
-    void setWhiteQueensAttackedSquares();
-    void setBlackKnightsAttackedSquares();
-    void setBlackKingAttackedSquares();
-    void setBlackPawnsAttackedSquares();
-    void setWhiteKnightsAttackedSquares();
-    void setWhiteKingAttackedSquares();
-    void setWhitePawnsAttackedSquares();
-    bool isCheck() const;
-    void setPinsBits();
-    void setChecksAndPinsBits();
-    bool kingIsSafeFromSliders(unsigned short destination_square) const;
+
+    void setPins();
+    void setBlockers();
+    void setAttackedSquares();
+
+    template <typename T>
+    bool isLegal(const T &move) const;
+    bool isLegalForWhite(unsigned short origin_square, unsigned short destination_square) const;
+    bool isLegalForBlack(unsigned short origin_square, unsigned short destination_square) const;
+
+    // These set the checks bits, m_is_check and m_num_checks
+    void setDiscoverCheckForWhite();
+    void setDiscoverCheckForBlack();
+
+    void setCheckInfoAfterMove();
+
+    bool newKingSquareIsSafe(unsigned short new_position) const;
+    bool newWhiteKingSquareIsSafe(unsigned short new_position) const;
+    bool newBlackKingSquareIsSafe(unsigned short new_position) const;
+
+    bool whiteSquareIsSafe(unsigned short square) const;
+    bool blackSquareIsSafe(unsigned short square) const;
+
     bool kingIsSafeAfterPassant(unsigned short removed_square_1, unsigned short removed_square_2) const;
-    std::vector<Capture> inCheckOrderedCaptures() const;
-    std::vector<Capture> orderedCaptures() const;
-    std::vector<Move> inCheckAllMoves() const;
-    std::vector<Move> allMoves() const;
-    std::vector<Move> orderAllMoves(std::vector<Move> &moves, Move ttMove) const;
+
+    void pawnAllMoves(ScoredMove*& move_list) const;
+    void knightAllMoves(ScoredMove*& move_list) const;
+    void bishopAllMoves(ScoredMove*& move_list) const;
+    void rookAllMoves(ScoredMove*& move_list) const;
+    void queenAllMoves(ScoredMove*& move_list) const;
+    void kingAllMoves(ScoredMove*& move_list) const;
+
+    void kingAllMovesInCheck(Move *&move_list) const;
+
+    void pawnCapturesAndQueenProms(ScoredMove*& move_list) const;
+    void knightCaptures(ScoredMove*& move_list) const;
+    void bishopCaptures(ScoredMove*& move_list) const;
+    void rookCaptures(ScoredMove*& move_list) const;
+    void queenCaptures(ScoredMove*& move_list) const;
+
+    template <typename T>
+    void kingCaptures(T *&move_list) const;
+
+    void inCheckPawnBlocks(Move *&move_list) const;
+    void inCheckKnightBlocks(Move *&move_list) const;
+    void inCheckBishopBlocks(Move *&move_list) const;
+    void inCheckRookBlocks(Move *&move_list) const;
+    void inCheckQueenBlocks(Move *&move_list) const;
+
+    bool isDiscoverCheckForWhite(unsigned short origin_square, unsigned short destination_square) const;
+    bool isDiscoverCheckForBlack(unsigned short origin_square, unsigned short destination_square) const;
+
+    bool isPawnCheckOrDiscoverForWhite(unsigned short origin_square, unsigned short destination_square) const;
+    bool isKnightCheckOrDiscoverForWhite(unsigned short origin_square, unsigned short destination_square) const;
+    bool isBishopCheckOrDiscoverForWhite(unsigned short origin_square, unsigned short destination_square) const;
+    bool isRookCheckOrDiscoverForWhite(unsigned short origin_square, unsigned short destination_square) const;
+    bool isQueenCheckOrDiscoverForWhite(unsigned short origin_square, unsigned short destination_square) const;
+
+    bool isPawnCheckOrDiscoverForBlack(unsigned short origin_square, unsigned short destination_square) const;
+    bool isKnightCheckOrDiscoverForBlack(unsigned short origin_square, unsigned short destination_square) const;
+    bool isBishopCheckOrDiscoverForBlack(unsigned short origin_square, unsigned short destination_square) const;
+    bool isRookCheckOrDiscoverForBlack(unsigned short origin_square, unsigned short destination_square) const;
+    bool isQueenCheckOrDiscoverForBlack(unsigned short origin_square, unsigned short destination_square) const;
+
+    void inCheckOrderedCapturesAndKingMoves(Move *&move_list) const;
+    void inCheckOrderedCaptures(Move *&move_list) const;
+
+    ScoredMove *setMovesAndScores(ScoredMove *&move_list_start);
+    Move *setMovesInCheck(Move *&move_list_start);
+    ScoredMove *setCapturesAndScores(ScoredMove *&move_list_start);
+    Move *setCapturesInCheck(Move *&move_list_start);
+
+    ScoredMove nextCapture(ScoredMove *&move_list, ScoredMove *endMoves);
+    Move nextCaptureInCheck(Move *&move_list, Move *endMoves);
+    ScoredMove nextMove(ScoredMove *&move_list, ScoredMove *endMoves);
+    Move nextMoveInCheck(Move *&move_list, Move *endMoves);
+
     std::vector<Move> orderAllMovesOnFirstIterationFirstTime(std::vector<Move> &moves, Move ttMove) const;
-    std::pair<std::vector<Move>, std::vector<float>> orderAllMovesOnFirstIteration(std::vector<Move> &moves, std::vector<float> &scores) const;
+    std::pair<std::vector<Move>, std::vector<int16_t>> orderAllMovesOnFirstIteration(std::vector<Move> &moves, std::vector<int16_t> &scores) const;
     std::vector<Move> inCheckMoves() const;
     std::vector<Move> nonCaptureMoves() const;
 
-    void setPiece();
-    void removePiece();
+    bool isStalemate() const;
+    bool isMate() const;
+    bool isThreeFold() const;
+
+    void setPiece(uint64_t origin_bit, uint64_t destination_bit);
     void storePlyInfo();
-    void makeNormalMove(Move move);
-    void makeCapture(Capture move);
-    void unmakeNormalMove(Move move);
-    void unmakeCapture(Capture move);
-    void makeNormalMoveWithoutNNUE(Move move);
-    void setSliderAttackedSquares();
-    void setAttackedSquaresAfterMove();
+    void storePlyInfoInCaptures();
+    bool moveIsReseter(Move move);
+    void resetPlyInfo();
 
-    // Member function definitions
+    template <typename T>
+    void makeMove(T move);
+    template <typename T>
+    void unmakeMove(T move);
 
-    void restorePlyInfo()
-    // This member function is used when either opponent or engine makes a capture.
-    // To make the ply info smaller. For a faster 3 fold repetition check.
-    // It isnt used when making a move in search!
-    {
-        m_ply = 0;
-        std::array<bool, 150> m_wkcastling_array{};
-        std::array<bool, 150> m_wqcastling_array{};
-        std::array<bool, 150> m_bkcastling_array{};
-        std::array<bool, 150> m_bqcastling_array{};
-        std::array<unsigned short, 150> m_psquare_array{};
-        std::array<uint64_t, 150> m_diagonal_pins_array{};
-        std::array<uint64_t, 150> m_straight_pins_array{};
+    template <typename T>
+    void makeCapture(T move);
+    template <typename T>
+    void unmakeCapture(T move);
 
-        std::array<bool, 150> m_is_check_array{};
+    std::vector<Move> inCheckAllMoves();
+    std::vector<Move> allMoves();
 
-        std::array<unsigned short, 150> m_white_king_positions_array{};
-        std::array<unsigned short, 150> m_black_king_positions_array{};
+    // Functions for tests
+    void inCheckPawnBlocksNonQueenProms(Move *&move_list) const;
+    void inCheckPawnCapturesNonQueenProms(Move *&move_list) const;
+    void inCheckPassantCaptures(Move *&move_list) const;
+    void pawnNonCapturesNonQueenProms(Move *&move_list) const;
+    void knightNonCaptures(Move*& move_list) const;
+    void bishopNonCaptures(Move*& move_list) const;
+    void rookNonCaptures(Move*& move_list) const;
+    void queenNonCaptures(Move*& move_list) const;
+    void kingNonCaptures(Move*& move_list) const;
+    void kingNonCapturesInCheck(Move *&move_list) const;
 
-        std::array<uint64_t, 150> m_squares_attacked_by_white_pawns_array{};
-        std::array<uint64_t, 150> m_squares_attacked_by_black_pawns_array{};
-        std::array<uint64_t, 150> m_squares_attacked_by_white_knights_array{};
-        std::array<uint64_t, 150> m_squares_attacked_by_black_knights_array{};
-        std::array<uint64_t, 150> m_squares_attacked_by_white_bishops_array{};
-        std::array<uint64_t, 150> m_squares_attacked_by_black_bishops_array{};
-        std::array<uint64_t, 150> m_squares_attacked_by_white_rooks_array{};
-        std::array<uint64_t, 150> m_squares_attacked_by_black_rooks_array{};
-        std::array<uint64_t, 150> m_squares_attacked_by_white_queens_array{};
-        std::array<uint64_t, 150> m_squares_attacked_by_black_queens_array{};
-        std::array<uint64_t, 150> m_squares_attacked_by_white_king_array{};
-        std::array<uint64_t, 150> m_squares_attacked_by_black_king_array{};
+    Move *setNonCaptures(Move *&move_list_start);
+    Move *setNonCapturesInCheck(Move *&move_list_start);
 
-        std::array<uint64_t, 150> m_all_squares_attacked_by_white_array{};
-        std::array<uint64_t, 150> m_all_squares_attacked_by_black_array{};
+    Move *setMovesInCheckTest(Move *&move_list_start);
+    Move *setCapturesInCheckTest(Move *&move_list_start);
 
-        std::array<uint64_t, 150> m_zobrist_keys_array{m_zobrist_key};
+    Move nextNonCapture(Move *&currentMove, Move *endMoves);
 
-        std::array<unsigned short, 150> m_captured_piece_array{};
-    }
-    bool isThreeFold()
-    {
-        if (m_zobrist_keys_array.empty())
-        {
-            return false; // Ensure there is at least one element
-        }
+    template <typename T>
+    void makeMoveWithoutNNUE(T move);
+    template <typename T>
+    void unmakeMoveWithoutNNUE(T move);
 
-        // Find the last non-zero key in the array
-        uint64_t lastKey = 0;
-        for (auto it = m_zobrist_keys_array.rbegin(); it != m_zobrist_keys_array.rend(); ++it)
-        {
-            if (*it != 0)
-            {
-                lastKey = *it;
-                break; // Break once the last non-zero key is found
-            }
-        }
+    template <typename T>
+    void makeCaptureWithoutNNUE(T move);
+    template <typename T>
+    void unmakeCaptureWithoutNNUE(T move);
 
-        // If lastKey remains 0, it means all elements were zero, or the last element is zero which should not count.
-        if (lastKey == 0)
-        {
-            return false;
-        }
-
-        int count = 0;
-        for (uint64_t key : m_zobrist_keys_array)
-        {
-            if (key == lastKey)
-            {
-                count++;
-            }
-        }
-        return count >= 3; // Return true if last non-zero position occurred at least three times
-    }
+    // Simple member function definitions
 
     void setKingPosition()
     // Set the index of the king in the board.
@@ -406,13 +376,18 @@ public:
         m_white_pieces_bit = (m_white_pawns_bit | m_white_knights_bit | m_white_bishops_bit | m_white_rooks_bit | m_white_queens_bit | m_white_king_bit);
         m_black_pieces_bit = (m_black_pawns_bit | m_black_knights_bit | m_black_bishops_bit | m_black_rooks_bit | m_black_queens_bit | m_black_king_bit);
         m_all_pieces_bit = (m_white_pieces_bit | m_black_pieces_bit);
-        m_all_pieces_bit_without_white_king = (m_all_pieces_bit & ~m_white_king_bit);
-        m_all_pieces_bit_without_black_king = (m_all_pieces_bit & ~m_black_king_bit);
     }
 
     bool getTurn() const { return m_turn; }
 
-    bool getIsCheck() const { return m_is_check; }
+    bool getIsCheck() const 
+    {
+        return m_is_check;
+    }
+    unsigned short getNumChecks() const
+    {
+        return m_num_checks;
+    }
 
     uint64_t getZobristKey() const { return m_zobrist_key; }
 
@@ -432,9 +407,6 @@ public:
 
     uint64_t getAllWhitePiecesBits() const { return m_white_pieces_bit; }
     uint64_t getAllBlackPiecesBits() const { return m_black_pieces_bit; }
-
-    uint64_t getWhiteAttackedSquaresBits() const { return m_all_squares_attacked_by_white; }
-    uint64_t getBlackAttackedSquaresBits() const { return m_all_squares_attacked_by_black; }
 
     unsigned short getMovedPiece() const { return m_moved_piece; }
     unsigned short getCapturedPiece() const { return m_captured_piece; }
@@ -466,16 +438,15 @@ public:
     }
     void printChecksInfo() const
     {
-        std::cout << "Diagonal pins " << m_diagonal_pins << "\n";
-        std::cout << "Staright pins " << m_straight_pins << "\n";
-        std::cout << "Pawns giving checks " << m_pawn_checks << "\n";
-        std::cout << "Knights giving checks " << m_knight_checks << "\n";
-        std::cout << "Bishops giving checks " << m_bishop_checks << "\n";
-        std::cout << "Rooks giving checks " << m_rook_checks << "\n";
-        std::cout << "Queens giving checks " << m_queen_checks << "\n";
+        std::cout << "Square of piece giving check " << m_check_square << "\n";
         std::cout << "Check rays " << m_check_rays << "\n";
         std::cout << "Number of checks " << m_num_checks << "\n";
-        std::cout << "Is check " << m_is_check << "\n";
+    }
+    void printPinsInfo() const
+    {
+        std::cout << "Straight pins bit " << m_straight_pins << "\n";
+        std::cout << "Diagonal pins bit " << m_diagonal_pins << "\n";
+        std::cout << "Blockers bit " << m_blockers << "\n";
     }
 
     std::string toFenString() const

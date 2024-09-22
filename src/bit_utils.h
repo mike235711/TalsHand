@@ -2,6 +2,7 @@
 #define BIT_UTILS_H
 
 #include <cstdint> // For fixed sized integers
+#include <vector>
 // Here we use inline because this permits the compiler copy inline the function
 // definitions whenever the functions name appears in the project.
 
@@ -10,16 +11,13 @@ inline int invertIndex(int index)
     int newRow{7 - (index / 8)};
     return newRow * 8 + (index % 8);
 }
-inline unsigned short getLeastSignificantBitIndex(uint64_t bitboard) // Works
-// Give a bitboard get the index of the first 1 appearing in the bit
+
+inline unsigned short getLeastSignificantBitIndex(uint64_t bitboard)
 {
-    unsigned short index {0};
-    while ((bitboard & 1) == 0)
-    {
-        bitboard >>= 1;
-        ++index;
-    }
-    return index;
+    if (bitboard == 0)
+        return 65;
+    else
+        return static_cast<unsigned short>(__builtin_ctzll(bitboard));
 }
 
 inline std::vector<unsigned short> getBitIndices(uint64_t bitboard)
