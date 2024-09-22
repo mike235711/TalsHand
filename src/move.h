@@ -16,58 +16,45 @@ static unsigned short algebraicToSquare(const std::string &square)
     return rankIndex * 8 + fileIndex; // Convert to 0-based index
 }
 
-static unsigned short pieceTypeFromChar(char promotionChar)
+static std::string squareToAlgebraic(unsigned short square)
 {
-    switch (promotionChar)
-    {
-    case 'n':
-        return 0b00; // Knight
-    case 'b':
-        return 0b01; // Bishop
-    case 'r':
-        return 0b10; // Rook
-    case 'q':
-        return 0b11; // Queen
-    default:
-        return 0;
-    }
+    std::string file(1, "abcdefgh"[square % 8]);
+    std::string rank = std::to_string(square / 8 + 1);
+    return file + rank;
 }
 
 // Moves are represented by 16bit integers
 //
-// bit  0-5: origin square (from 0 to 63)                                            0000000000111111
-// bit  6-11: destination square (from 0 to 63)                                      0000111111000000
-// bit 12-13: promotion (00 knight, 01 bishop, 10 rook, 11 queen)                    0011000000000000
-// bit 14-15: special move flag (promotion/castling 01, pawn double 10, capture 11)  1100000000000000
+// bit  0-5: origin square (from 0 to 63)                                  0000000000111111
+// bit  6-11: destination square (from 0 to 63)                            0000111111000000
+// bit 12-13: promotion (00 knight, 01 bishop, 10 rook, 11 queen)          0011000000000000
+// bit 14-15: special move flag (passant/promotion/castling 01, check 10)  1100000000000000
 
 class Move
 {
-private:
-    uint16_t data;
+protected:
 
-    static std::string squareToAlgebraic(unsigned short square)
-    {
-        std::string file(1, "abcdefgh"[square % 8]);
-        std::string rank = std::to_string(square / 8 + 1);
-        return file + rank;
-    }
+    uint16_t data;
 
 public:
     Move() : data{0} {}
     explicit Move(uint16_t value) : data{value} {}
+
+    // Neither checks or promotion
     explicit Move(unsigned short origin, unsigned short destination)
         : data{static_cast<uint16_t>(origin | (destination << 6))}
     {
     }
+    // Promotions/passant/castling without check
     explicit Move(unsigned short origin, unsigned short destination, unsigned short promotionPiece)
     {
         data = static_cast<uint16_t>(origin | (destination << 6) | (promotionPiece << 12) | 0x4000);
     }
-
     uint16_t getData() const { return data; }
 
     unsigned short getOriginSquare() const { return data & 63; }
     unsigned short getDestinationSquare() const { return (data >> 6) & 63; }
+    unsigned short getPromotingPiece() const { return (data >> 12) & 3; }
 
     std::string toString() const
     {
@@ -76,94 +63,49 @@ public:
         {
             return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare());
         }
-        // Promotion move
-        else if ((data & 0xC000) == 0x4000)
+        else if ((data & 0x4000) == 0x4000)
         {
-            char promotionChar = 'n';
-            switch ((data >> 12) & 0b11)
+            if (getDestinationSquare() <= 7 || getDestinationSquare() >= 56) // Promotions (non passant)
             {
-            case 0b00:
-                promotionChar = 'n';
-                break;
-            case 0b01:
-                promotionChar = 'b';
-                break;
-            case 0b10:
-                promotionChar = 'r';
-                break;
-            case 0b11:
-                promotionChar = 'q';
-                break;
+                char promotionChar = 'n';
+                switch ((data >> 12) & 0b11)
+                {
+                case 0b00:
+                    promotionChar = 'n';
+                    break;
+                case 0b01:
+                    promotionChar = 'b';
+                    break;
+                case 0b10:
+                    promotionChar = 'r';
+                    break;
+                case 0b11:
+                    promotionChar = 'q';
+                    break;
+                }
+                return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare()) + promotionChar;
             }
-            return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare()) + promotionChar;
         }
         // Rest of moves
         return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare());
     }
 };
 
-// Captures are represented by 16bit integers
-//
-// bit  0-5: origin square (from 0 to 63)           0000000000111111
-// bit  6-11: destination square (from 0 to 63)     0000111111000000
-// bit 12-13: moving piece/promoting piece          0111000000000000
-// (000 pawn, 001 knight, 010 bishop, 011 rook, 100 queen, 101 king)
-// bit 14-15: promotion flag                        1000000000000000
-class Capture
+// Moves which contain a score
+struct ScoredMove : public Move
 {
-private:
-    uint16_t data;
+    int8_t score;
 
-    static std::string squareToAlgebraic(unsigned short square)
-    {
-        std::string file(1, "abcdefgh"[square % 8]);
-        std::string rank = std::to_string(square / 8 + 1);
-        return file + rank;
-    }
+    // This is so that we can assign efficiently Move object to a *ScoredMove object
+    void operator=(Move m) { data = m.getData(); }
 
-public:
-    Capture() : data{0} {}
-    explicit Capture(uint16_t value) : data{value} {}
-    explicit Capture(unsigned short origin, unsigned short destination, unsigned short movingPiece)
-        : data{static_cast<uint16_t>(origin | (destination << 6) | (movingPiece << 12))}
-    {
-    }
-    explicit Capture(unsigned short origin, unsigned short destination, unsigned short movingPiece, unsigned short promotionFlag)
-        : data{static_cast<uint16_t>(origin | (destination << 6) | (movingPiece << 12) | (promotionFlag << 15))}
-    {
-    }
+    // Constructor to initialize both data (from Move) and score
+    ScoredMove(int dataValue = 0, int8_t scoreValue = 0)
+        : Move(dataValue), score(scoreValue) {}
 
-    uint16_t getData() const { return data; }
-
-    unsigned short getOriginSquare() const { return data & 63; }
-    unsigned short getDestinationSquare() const { return (data >> 6) & 63; }
-    unsigned short getMovingOrPromotingPiece() const { return (data >> 12) & 7; }
-    bool isPromotion() const { return (data >> 15) & 1; }
-
-    std::string toString() const
-    {
-        if (isPromotion())
-        {
-            char promotionChar = 'n';
-            switch (getMovingOrPromotingPiece())
-            {
-            case 0b00:
-                promotionChar = 'n';
-                break;
-            case 0b01:
-                promotionChar = 'b';
-                break;
-            case 0b10:
-                promotionChar = 'r';
-                break;
-            case 0b11:
-                promotionChar = 'q';
-                break;
-            }
-            return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare()) + promotionChar;
-        }
-        return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare());
-    }
 };
+
+// For move ordering
+inline bool operator<(const ScoredMove &a, const ScoredMove &b) { return a.score < b.score; }
 
 #endif
