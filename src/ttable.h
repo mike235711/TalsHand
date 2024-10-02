@@ -104,7 +104,7 @@ public:
         }
     }
 
-    void printTableMemory()
+    void printTableMemory() const
     {
         size_t entriesInUse = 0;
         for (size_t i = 0; i < tableSize; ++i)

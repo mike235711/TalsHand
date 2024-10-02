@@ -24,6 +24,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
     int16_t value{NNUEU::evaluationFunction(our_turn)};
     Move best_move;
     bool no_captures{true};
+
     if (not position.getIsCheck()) // Not in check
     {
         ScoredMove moves[64];
@@ -160,23 +161,27 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
 // This search is done when depth is more than 0 and considers all moves and stores positions in the transposition table
 {
     // Threefold repetition
-    if (position.isThreeFold())
+    if (position.isThreeFoldOr50MoveRule())
         return 0;
 
     bool no_moves{true};
     bool cutoff{false};
+    bool is_check{position.getIsCheck()};
 
     // Baseline evaluation
-    int16_t value{our_turn ? static_cast<int16_t>(-30001) : static_cast<int16_t>(30001)};
+    int16_t value{our_turn ? static_cast<int16_t>(-31000) : static_cast<int16_t>(31000)};
     Move best_move;
+
+    // At depths <= 0 we enter quiesence search
+    if (depth <= 0)
+        return quiesenceSearch(position, alpha, beta, our_turn);
 
     // Check if we have stored this position in ttable
     TTEntry *ttEntry = globalTT.probe(position.getZobristKey());
-    Move tt_move;
+    Move tt_move{0};
     // If position is stored in ttable
     if (ttEntry != nullptr)
     {
-        no_moves = false;
         // At ttable's shalower depth we get the best move
         if (ttEntry->getDepth() < depth)
             tt_move = ttEntry->getMove();
@@ -196,19 +201,53 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
             beta = ttEntry->getValue();
         }
     }
-    // At depths <= 0 we enter quiesence search
-    if (depth <= 0)
-        return quiesenceSearch(position, alpha, beta, our_turn);
+    // Transposition table move search
+    if (tt_move.getData() != 0 && position.ttMoveIsLegal(tt_move))
+    {
+        no_moves = false;
+
+        position.setBlockers(); // For discovered checks
+        if (our_turn) // Maximize
+        {
+            position.makeTTMove(tt_move);
+            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
+            if (child_value > value)
+            {
+                value = child_value;
+                best_move = tt_move;
+            }
+            position.unmakeTTMove(tt_move);
+            if (value >= beta)
+                cutoff = true;
+            alpha = std::max(alpha, value);
+        }
+        else // Minimize
+        {
+            position.makeTTMove(tt_move);
+            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
+            if (child_value < value)
+            {
+                value = child_value;
+                best_move = tt_move;
+            }
+            position.unmakeTTMove(tt_move);
+            if (value <= alpha)
+                cutoff = true;
+            beta = std::min(beta, value);
+        }
+    }
+    else // Ilegal tt_move
+        tt_move = Move(0);
 
     // We only search if tt_move didn't produce a cutoff in the search tree
     if (not cutoff)
     {
-        if (not position.getIsCheck()) // Not in check
+        if (not is_check) // Not in check
         {
             ScoredMove moves[256];
             ScoredMove *current_move = moves;
             ScoredMove *end_move = position.setMovesAndScores(current_move);
-            ScoredMove move = position.nextMove(current_move, end_move);
+            ScoredMove move = position.nextMove(current_move, end_move, tt_move);
             if (move.getData() != 0)
                 no_moves = false;
             if (our_turn) // Maximize
@@ -230,7 +269,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     }
 
                     alpha = std::max(alpha, value);
-                    move = position.nextMove(current_move, end_move);
+                    move = position.nextMove(current_move, end_move, tt_move);
                 }
             }
             else // Minimize
@@ -252,7 +291,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     }
 
                     beta = std::min(beta, value);
-                    move = position.nextMove(current_move, end_move);
+                    move = position.nextMove(current_move, end_move, tt_move);
                 }
             }
         }
@@ -262,7 +301,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
             Move moves[64];
             Move *current_move = moves;
             Move *end_move = position.setMovesInCheck(current_move);
-            Move move = position.nextMoveInCheck(current_move, end_move);
+            Move move = position.nextMoveInCheck(current_move, end_move, tt_move);
             if (move.getData() != 0)
                 no_moves = false;
             if (our_turn) // Maximize
@@ -284,7 +323,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     }
 
                     alpha = std::max(alpha, value);
-                    move = position.nextMoveInCheck(current_move, end_move);
+                    move = position.nextMoveInCheck(current_move, end_move, tt_move);
                 }
             }
             else // Minimize
@@ -306,7 +345,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     }
 
                     beta = std::min(beta, value);
-                    move = position.nextMoveInCheck(current_move, end_move);
+                    move = position.nextMoveInCheck(current_move, end_move, tt_move);
                 }
             }
         }
@@ -315,14 +354,14 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
     if (no_moves)
     {
         // Stalemate
-        if (not position.getIsCheck())
+        if (not is_check)
             return 0;
         // Checkmate against us
         else if (our_turn)
-            return -30000;
+            return -30000 - depth;
         // Checkmate against opponent
         else
-            return 30000;
+            return 30000 + depth;
     }
     // Saving a tt value
     if (depth >= 2)
@@ -331,7 +370,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
     return value;
 }
 
-std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &position, int8_t depth, int16_t alpha, int16_t beta, std::vector<Move> &first_moves, std::vector<int16_t> &first_moves_scores, std::chrono::milliseconds timeForMoveMS)
+std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &position, int8_t depth, int16_t alpha, int16_t beta, std::vector<Move> &first_moves, std::vector<int16_t> &first_moves_scores, std::chrono::milliseconds timeForMoveMS, std::chrono::milliseconds predictedTimeTakenMs, int &lastFirstMoveTimeTakenMS)
 // This search is done when depth is more than 0 and considers all moves
 // Note that here we have no alpha/beta cutoffs, since we are only applying the first move.
 {
@@ -370,7 +409,9 @@ std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &pos
 
     // Baseline evaluation
     int16_t value{static_cast<int16_t>(-30001)};
-    Move best_move;
+    Move best_move{0};
+
+    std::chrono::time_point<std::chrono::high_resolution_clock> first_move_start_time{std::chrono::high_resolution_clock::now()};
 
     // Maximize (it's our move)
     for (std::size_t i = 0; i < first_moves.size(); ++i)
@@ -394,6 +435,11 @@ std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &pos
             break;
     }
 
+    // Find the time taken (milliseconds) to perform search at this depth, to predict the depth + 1 search time taken (lastFirstMoveTimeTaken is an int)
+    lastFirstMoveTimeTakenMS = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                   std::chrono::high_resolution_clock::now() - first_move_start_time)
+                                   .count() + 1;
+
     // Saving an exact value
     if (depth >= 2)
         globalTT.save(position.getZobristKey(), value, depth, best_move, true);
@@ -404,6 +450,8 @@ std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &pos
 std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t fixed_max_depth)
 { 
     std::vector<Move> first_moves;
+    int lastFirstMoveTimeTakenMS {1};
+    std::chrono::milliseconds timeForMoveMS{(OURTIME + OURINC) / 7};
 
     if (position.getIsCheck())
         first_moves = position.inCheckAllMoves();
@@ -413,9 +461,7 @@ std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t fixed_max_
     // If there is only one move in the position, we make it
     if (first_moves.size() == 1) 
         return std::pair<Move, int16_t>(first_moves[0], 0);
-    
-    
-    std::chrono::milliseconds timeForMoveMS{(OURTIME + OURINC) / 20};
+
     Move bestMove{};
     int16_t bestValue;
     std::tuple<Move, int16_t, std::vector<int16_t>> tuple;
@@ -425,11 +471,20 @@ std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t fixed_max_
     // Iterative deepening
     for (int8_t depth = 1; depth <= fixed_max_depth; ++depth)
     {
-        int16_t alpha{-30002};
-        int16_t beta{30002};
+        // We are going to perform N searches of time T, where:
+        // N is first_moves.size() and T is lastFirstMoveTimeTakenMS
+        // Hence we can predict the time taken of this new search to be N * T
+        std::chrono::milliseconds predictedTimeTakenMs{first_moves.size() * lastFirstMoveTimeTakenMS};
+        
+        if (predictedTimeTakenMs >= timeForMoveMS)
+            break;
+
+        // Set best current values to worse possible ones (so that we try to improve them)
+        int16_t alpha{-31001};
+        int16_t beta{31001};
 
         // Search
-        tuple = firstMoveSearch(position, depth, alpha, beta, first_moves, first_moves_scores, timeForMoveMS);
+        tuple = firstMoveSearch(position, depth, alpha, beta, first_moves, first_moves_scores, timeForMoveMS, predictedTimeTakenMs, lastFirstMoveTimeTakenMS);
         bestMove = std::get<0>(tuple);
         bestValue = std::get<1>(tuple);
         first_moves_scores = std::get<2>(tuple);

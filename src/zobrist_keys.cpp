@@ -37,7 +37,8 @@ namespace zobrist_keys
     {
         // Generate random numbers
         const size_t totalNumbers = 801;
-        auto randomNumbers = generateRandomNumbers(totalNumbers, 96620);
+        uint64_t seed = 71262;
+        auto randomNumbers = generateRandomNumbers(totalNumbers, seed);
 
         // Fill arrays with random numbers
         for (size_t i = 0; i < 64; ++i)

@@ -78,18 +78,27 @@ private:
     unsigned short m_ply{};
     
     // Ply info arrays
-    std::array<bool, 128> m_wkcastling_array{};
-    std::array<bool, 128> m_wqcastling_array{};
-    std::array<bool, 128> m_bkcastling_array{};
-    std::array<bool, 128> m_bqcastling_array{};
+    std::array<bool, 64> m_wkcastling_array{};
+    std::array<bool, 64> m_wqcastling_array{};
+    std::array<bool, 64> m_bkcastling_array{};
+    std::array<bool, 64> m_bqcastling_array{};
 
-    std::array<uint64_t, 128> m_all_pins_array{};
-    std::array<uint64_t, 128> m_blockers_array{};
+    std::array<uint64_t, 64> m_all_pins_array{};
+    std::array<uint64_t, 64> m_straight_pins_array{};
+    std::array<uint64_t, 64> m_diagonal_pins_array{};
+    std::array<uint64_t, 64> m_blockers_array{};
 
-    std::array<uint64_t, 128> m_zobrist_keys_array{};
+    std::array<unsigned short, 64> m_last_origin_square_array{};
+    std::array<unsigned short, 64> m_last_destination_square_array{};
+    std::array<unsigned short, 64> m_moved_piece_array{};
+    std::array<unsigned short, 64> m_promoted_piece_array{};
+    std::array<unsigned short, 64> m_psquare_array{};
 
-    std::array<unsigned short, 128> m_captured_piece_array{}; // For unmakeMove
+    std::array<uint64_t, 64> m_zobrist_keys_array{};
 
+    std::array<unsigned short, 64> m_captured_piece_array{}; // For unmakeMove
+
+    // std::array<std::string, 64> m_fen_array{}; // For debugging purposes
 
 public:
     // I define the short member functions here, the rest are defined in bitposition.cpp
@@ -227,6 +236,11 @@ public:
     void initializeZobristKey();
     void updateZobristKeyPiecePartAfterMove(unsigned short origin_square, unsigned short destination_square);
 
+    bool ttMoveIsLegal(Move move);
+    void storePlyInfoInTTMove();
+    void makeTTMove(Move tt_move);
+    void unmakeTTMove(Move move);
+
     void setPins();
     void setBlockers();
     void setAttackedSquares();
@@ -300,8 +314,8 @@ public:
 
     ScoredMove nextCapture(ScoredMove *&move_list, ScoredMove *endMoves);
     Move nextCaptureInCheck(Move *&move_list, Move *endMoves);
-    ScoredMove nextMove(ScoredMove *&move_list, ScoredMove *endMoves);
-    Move nextMoveInCheck(Move *&move_list, Move *endMoves);
+    ScoredMove nextMove(ScoredMove *&move_list, ScoredMove *endMoves, Move ttMove);
+    Move nextMoveInCheck(Move *&move_list, Move *endMoves, Move ttMove);
 
     std::vector<Move> orderAllMovesOnFirstIterationFirstTime(std::vector<Move> &moves, Move ttMove) const;
     std::pair<std::vector<Move>, std::vector<int16_t>> orderAllMovesOnFirstIteration(std::vector<Move> &moves, std::vector<int16_t> &scores) const;
@@ -310,7 +324,7 @@ public:
 
     bool isStalemate() const;
     bool isMate() const;
-    bool isThreeFold() const;
+    bool isThreeFoldOr50MoveRule() const;
 
     void setPiece(uint64_t origin_bit, uint64_t destination_bit);
     void storePlyInfo();
@@ -327,6 +341,11 @@ public:
     void makeCapture(T move);
     template <typename T>
     void unmakeCapture(T move);
+
+    template <typename T>
+    void makeCaptureWithoutNNUE(T move);
+    template <typename T>
+    void unmakeCaptureWithoutNNUE(T move);
 
     std::vector<Move> inCheckAllMoves();
     std::vector<Move> allMoves();
@@ -350,16 +369,6 @@ public:
     Move *setCapturesInCheckTest(Move *&move_list_start);
 
     Move nextNonCapture(Move *&currentMove, Move *endMoves);
-
-    template <typename T>
-    void makeMoveWithoutNNUE(T move);
-    template <typename T>
-    void unmakeMoveWithoutNNUE(T move);
-
-    template <typename T>
-    void makeCaptureWithoutNNUE(T move);
-    template <typename T>
-    void unmakeCaptureWithoutNNUE(T move);
 
     // Simple member function definitions
 
@@ -390,6 +399,7 @@ public:
     }
 
     uint64_t getZobristKey() const { return m_zobrist_key; }
+    std::array<uint64_t, 64> getZobristKeysArray() const { return m_zobrist_keys_array; }
 
     uint64_t getWhitePawnsBits() const { return m_white_pawns_bit; }
     uint64_t getWhiteKnightsBits() const { return m_white_knights_bit; }
