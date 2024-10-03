@@ -179,28 +179,34 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
     // Check if we have stored this position in ttable
     TTEntry *ttEntry = globalTT.probe(position.getZobristKey());
     Move tt_move{0};
+    bool is_pv_node{false};
     // If position is stored in ttable
     if (ttEntry != nullptr)
     {
-        // At ttable's shalower depth we get the best move
-        if (ttEntry->getDepth() < depth)
-            tt_move = ttEntry->getMove();
-        // Exact value at deeper depth
-        else if (ttEntry->getDepth() >= depth && ttEntry->getIsExact())
-            return ttEntry->getValue();
-        // Lower bound at deeper depth
-        else if (ttEntry->getDepth() >= depth && our_turn)
+        // We are in a PV-Node
+        if (ttEntry->getIsExact())
         {
+            if (ttEntry->getDepth() >= depth)
+                return ttEntry->getValue();
+            is_pv_node = true;
             tt_move = ttEntry->getMove();
-            alpha = ttEntry->getValue();
         }
-        // Upper bound at deeper depth
+        // We are not in a PV-Node
         else
         {
             tt_move = ttEntry->getMove();
-            beta = ttEntry->getValue();
+            if (ttEntry->getDepth() >= depth)
+            {
+                // Lower bound at deeper depth
+                if (our_turn)
+                    alpha = ttEntry->getValue();
+                // Upper bound at deeper depth
+                else
+                    beta = ttEntry->getValue();
+            }
         }
     }
+
     // Transposition table move search
     if (tt_move.getData() != 0 && position.ttMoveIsLegal(tt_move))
     {
@@ -364,8 +370,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
             return 30000 + depth;
     }
     // Saving a tt value
-    if (depth >= 2)
-        globalTT.save(position.getZobristKey(), value, depth, best_move, not cutoff);
+    globalTT.save(position.getZobristKey(), value, depth, best_move, not cutoff);
 
     return value;
 }
@@ -412,7 +417,7 @@ std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &pos
     Move best_move{0};
 
     std::chrono::time_point<std::chrono::high_resolution_clock> first_move_start_time{std::chrono::high_resolution_clock::now()};
-
+    Move newKiller{};
     // Maximize (it's our move)
     for (std::size_t i = 0; i < first_moves.size(); ++i)
     {
@@ -441,8 +446,7 @@ std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &pos
                                    .count() + 1;
 
     // Saving an exact value
-    if (depth >= 2)
-        globalTT.save(position.getZobristKey(), value, depth, best_move, true);
+    globalTT.save(position.getZobristKey(), value, depth, best_move, true);
 
     return std::tuple<Move, int16_t, std::vector<int16_t>>(best_move, value, first_moves_scores);
 }

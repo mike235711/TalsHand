@@ -68,6 +68,8 @@ private:
     unsigned short m_last_origin_square{};
     unsigned short m_last_destination_square{};
 
+    uint64_t m_last_destination_bit{};
+
     // Used for zobrist key updates
     uint64_t m_zobrist_key{};
     unsigned short m_moved_piece{}; // Used for setting check info after move
@@ -280,6 +282,24 @@ public:
     void rookCaptures(ScoredMove*& move_list) const;
     void queenCaptures(ScoredMove*& move_list) const;
 
+    void refutationMoves(Move *&move_list);
+    void capturingQueensGood(Move *&move_list);
+    void capturingRooksGood(Move *&move_list);
+    void capturingBishopsGood(Move *&move_list);
+    void capturingKnightsGood(Move *&move_list);
+
+    void pawnSafeMoves(ScoredMove *&move_list);
+    void knightSafeMoves(ScoredMove *&move_list);
+    void bishopSafeMoves(ScoredMove *&move_list);
+    void rookSafeMoves(ScoredMove *&move_list);
+    void queenSafeMoves(ScoredMove *&move_list);
+
+    void capturingQueensUnsafeBad(Move *&move_list);
+    void capturingRooksUnsafeBad(Move *&move_list);
+    void capturingBishopsUnsafeBad(Move *&move_list);
+    void capturingKnightsUnsafeBad(Move *&move_list);
+    void capturingPawnsUnsafe(Move *&move_list);
+
     template <typename T>
     void kingCaptures(T *&move_list) const;
 
@@ -307,6 +327,10 @@ public:
     void inCheckOrderedCapturesAndKingMoves(Move *&move_list) const;
     void inCheckOrderedCaptures(Move *&move_list) const;
 
+    Move *setGoodCaptures(Move *&currentMove);
+    ScoredMove *setSafeMovesAndScores(ScoredMove *&move_list_start);
+    Move *setUnsafeBadCaptures(Move *&currentMove);
+
     ScoredMove *setMovesAndScores(ScoredMove *&move_list_start);
     Move *setMovesInCheck(Move *&move_list_start);
     ScoredMove *setCapturesAndScores(ScoredMove *&move_list_start);
@@ -326,7 +350,7 @@ public:
     bool isMate() const;
     bool isThreeFoldOr50MoveRule() const;
 
-    void setPiece(uint64_t origin_bit, uint64_t destination_bit);
+    void setPiece(uint64_t &origin_bit, uint64_t &destination_bit);
     void storePlyInfo();
     void storePlyInfoInCaptures();
     bool moveIsReseter(Move move);
