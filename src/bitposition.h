@@ -48,7 +48,6 @@ private:
     // For ilegal moves
     uint64_t m_straight_pins{};
     uint64_t m_diagonal_pins{};
-    uint64_t m_all_pins{};
 
     uint64_t m_unsafe_squares{};
 
@@ -85,7 +84,6 @@ private:
     std::array<bool, 64> m_bkcastling_array{};
     std::array<bool, 64> m_bqcastling_array{};
 
-    std::array<uint64_t, 64> m_all_pins_array{};
     std::array<uint64_t, 64> m_straight_pins_array{};
     std::array<uint64_t, 64> m_diagonal_pins_array{};
     std::array<uint64_t, 64> m_blockers_array{};
@@ -99,6 +97,7 @@ private:
     std::array<uint64_t, 64> m_zobrist_keys_array{};
 
     std::array<unsigned short, 64> m_captured_piece_array{}; // For unmakeMove
+    std::array<uint64_t, 64> m_unsafe_squares_array{};
 
     // std::array<std::string, 64> m_fen_array{}; // For debugging purposes
 
@@ -282,23 +281,20 @@ public:
     void rookCaptures(ScoredMove*& move_list) const;
     void queenCaptures(ScoredMove*& move_list) const;
 
-    void refutationMoves(Move *&move_list);
-    void capturingQueensGood(Move *&move_list);
-    void capturingRooksGood(Move *&move_list);
-    void capturingBishopsGood(Move *&move_list);
-    void capturingKnightsGood(Move *&move_list);
+    Move *setRefutationMovesOrdered(Move *&move_list);
+    Move *setGoodCapturesOrdered(Move *&move_list);
 
-    void pawnSafeMoves(ScoredMove *&move_list);
-    void knightSafeMoves(ScoredMove *&move_list);
-    void bishopSafeMoves(ScoredMove *&move_list);
-    void rookSafeMoves(ScoredMove *&move_list);
-    void queenSafeMoves(ScoredMove *&move_list);
+    void pawnSafeMoves(ScoredMove *&move_list) const;
+    void knightSafeMoves(ScoredMove *&move_list) const;
+    void bishopSafeMoves(ScoredMove *&move_list) const;
+    void rookSafeMoves(ScoredMove *&move_list) const;
+    void queenSafeMoves(ScoredMove *&move_list) const;
 
-    void capturingQueensUnsafeBad(Move *&move_list);
-    void capturingRooksUnsafeBad(Move *&move_list);
-    void capturingBishopsUnsafeBad(Move *&move_list);
-    void capturingKnightsUnsafeBad(Move *&move_list);
-    void capturingPawnsUnsafe(Move *&move_list);
+    void pawnBadCapturesOrUnsafeNonCaptures(Move *&move_list);
+    void knightBadCapturesOrUnsafeNonCaptures(Move *&move_list);
+    void bishopBadCapturesOrUnsafeNonCaptures(Move *&move_list);
+    void rookBadCapturesOrUnsafeNonCaptures(Move *&move_list);
+    void queenBadCapturesOrUnsafeNonCaptures(Move *&move_list);
 
     template <typename T>
     void kingCaptures(T *&move_list) const;
@@ -327,19 +323,18 @@ public:
     void inCheckOrderedCapturesAndKingMoves(Move *&move_list) const;
     void inCheckOrderedCaptures(Move *&move_list) const;
 
-    Move *setGoodCaptures(Move *&currentMove);
     ScoredMove *setSafeMovesAndScores(ScoredMove *&move_list_start);
-    Move *setUnsafeBadCaptures(Move *&currentMove);
+    Move *setBadCapturesOrUnsafeMoves(Move *&currentMove);
 
     ScoredMove *setMovesAndScores(ScoredMove *&move_list_start);
     Move *setMovesInCheck(Move *&move_list_start);
     ScoredMove *setCapturesAndScores(ScoredMove *&move_list_start);
-    Move *setCapturesInCheck(Move *&move_list_start);
+    Move *setOrderedCapturesInCheck(Move *&move_list_start);
 
-    ScoredMove nextCapture(ScoredMove *&move_list, ScoredMove *endMoves);
-    Move nextCaptureInCheck(Move *&move_list, Move *endMoves);
-    ScoredMove nextMove(ScoredMove *&move_list, ScoredMove *endMoves, Move ttMove);
-    Move nextMoveInCheck(Move *&move_list, Move *endMoves, Move ttMove);
+    ScoredMove nextScoredMove(ScoredMove *&move_list, ScoredMove *endMoves);
+    Move nextMove(Move *&move_list, Move *endMoves);
+    ScoredMove nextScoredMove(ScoredMove *&move_list, ScoredMove *endMoves, Move ttMove);
+    Move nextMove(Move *&move_list, Move *endMoves, Move ttMove);
 
     std::vector<Move> orderAllMovesOnFirstIterationFirstTime(std::vector<Move> &moves, Move ttMove) const;
     std::pair<std::vector<Move>, std::vector<int16_t>> orderAllMovesOnFirstIteration(std::vector<Move> &moves, std::vector<int16_t> &scores) const;
@@ -350,7 +345,7 @@ public:
     bool isMate() const;
     bool isThreeFoldOr50MoveRule() const;
 
-    void setPiece(uint64_t &origin_bit, uint64_t &destination_bit);
+    void setPiece(uint64_t origin_bit, uint64_t destination_bit);
     void storePlyInfo();
     void storePlyInfoInCaptures();
     bool moveIsReseter(Move move);
@@ -384,6 +379,7 @@ public:
     void rookNonCaptures(Move*& move_list) const;
     void queenNonCaptures(Move*& move_list) const;
     void kingNonCaptures(Move*& move_list) const;
+    void kingNonCaptures(ScoredMove *&move_list) const;
     void kingNonCapturesInCheck(Move *&move_list) const;
 
     Move *setNonCaptures(Move *&move_list_start);
@@ -391,8 +387,6 @@ public:
 
     Move *setMovesInCheckTest(Move *&move_list_start);
     Move *setCapturesInCheckTest(Move *&move_list_start);
-
-    Move nextNonCapture(Move *&currentMove, Move *endMoves);
 
     // Simple member function definitions
 

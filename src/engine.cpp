@@ -21,16 +21,16 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
 // This search is done when depth is less than or equal to 0 and considers only captures and promotions
 {
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
-    int16_t value{NNUEU::evaluationFunction(our_turn)};
+    int16_t value{NNUE::evaluationFunction(our_turn)};
     Move best_move;
     bool no_captures{true};
 
     if (not position.getIsCheck()) // Not in check
     {
-        ScoredMove moves[64];
-        ScoredMove *current_move = moves;
+        ScoredMove captures[64];
+        ScoredMove *current_move = captures;
         ScoredMove *end_move = position.setCapturesAndScores(current_move);
-        ScoredMove capture = position.nextCapture(current_move, end_move);
+        ScoredMove capture = position.nextScoredMove(current_move, end_move);
         
         if (capture.getData() != 0)
             no_captures = false;
@@ -51,7 +51,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
                     break;
 
                 alpha = std::max(alpha, value);
-                capture = position.nextCapture(current_move, end_move);
+                capture = position.nextScoredMove(current_move, end_move);
             }
         }
         else // Minimize
@@ -70,7 +70,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
                     break;
 
                 beta = std::min(beta, value);
-                capture = position.nextCapture(current_move, end_move);
+                capture = position.nextScoredMove(current_move, end_move);
             }
         }
     }
@@ -79,8 +79,8 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
         // Before generating in check moves we need the checks info
         Move moves[32];
         Move *current_move = moves;
-        Move *end_move = position.setCapturesInCheck(current_move);
-        Move capture = position.nextCaptureInCheck(current_move, end_move);
+        Move *end_move = position.setOrderedCapturesInCheck(current_move);
+        Move capture = position.nextMove(current_move, end_move);
         
         if (capture.getData() != 0)
             no_captures = false;
@@ -101,7 +101,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
                     break;
 
                 alpha = std::max(alpha, value);
-                capture = position.nextCaptureInCheck(current_move, end_move);
+                capture = position.nextMove(current_move, end_move);
             }
         }
         else // Minimize
@@ -120,7 +120,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
                     break;
 
                 beta = std::min(beta, value);
-                capture = position.nextCaptureInCheck(current_move, end_move);
+                capture = position.nextMove(current_move, end_move);
             }
         }
     }
@@ -141,7 +141,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
             }
             // In check quiet position
             else
-                return NNUEU::evaluationFunction(our_turn);
+                return NNUE::evaluationFunction(our_turn);
         }
         // If there is no check we check for bad captures
         else
@@ -151,7 +151,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
                 return 0;
             // Quiet position
             else
-                return NNUEU::evaluationFunction(our_turn);
+                return NNUE::evaluationFunction(our_turn);
         }
     }
     return value;
@@ -253,7 +253,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
             ScoredMove moves[256];
             ScoredMove *current_move = moves;
             ScoredMove *end_move = position.setMovesAndScores(current_move);
-            ScoredMove move = position.nextMove(current_move, end_move, tt_move);
+            ScoredMove move = position.nextScoredMove(current_move, end_move, tt_move);
             if (move.getData() != 0)
                 no_moves = false;
             if (our_turn) // Maximize
@@ -275,7 +275,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     }
 
                     alpha = std::max(alpha, value);
-                    move = position.nextMove(current_move, end_move, tt_move);
+                    move = position.nextScoredMove(current_move, end_move, tt_move);
                 }
             }
             else // Minimize
@@ -297,7 +297,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     }
 
                     beta = std::min(beta, value);
-                    move = position.nextMove(current_move, end_move, tt_move);
+                    move = position.nextScoredMove(current_move, end_move, tt_move);
                 }
             }
         }
@@ -307,7 +307,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
             Move moves[64];
             Move *current_move = moves;
             Move *end_move = position.setMovesInCheck(current_move);
-            Move move = position.nextMoveInCheck(current_move, end_move, tt_move);
+            Move move = position.nextMove(current_move, end_move, tt_move);
             if (move.getData() != 0)
                 no_moves = false;
             if (our_turn) // Maximize
@@ -329,7 +329,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     }
 
                     alpha = std::max(alpha, value);
-                    move = position.nextMoveInCheck(current_move, end_move, tt_move);
+                    move = position.nextMove(current_move, end_move, tt_move);
                 }
             }
             else // Minimize
@@ -351,7 +351,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     }
 
                     beta = std::min(beta, value);
-                    move = position.nextMoveInCheck(current_move, end_move, tt_move);
+                    move = position.nextMove(current_move, end_move, tt_move);
                 }
             }
         }

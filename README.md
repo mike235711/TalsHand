@@ -14,11 +14,15 @@ My Neural Network implementation uses SIMD instructions (currently only compatib
 
 There are many choices of search algorithms for chess engines (in general most 2 player games), however alpha-beta pruning is the most efficient, because it prunes branches of the tree search that one doesn't need to search. 
 
-On top of the alpha beta search I have added a score to moves depending on capturing pieces, pawns and making checks. The algorithm is contructed such that it considers high score moves first, making it faster because it prunes more branches. 
-
 I have also applied quiescence search so that in tactical positions (when there are possible captures) it makes captures (I want to include some checks) until a quiet position is reached.
 
+A common technique to implement with alpha-beta pruning is iterative deepening. It consists of performing iterative searches of increasing depths. Which allow for fast move ordering using the transposition table at low depths making higher depths more efficient.
+
+When searching for moves I have added a score to moves depending on capturing pieces, making checks and move safety. The algorithm is contructed such that it considers high score moves first, making it faster because it prunes more branches. 
+
 The engine updates internally a Zobrist key each time a move is made, these keys correspond to the positions almost uniquely. The keys allow to efficiently check for threefold repetitions, and a transposition table in which the evaluation, best move and move type (see ttable.h) are stored for each zobrist key.
+
+The transposition table makes it possible to check for principal variation nodes. These are positions which are a result of the best move played (from engine's point of view) previously within the search tree. These allows to perform a principal variation search, searching mor thoroughly after a principal variation move, and less thoroughly otherwise.
 
 To play a game against the engine, download this repository and you can load the engine to any UCI compatible chess GUI (such as BANKSIAGUI).
 
@@ -26,13 +30,17 @@ Hope you enjoy and beat the engine :)
 
 
 To do:
-* Late move reductions
-* Futility pruning
+* PV move search
+* Pruning at shallow depth 
 * Search extensions
-* Pruning at shallow depth
-* 50 move rule
-* Killer moves
+* Late move reductions / extensions
+
+* Futility pruning
 * Null move pruning
+* Internal Iterative deepening
+
+Tried but didn't improve engine:
+* Killer moves
 
 # NNUEU (Ultra Efficiently Updatable Neural Networks)
 
