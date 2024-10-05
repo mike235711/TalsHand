@@ -251,7 +251,7 @@ public:
     bool isLegalForWhite(unsigned short origin_square, unsigned short destination_square) const;
     bool isLegalForBlack(unsigned short origin_square, unsigned short destination_square) const;
 
-    // These set the checks bits, m_is_check and m_num_checks
+    // These set the checks bits, m_is_check and m_num_checks    
     void setDiscoverCheckForWhite();
     void setDiscoverCheckForBlack();
 
@@ -305,6 +305,9 @@ public:
     void inCheckRookBlocks(Move *&move_list) const;
     void inCheckQueenBlocks(Move *&move_list) const;
 
+    bool isDiscoverCheckForWhiteAfterPassant(unsigned short origin_square, unsigned short destination_square) const;
+    bool isDiscoverCheckForBlackAfterPassant(unsigned short origin_square, unsigned short destination_square) const;
+
     bool isDiscoverCheckForWhite(unsigned short origin_square, unsigned short destination_square) const;
     bool isDiscoverCheckForBlack(unsigned short origin_square, unsigned short destination_square) const;
 
@@ -344,6 +347,8 @@ public:
     bool isStalemate() const;
     bool isMate() const;
     bool isThreeFoldOr50MoveRule() const;
+    int m_50_move_count{1};
+    std::array<int, 64> m_50_move_count_array{};
 
     void setPiece(uint64_t origin_bit, uint64_t destination_bit);
     void storePlyInfo();

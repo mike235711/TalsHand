@@ -21,7 +21,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
 // This search is done when depth is less than or equal to 0 and considers only captures and promotions
 {
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
-    int16_t value{NNUE::evaluationFunction(our_turn)};
+    int16_t value{NNUEU::evaluationFunction(our_turn)};
     Move best_move;
     bool no_captures{true};
 
@@ -135,23 +135,23 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
             if (position.isMate())
             {
                 if (our_turn)
-                    return -30000;
+                    return 0;
                 else
                     return 30000;
             }
             // In check quiet position
             else
-                return NNUE::evaluationFunction(our_turn);
+                return NNUEU::evaluationFunction(our_turn);
         }
         // If there is no check we check for bad captures
         else
         {
             // Stalemate
             if (position.isStalemate())
-                return 0;
+                return 2048;
             // Quiet position
             else
-                return NNUE::evaluationFunction(our_turn);
+                return NNUEU::evaluationFunction(our_turn);
         }
     }
     return value;
@@ -162,7 +162,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
 {
     // Threefold repetition
     if (position.isThreeFoldOr50MoveRule())
-        return 0;
+        return 2048;
 
     bool no_moves{true};
     bool cutoff{false};
@@ -364,7 +364,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
             return 0;
         // Checkmate against us
         else if (our_turn)
-            return -30000 - depth;
+            return - depth;
         // Checkmate against opponent
         else
             return 30000 + depth;
