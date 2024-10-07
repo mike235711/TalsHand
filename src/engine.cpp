@@ -21,7 +21,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
 // This search is done when depth is less than or equal to 0 and considers only captures and promotions
 {
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
-    int16_t value{NNUEU::evaluationFunction(our_turn)};
+    int16_t value{NNUE::evaluationFunction(our_turn)};
     Move best_move;
     bool no_captures{true};
 
@@ -141,7 +141,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
             }
             // In check quiet position
             else
-                return NNUEU::evaluationFunction(our_turn);
+                return NNUE::evaluationFunction(our_turn);
         }
         // If there is no check we check for bad captures
         else
@@ -151,7 +151,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
                 return 2048;
             // Quiet position
             else
-                return NNUEU::evaluationFunction(our_turn);
+                return NNUE::evaluationFunction(our_turn);
         }
     }
     return value;
@@ -188,6 +188,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
         {
             if (ttEntry->getDepth() >= depth)
                 return ttEntry->getValue();
+                
             is_pv_node = true;
             tt_move = ttEntry->getMove();
         }
@@ -361,7 +362,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
     {
         // Stalemate
         if (not is_check)
-            return 0;
+            return 2048;
         // Checkmate against us
         else if (our_turn)
             return - depth;
@@ -430,6 +431,7 @@ std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &pos
             value = child_value;
             best_move = move;
         }
+        
         position.unmakeMove(move);
         alpha = std::max(alpha, value);
 

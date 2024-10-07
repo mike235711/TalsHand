@@ -26,7 +26,7 @@ bool ENGINEISWHITE;
 int OURTIME;
 int OURINC;
 std::chrono::time_point<std::chrono::high_resolution_clock> STARTTIME;
-int TTSIZE{19};
+int TTSIZE{24};
 
 void printArray(const char *name, const int16_t *array, size_t size)
 {
@@ -130,11 +130,13 @@ Move findCaptureMoveFromString(std::string moveString, BitPosition position)
 int main()
 {
     // Initialize std::vectors of NNUEInput layers as global variables
-    NNUEU::initNNUEParameters();
+    NNUE::initNNUEParameters();
 
     // Initialize magic numbers and zobrist numbers
     initmagicmoves();
     zobrist_keys::initializeZobristNumbers();
+
+    zobrist_keys::printAllZobristKeys();
 
     // Initialize position object
     std::string inputLine;
@@ -182,7 +184,7 @@ int main()
 
             position = BitPosition(fen);
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position);
+            NNUE::initializeNNUEInput(position);
             
             std::string moveUci;
             while (iss >> command)
@@ -227,7 +229,7 @@ int main()
                     iss >> OURINC;
             }
 
-            std::cout << "Static Eval Before Move: " << NNUEU::evaluationFunction(true) << "\n";
+            std::cout << "Static Eval Before Move: " << NNUE::evaluationFunction(true) << "\n";
             // Call the engine
             STARTTIME = std::chrono::high_resolution_clock::now();
             auto [bestMove, bestValue]{iterativeSearch(position)};
@@ -239,9 +241,9 @@ int main()
 
             // Static eval after making move (testing purposes)
             position.makeMove(bestMove);
-            std::cout << "Static Eval After Move: " << NNUEU::evaluationFunction(false) << "\n";
-            NNUEU::initializeNNUEInput(position);
-            std::cout << "Static Eval After Move: " << NNUEU::evaluationFunction(false) << "\n";
+            std::cout << "Static Eval After Move: " << NNUE::evaluationFunction(false) << "\n";
+            NNUE::initializeNNUEInput(position);
+            std::cout << "Static Eval After Move: " << NNUE::evaluationFunction(false) << "\n";
 
             // Check transposition table memory
             globalTT.printTableMemory();
@@ -287,7 +289,7 @@ int main()
             // Position 1
             std::cout << "Position 1 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_1);
+            NNUE::initializeNNUEInput(position_1);
             auto start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -301,7 +303,7 @@ int main()
             // Position 2
             std::cout << "Position 2 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_2);
+            NNUE::initializeNNUEInput(position_2);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -314,7 +316,7 @@ int main()
             // Position 3
             std::cout << "Position 3 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_3);
+            NNUE::initializeNNUEInput(position_3);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -327,7 +329,7 @@ int main()
             // Position 4
             std::cout << "Position 4 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_4);
+            NNUE::initializeNNUEInput(position_4);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -341,7 +343,7 @@ int main()
             // Position 5
             std::cout << "Position 5 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_5);
+            NNUE::initializeNNUEInput(position_5);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -355,7 +357,7 @@ int main()
             // Position 6
             std::cout << "Position 6 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_6);
+            NNUE::initializeNNUEInput(position_6);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -396,7 +398,7 @@ int main()
             // Position 1
             std::cout << "Position 1 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_1);
+            NNUE::initializeNNUEInput(position_1);
             auto start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -410,7 +412,7 @@ int main()
             // Position 2
             std::cout << "Position 2 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_2);
+            NNUE::initializeNNUEInput(position_2);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -423,7 +425,7 @@ int main()
             // Position 3
             std::cout << "Position 3 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_3);
+            NNUE::initializeNNUEInput(position_3);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -437,7 +439,7 @@ int main()
             // Position 4
             std::cout << "Position 4 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_4);
+            NNUE::initializeNNUEInput(position_4);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -451,7 +453,7 @@ int main()
             // Position 5
             std::cout << "Position 5 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_5);
+            NNUE::initializeNNUEInput(position_5);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -465,7 +467,7 @@ int main()
             // Position 6
             std::cout << "Position 6 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_6);
+            NNUE::initializeNNUEInput(position_6);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -505,7 +507,7 @@ int main()
             // Position 1
             std::cout << "Position 1 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_1);
+            NNUE::initializeNNUEInput(position_1);
             auto start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -519,7 +521,7 @@ int main()
             // Position 2
             std::cout << "Position 2 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_2);
+            NNUE::initializeNNUEInput(position_2);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -532,7 +534,7 @@ int main()
             // Position 3
             std::cout << "Position 3 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_3);
+            NNUE::initializeNNUEInput(position_3);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -546,7 +548,7 @@ int main()
             // Position 4
             std::cout << "Position 4 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_4);
+            NNUE::initializeNNUEInput(position_4);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -560,7 +562,7 @@ int main()
             // Position 5
             std::cout << "Position 5 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_5);
+            NNUE::initializeNNUEInput(position_5);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -574,7 +576,7 @@ int main()
             // Position 6
             std::cout << "Position 6 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_6);
+            NNUE::initializeNNUEInput(position_6);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -615,7 +617,7 @@ int main()
             // Position 1
             std::cout << "Position 1 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_1);
+            NNUE::initializeNNUEInput(position_1);
             auto start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -629,7 +631,7 @@ int main()
             // Position 2
             std::cout << "Position 2 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_2);
+            NNUE::initializeNNUEInput(position_2);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -642,7 +644,7 @@ int main()
             // Position 3
             std::cout << "Position 3 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_3);
+            NNUE::initializeNNUEInput(position_3);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -656,7 +658,7 @@ int main()
             // Position 4
             std::cout << "Position 4 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_4);
+            NNUE::initializeNNUEInput(position_4);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -670,7 +672,7 @@ int main()
             // Position 5
             std::cout << "Position 5 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_5);
+            NNUE::initializeNNUEInput(position_5);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -684,7 +686,7 @@ int main()
             // Position 6
             std::cout << "Position 6 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_6);
+            NNUE::initializeNNUEInput(position_6);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -724,7 +726,7 @@ int main()
             // Position 1
             std::cout << "Position 1 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_1);
+            NNUE::initializeNNUEInput(position_1);
             auto start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -738,7 +740,7 @@ int main()
             // Position 2
             std::cout << "Position 2 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_2);
+            NNUE::initializeNNUEInput(position_2);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -752,7 +754,7 @@ int main()
             // Position 3
             std::cout << "Position 3 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_3);
+            NNUE::initializeNNUEInput(position_3);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -766,7 +768,7 @@ int main()
             // Position 4
             std::cout << "Position 4 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_4);
+            NNUE::initializeNNUEInput(position_4);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -779,7 +781,7 @@ int main()
             // Position 5
             std::cout << "Position 5 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_5);
+            NNUE::initializeNNUEInput(position_5);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -794,7 +796,7 @@ int main()
             // Position 6
             std::cout << "Position 6 \n";
             // Initialize NNUE input std::vec
-            NNUEU::initializeNNUEInput(position_6);
+            NNUE::initializeNNUEInput(position_6);
             start = std::chrono::high_resolution_clock::now(); // Start timing
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
@@ -837,7 +839,7 @@ int main()
             std::chrono::duration<double> duration{0};
 
             // Position 1
-            NNUEU::initializeNNUEInput(position_1);
+            NNUE::initializeNNUEInput(position_1);
             globalTT.resize(1 << 20);
             std::cout << "Position 1: \n";
             std::cout << "Best move should be a1a6 \n";
@@ -852,7 +854,7 @@ int main()
             duration += (end - start); // Calculate duration
 
             // Position 2
-            NNUEU::initializeNNUEInput(position_2);
+            NNUE::initializeNNUEInput(position_2);
             globalTT.resize(1 << 20);
             std::cout << "Position 2: \n";
             std::cout << "Best move should be c6c7 \n";
@@ -867,7 +869,7 @@ int main()
             duration += (end - start); // Calculate duration
 
             // Position 3
-            NNUEU::initializeNNUEInput(position_3);
+            NNUE::initializeNNUEInput(position_3);
             globalTT.resize(1 << 20);
             std::cout << "Position 3: \n";
             std::cout << "Best move should be b2b4 \n";
@@ -882,7 +884,7 @@ int main()
             duration += (end - start); // Calculate duration
 
             // Position 4
-            NNUEU::initializeNNUEInput(position_4);
+            NNUE::initializeNNUEInput(position_4);
             globalTT.resize(1 << 20);
             std::cout << "Position 4: \n";
             std::cout << "Best move should be c6b6 \n";
@@ -897,7 +899,7 @@ int main()
             duration += (end - start); // Calculate duration
 
             // Position 5
-            NNUEU::initializeNNUEInput(position_5);
+            NNUE::initializeNNUEInput(position_5);
             globalTT.resize(1 << 20);
             std::cout << "Position 5: \n";
             std::cout << "Best move should be f4e5 \n";
@@ -912,7 +914,7 @@ int main()
             duration += (end - start); // Calculate duration
 
             // Position 6
-            NNUEU::initializeNNUEInput(position_6);
+            NNUE::initializeNNUEInput(position_6);
             globalTT.resize(1 << 20);
             std::cout << "Position 6: \n";
             std::cout << "Best move should be h8h2 \n";
@@ -927,7 +929,7 @@ int main()
             duration += (end - start); // Calculate duration
 
             // Position 7
-            NNUEU::initializeNNUEInput(position_7);
+            NNUE::initializeNNUEInput(position_7);
             globalTT.resize(1 << 20);
             std::cout << "Position 7: \n";
             std::cout << "Best move should be b2b8 \n";
@@ -948,36 +950,36 @@ int main()
         {
             // Position at initialization
             BitPosition positionAfter_e2e3{BitPosition("rnbqkbnr/pppppppp/8/8/8/4P3/PPPP1PPP/RNBQKBNR b KQkq - 0 1")};
-            NNUEU::initializeNNUEInput(positionAfter_e2e3);
-            std::cout << "Eval our turn: " << NNUEU::evaluationFunction(true) << "\n";
-            std::cout << "Eval not our turn: " << NNUEU::evaluationFunction(false) << "\n";
-            // printArray("White turn Accumulator", NNUEU::inputWhiteTurn, 8);
-            // printArray("Black turn Accumulator", NNUEU::inputBlackTurn, 8);
+            NNUE::initializeNNUEInput(positionAfter_e2e3);
+            std::cout << "Eval our turn: " << NNUE::evaluationFunction(true) << "\n";
+            std::cout << "Eval not our turn: " << NNUE::evaluationFunction(false) << "\n";
+            // printArray("White turn Accumulator", NNUE::inputWhiteTurn, 8);
+            // printArray("Black turn Accumulator", NNUE::inputBlackTurn, 8);
 
             // Position accumulated
             BitPosition position_1{BitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
-            NNUEU::initializeNNUEInput(position_1);
+            NNUE::initializeNNUEInput(position_1);
             position_1.makeMove(findNormalMoveFromString("e2e3", position_1));
-            std::cout << "Eval our turn: " << NNUEU::evaluationFunction(true) << "\n";
-            std::cout << "Eval not our turn: " << NNUEU::evaluationFunction(false) << "\n";
-            // printArray("White turn Accumulator", NNUEU::inputWhiteTurn, 8);
-            // printArray("Black turn Accumulator", NNUEU::inputBlackTurn, 8);
+            std::cout << "Eval our turn: " << NNUE::evaluationFunction(true) << "\n";
+            std::cout << "Eval not our turn: " << NNUE::evaluationFunction(false) << "\n";
+            // printArray("White turn Accumulator", NNUE::inputWhiteTurn, 8);
+            // printArray("Black turn Accumulator", NNUE::inputBlackTurn, 8);
 
             // Position at initialization
             BitPosition position2{BitPosition("7r/3qrpbk/1p1p1np1/p1nP3p/P1P1pP2/1P2B2P/3NBRP1/3Q1R1K b - - 2 24")};
-            NNUEU::initializeNNUEInput(position2);
-            std::cout << "Eval our turn: " << NNUEU::evaluationFunction(true) << "\n";
-            std::cout << "Eval not our turn: " << NNUEU::evaluationFunction(false) << "\n";
-            // printArray("White turn Accumulator", NNUEU::inputWhiteTurn, 8);
-            // printArray("Black turn Accumulator", NNUEU::inputBlackTurn, 8);
+            NNUE::initializeNNUEInput(position2);
+            std::cout << "Eval our turn: " << NNUE::evaluationFunction(true) << "\n";
+            std::cout << "Eval not our turn: " << NNUE::evaluationFunction(false) << "\n";
+            // printArray("White turn Accumulator", NNUE::inputWhiteTurn, 8);
+            // printArray("Black turn Accumulator", NNUE::inputBlackTurn, 8);
 
             // Position at initialization
             BitPosition position3{BitPosition("4q2k/4rp2/1p1p2p1/p2P2Pn/P1P5/1P1p1Q2/3N1R2/5RK1 b - - 1 33")};
-            NNUEU::initializeNNUEInput(position3);
-            std::cout << "Eval our turn: " << NNUEU::evaluationFunction(true) << "\n";
-            std::cout << "Eval not our turn: " << NNUEU::evaluationFunction(false) << "\n";
-            // printArray("White turn Accumulator", NNUEU::inputWhiteTurn, 8);
-            // printArray("Black turn Accumulator", NNUEU::inputBlackTurn, 8);
+            NNUE::initializeNNUEInput(position3);
+            std::cout << "Eval our turn: " << NNUE::evaluationFunction(true) << "\n";
+            std::cout << "Eval not our turn: " << NNUE::evaluationFunction(false) << "\n";
+            // printArray("White turn Accumulator", NNUE::inputWhiteTurn, 8);
+            // printArray("Black turn Accumulator", NNUE::inputBlackTurn, 8);
         }
         // Generate data for NNUE further training
         else if (inputLine == "generateData")
@@ -1060,7 +1062,7 @@ int main()
                 std::cout << "New initial position \n";
                 nnueTT.resize(1 << 21);
                 BitPosition position{"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"};
-                NNUEU::initializeNNUEInput(position);
+                NNUE::initializeNNUEInput(position);
                 bool gameEnded{false};
                 while (not gameEnded)
                 {
