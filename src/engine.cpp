@@ -16,6 +16,45 @@ extern int OURTIME;
 extern int OURINC;
 extern std::chrono::time_point<std::chrono::high_resolution_clock> STARTTIME;
 
+int DEPTH;
+Move ourMoveMade;
+
+std::unordered_map<Move, std::vector<int16_t>> moveDepthValues;
+
+bool stopSearch(const std::vector<int16_t> &values, int streak, int depth, BitPosition position)
+{
+    // If not endgame
+    if (not position.isEndgame())
+    {
+        if (streak > 6 && depth > 7)
+            return true;
+        // Check if the move's score has just increased over time
+        for (std::size_t i = 1; i < values.size(); ++i)
+        {
+            if (values[i] <= values[i - 1])
+                return false;
+        }
+
+        if (streak > 5 && depth > 7)
+            return true;
+    }
+    // If endgame
+    else
+    {
+        if (streak > 8 && depth > 9)
+            return true;
+        // Check if the move's score has just increased over time
+        for (std::size_t i = 1; i < values.size(); ++i)
+        {
+            if (values[i] <= values[i - 1])
+                return false;
+        }
+
+        if (streak > 6 && depth > 8)
+            return true;
+    }
+    return false;
+}
 
 int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool our_turn)
 // This search is done when depth is less than or equal to 0 and considers only captures and promotions
@@ -24,53 +63,95 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
     int16_t value{NNUE::evaluationFunction(our_turn)};
     Move best_move;
     bool no_captures{true};
+    bool cutoff{false};
+    Move refutation{};
 
     if (not position.getIsCheck()) // Not in check
     {
-        ScoredMove captures[64];
-        ScoredMove *current_move = captures;
-        ScoredMove *end_move = position.setCapturesAndScores(current_move);
-        ScoredMove capture = position.nextScoredMove(current_move, end_move);
-        
-        if (capture.getData() != 0)
-            no_captures = false;
-
-        if (our_turn) // Maximize
+        refutation = position.getBestRefutation();
+        // Refutation
+        if (refutation.getData() != 0)
         {
-            while (capture.getData() != 0)
+            no_captures = false;
+            if (our_turn) // Maximize
             {
-                position.makeCapture(capture);
+                position.makeCapture(refutation);
                 int16_t child_value{quiesenceSearch(position, alpha, beta, false)};
                 if (child_value > value)
                 {
                     value = child_value;
-                    best_move = capture;
+                    best_move = refutation;
                 }
-                position.unmakeCapture(capture);
+                position.unmakeCapture(refutation);
                 if (value >= beta)
-                    break;
+                    cutoff = true;
 
                 alpha = std::max(alpha, value);
-                capture = position.nextScoredMove(current_move, end_move);
             }
-        }
-        else // Minimize
-        {
-            while (capture.getData() != 0)
+            else // Minimize
             {
-                position.makeCapture(capture);
+                position.makeCapture(refutation);
                 int16_t child_value{quiesenceSearch(position, alpha, beta, true)};
                 if (child_value < value)
                 {
                     value = child_value;
-                    best_move = capture;
+                    best_move = refutation;
                 }
-                position.unmakeCapture(capture);
+                position.unmakeCapture(refutation);
                 if (value <= alpha)
-                    break;
+                    cutoff = true;
 
                 beta = std::min(beta, value);
-                capture = position.nextScoredMove(current_move, end_move);
+            }
+        }
+        if (not cutoff)
+        {
+            // All non refutations
+            ScoredMove captures[64];
+            ScoredMove *current_move = captures;
+            ScoredMove *end_move = position.setCapturesAndScores(current_move);
+            ScoredMove capture = position.nextScoredMove(current_move, end_move, refutation);
+            
+            if (capture.getData() != 0)
+                no_captures = false;
+
+            if (our_turn) // Maximize
+            {
+                while (capture.getData() != 0)
+                {
+                    position.makeCapture(capture);
+                    int16_t child_value{quiesenceSearch(position, alpha, beta, false)};
+                    if (child_value > value)
+                    {
+                        value = child_value;
+                        best_move = capture;
+                    }
+                    position.unmakeCapture(capture);
+                    if (value >= beta)
+                        break;
+
+                    alpha = std::max(alpha, value);
+                    capture = position.nextScoredMove(current_move, end_move, refutation);
+                }
+            }
+            else // Minimize
+            {
+                while (capture.getData() != 0)
+                {
+                    position.makeCapture(capture);
+                    int16_t child_value{quiesenceSearch(position, alpha, beta, true)};
+                    if (child_value < value)
+                    {
+                        value = child_value;
+                        best_move = capture;
+                    }
+                    position.unmakeCapture(capture);
+                    if (value <= alpha)
+                        break;
+
+                    beta = std::min(beta, value);
+                    capture = position.nextScoredMove(current_move, end_move, refutation);
+                }
             }
         }
     }
@@ -209,7 +290,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
     }
 
     // Transposition table move search
-    if (tt_move.getData() != 0 && position.ttMoveIsLegal(tt_move))
+    if (tt_move.getData() != 0)
     {
         no_moves = false;
 
@@ -243,62 +324,282 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
             beta = std::min(beta, value);
         }
     }
-    else // Ilegal tt_move
-        tt_move = Move(0);
 
     // We only search if tt_move didn't produce a cutoff in the search tree
     if (not cutoff)
     {
         if (not is_check) // Not in check
         {
-            ScoredMove moves[256];
-            ScoredMove *current_move = moves;
-            ScoredMove *end_move = position.setMovesAndScores(current_move);
-            ScoredMove move = position.nextScoredMove(current_move, end_move, tt_move);
-            if (move.getData() != 0)
-                no_moves = false;
-            if (our_turn) // Maximize
+            if (is_pv_node) // PV Nodes usually dont produce cutoffs so we generate all moves in one
             {
-                while (move.getData() != 0)
+                if (not cutoff)
                 {
-                    position.makeMove(move);
-                    int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
-                    if (child_value > value)
+                    // Refutation moves ordered
+                    Move refutationMoves[64];
+                    Move *current_move = refutationMoves;
+                    Move *end_move = position.setRefutationMovesOrdered(current_move);
+                    Move move = position.nextMove(current_move, end_move, tt_move);
+                    if (move.getData() != 0)
+                        no_moves = false;
+                    if (our_turn) // Maximize
                     {
-                        value = child_value;
-                        best_move = move;
-                    }
-                    position.unmakeMove(move);
-                    if (value >= beta)
-                    {
-                        cutoff = true;
-                        break;
-                    }
+                        while (move.getData() != 0)
+                        {
+                            position.makeMove(move);
+                            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
+                            if (child_value > value)
+                            {
+                                value = child_value;
+                                best_move = move;
+                            }
+                            position.unmakeMove(move);
+                            if (value >= beta)
+                            {
+                                cutoff = true;
+                                break;
+                            }
 
-                    alpha = std::max(alpha, value);
-                    move = position.nextScoredMove(current_move, end_move, tt_move);
+                            alpha = std::max(alpha, value);
+                            move = position.nextMove(current_move, end_move, tt_move);
+                        }
+                    }
+                    else // Minimize
+                    {
+                        while (move.getData() != 0)
+                        {
+                            position.makeMove(move);
+                            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
+                            if (child_value < value)
+                            {
+                                value = child_value;
+                                best_move = move;
+                            }
+                            position.unmakeMove(move);
+                            if (value <= alpha)
+                            {
+                                cutoff = true;
+                                break;
+                            }
+
+                            beta = std::min(beta, value);
+                            move = position.nextMove(current_move, end_move, tt_move);
+                        }
+                    }
+                }
+                if (not cutoff)
+                {
+                    // Good captures ordered
+                    Move goodCaptures[64];
+                    Move *current_move = goodCaptures;
+                    Move *end_move = position.setGoodCapturesOrdered(current_move);
+                    Move move = position.nextMove(current_move, end_move);
+                    if (move.getData() != 0)
+                        no_moves = false;
+                    if (our_turn) // Maximize
+                    {
+                        while (move.getData() != 0)
+                        {
+                            position.makeMove(move);
+                            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
+                            if (child_value > value)
+                            {
+                                value = child_value;
+                                best_move = move;
+                            }
+                            position.unmakeMove(move);
+                            if (value >= beta)
+                            {
+                                cutoff = true;
+                                break;
+                            }
+
+                            alpha = std::max(alpha, value);
+                            move = position.nextMove(current_move, end_move, tt_move);
+                        }
+                    }
+                    else // Minimize
+                    {
+                        while (move.getData() != 0)
+                        {
+                            position.makeMove(move);
+                            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
+                            if (child_value < value)
+                            {
+                                value = child_value;
+                                best_move = move;
+                            }
+                            position.unmakeMove(move);
+                            if (value <= alpha)
+                            {
+                                cutoff = true;
+                                break;
+                            }
+
+                            beta = std::min(beta, value);
+                            move = position.nextMove(current_move, end_move, tt_move);
+                        }
+                    }
+                }
+                if (not cutoff)
+                {
+                    // Safe moves
+                    ScoredMove safeMoves[128];
+                    ScoredMove *currSafeMove = safeMoves;
+                    ScoredMove *endSafeMove = position.setSafeMovesAndScores(currSafeMove);
+                    ScoredMove safe_move = position.nextScoredMove(currSafeMove, endSafeMove);
+                    if (safe_move.getData() != 0)
+                        no_moves = false;
+                    if (our_turn) // Maximize
+                    {
+                        while (safe_move.getData() != 0)
+                        {
+                            position.makeMove(safe_move);
+                            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
+                            if (child_value > value)
+                            {
+                                value = child_value;
+                                best_move = safe_move;
+                            }
+                            position.unmakeMove(safe_move);
+                            if (value >= beta)
+                            {
+                                cutoff = true;
+                                break;
+                            }
+
+                            alpha = std::max(alpha, value);
+                            safe_move = position.nextScoredMove(currSafeMove, endSafeMove, tt_move);
+                        }
+                    }
+                    else // Minimize
+                    {
+                        while (safe_move.getData() != 0)
+                        {
+                            position.makeMove(safe_move);
+                            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
+                            if (child_value < value)
+                            {
+                                value = child_value;
+                                best_move = safe_move;
+                            }
+                            position.unmakeMove(safe_move);
+                            if (value <= alpha)
+                            {
+                                cutoff = true;
+                                break;
+                            }
+
+                            beta = std::min(beta, value);
+                            safe_move = position.nextScoredMove(currSafeMove, endSafeMove, tt_move);
+                        }
+                    }
+                }
+                if (not cutoff)
+                {
+                    // Bad captures
+                    Move badCaptures[64];
+                    Move *current_move = badCaptures;
+                    Move *end_move = position.setBadCapturesOrUnsafeMoves(current_move);
+                    Move move = position.nextMove(current_move, end_move);
+                    if (move.getData() != 0)
+                        no_moves = false;
+                    if (our_turn) // Maximize
+                    {
+                        while (move.getData() != 0)
+                        {
+                            position.makeMove(move);
+                            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
+                            if (child_value > value)
+                            {
+                                value = child_value;
+                                best_move = move;
+                            }
+                            position.unmakeMove(move);
+                            if (value >= beta)
+                            {
+                                cutoff = true;
+                                break;
+                            }
+
+                            alpha = std::max(alpha, value);
+                            move = position.nextMove(current_move, end_move, tt_move);
+                        }
+                    }
+                    else // Minimize
+                    {
+                        while (move.getData() != 0)
+                        {
+                            position.makeMove(move);
+                            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
+                            if (child_value < value)
+                            {
+                                value = child_value;
+                                best_move = move;
+                            }
+                            position.unmakeMove(move);
+                            if (value <= alpha)
+                            {
+                                cutoff = true;
+                                break;
+                            }
+
+                            beta = std::min(beta, value);
+                            move = position.nextMove(current_move, end_move, tt_move);
+                        }
+                    }
                 }
             }
-            else // Minimize
+            else // Non PV nodes
             {
-                while (move.getData() != 0)
+                ScoredMove moves[256];
+                ScoredMove *current_move = moves;
+                ScoredMove *end_move = position.setMovesAndScores(current_move);
+                ScoredMove move = position.nextScoredMove(current_move, end_move, tt_move);
+                if (move.getData() != 0)
+                    no_moves = false;
+                if (our_turn) // Maximize
                 {
-                    position.makeMove(move);
-                    int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
-                    if (child_value < value)
+                    while (move.getData() != 0)
                     {
-                        value = child_value;
-                        best_move = move;
-                    }
-                    position.unmakeMove(move);
-                    if (value <= alpha)
-                    {
-                        cutoff = true;
-                        break;
-                    }
+                        position.makeMove(move);
+                        int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
+                        if (child_value > value)
+                        {
+                            value = child_value;
+                            best_move = move;
+                        }
+                        position.unmakeMove(move);
+                        if (value >= beta)
+                        {
+                            cutoff = true;
+                            break;
+                        }
 
-                    beta = std::min(beta, value);
-                    move = position.nextScoredMove(current_move, end_move, tt_move);
+                        alpha = std::max(alpha, value);
+                        move = position.nextScoredMove(current_move, end_move, tt_move);
+                    }
+                }
+                else // Minimize
+                {
+                    while (move.getData() != 0)
+                    {
+                        position.makeMove(move);
+                        int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
+                        if (child_value < value)
+                        {
+                            value = child_value;
+                            best_move = move;
+                        }
+                        position.unmakeMove(move);
+                        if (value <= alpha)
+                        {
+                            cutoff = true;
+                            break;
+                        }
+
+                        beta = std::min(beta, value);
+                        move = position.nextScoredMove(current_move, end_move, tt_move);
+                    }
                 }
             }
         }
@@ -422,19 +723,19 @@ std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &pos
     // Maximize (it's our move)
     for (std::size_t i = 0; i < first_moves.size(); ++i)
     {
-        Move move{first_moves[i]};
-        position.makeMove(move);
+        ourMoveMade = first_moves[i];
+        position.makeMove(ourMoveMade);
         int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
         first_moves_scores[i] = child_value;
         if (child_value > value)
         {
             value = child_value;
-            best_move = move;
+            best_move = ourMoveMade;
         }
         
-        position.unmakeMove(move);
+        position.unmakeMove(ourMoveMade);
         alpha = std::max(alpha, value);
-
+        moveDepthValues[ourMoveMade].emplace_back(value);
         // Calculate the elapsed time in milliseconds
         std::chrono::duration<double, std::milli> duration = std::chrono::high_resolution_clock::now() - STARTTIME;
         // Check if the duration has been exceeded
@@ -453,11 +754,12 @@ std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &pos
     return std::tuple<Move, int16_t, std::vector<int16_t>>(best_move, value, first_moves_scores);
 }
 
-std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t fixed_max_depth)
-{ 
+std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t start_depth, int8_t fixed_max_depth)
+{
+    moveDepthValues = {};
     std::vector<Move> first_moves;
     int lastFirstMoveTimeTakenMS {1};
-    std::chrono::milliseconds timeForMoveMS{(OURTIME + OURINC) / 7};
+    std::chrono::milliseconds timeForMoveMS{(OURTIME + OURINC) / 6};
 
     if (position.getIsCheck())
         first_moves = position.inCheckAllMoves();
@@ -469,13 +771,14 @@ std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t fixed_max_
         return std::pair<Move, int16_t>(first_moves[0], 0);
 
     Move bestMove{};
+    Move bestMovePreviousDepth{};
     int16_t bestValue;
     std::tuple<Move, int16_t, std::vector<int16_t>> tuple;
     std::vector<int16_t> first_moves_scores; // For first move ordering
-    int8_t last_depth;
-    
+    int streak = 1;                          // To keep track of the improvement streak
+
     // Iterative deepening
-    for (int8_t depth = 1; depth <= fixed_max_depth; ++depth)
+    for (int8_t depth = start_depth; depth <= fixed_max_depth; ++depth)
     {
         // We are going to perform N searches of time T, where:
         // N is first_moves.size() and T is lastFirstMoveTimeTakenMS
@@ -495,14 +798,27 @@ std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t fixed_max_
         bestValue = std::get<1>(tuple);
         first_moves_scores = std::get<2>(tuple);
 
-        last_depth = depth;
+        DEPTH = static_cast<int>(depth);
+        
+        if (bestMove.getData() == bestMovePreviousDepth.getData())
+            streak++;
+        else
+        {
+            bestMovePreviousDepth = bestMove;
+            streak = 1;
+        }
+        // Check stop condition based on streak and improvement pattern
+        if (stopSearch(moveDepthValues[bestMove], streak, depth, position))
+            break;
 
         // Calculate the elapsed time in milliseconds
         std::chrono::duration<double, std::milli> duration = std::chrono::high_resolution_clock::now() - STARTTIME;
         // Check if the duration has been exceeded
         if (duration >= timeForMoveMS)
             break;
+
     }
-    std::cout << "Depth: " << unsigned(last_depth) << "\n";
+
+    std::cout << "Depth: " << DEPTH << "\n";
     return std::pair<Move, int16_t>(bestMove, bestValue);
 }

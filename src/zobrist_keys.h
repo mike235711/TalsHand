@@ -5,6 +5,7 @@
 #include <vector>
 #include <unordered_set>
 #include <random>
+#include <iostream>
 
 namespace zobrist_keys
 {
@@ -26,6 +27,8 @@ namespace zobrist_keys
 
     std::vector<uint64_t> generateRandomNumbers(size_t count, uint64_t seed);
     void initializeZobristNumbers();
+
+    void printAllZobristKeys();
 }
 
 #endif // ZOBRIST_KEYS_H

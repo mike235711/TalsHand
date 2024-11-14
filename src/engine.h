@@ -18,5 +18,5 @@ extern int OURTIME;
 extern int OURINC;
 extern std::chrono::time_point<std::chrono::high_resolution_clock> STARTTIME;
 
-std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t fixed_max_depth = 100);
+std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t start_depth, int8_t fixed_max_depth = 100);
 #endif

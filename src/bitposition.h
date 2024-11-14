@@ -99,6 +99,8 @@ private:
     std::array<unsigned short, 64> m_captured_piece_array{}; // For unmakeMove
     std::array<uint64_t, 64> m_unsafe_squares_array{};
 
+    std::array<uint64_t, 64> m_last_destination_bit_array{};
+
     // std::array<std::string, 64> m_fen_array{}; // For debugging purposes
 
 public:
@@ -275,11 +277,15 @@ public:
 
     void kingAllMovesInCheck(Move *&move_list) const;
 
+    Move getBestRefutation();
+
     void pawnCapturesAndQueenProms(ScoredMove*& move_list) const;
     void knightCaptures(ScoredMove*& move_list) const;
     void bishopCaptures(ScoredMove*& move_list) const;
     void rookCaptures(ScoredMove*& move_list) const;
     void queenCaptures(ScoredMove*& move_list) const;
+    void kingCaptures(ScoredMove *&move_list) const;
+    void kingCaptures(Move *&move_list) const;
 
     Move *setRefutationMovesOrdered(Move *&move_list);
     Move *setGoodCapturesOrdered(Move *&move_list);
@@ -289,6 +295,7 @@ public:
     void bishopSafeMoves(ScoredMove *&move_list) const;
     void rookSafeMoves(ScoredMove *&move_list) const;
     void queenSafeMoves(ScoredMove *&move_list) const;
+    void kingNonCapturesAndPawnCaptures(ScoredMove *&move_list) const;
 
     void pawnBadCapturesOrUnsafeNonCaptures(Move *&move_list);
     void knightBadCapturesOrUnsafeNonCaptures(Move *&move_list);
@@ -374,6 +381,21 @@ public:
     std::vector<Move> inCheckAllMoves();
     std::vector<Move> allMoves();
 
+    bool isEndgame() const
+    {
+        // Count the number of set bits (pieces) for each piece type
+        int white_major_pieces = countBits(m_white_rooks_bit) + countBits(m_white_queens_bit);
+        int white_minor_pieces = countBits(m_white_knights_bit) + countBits(m_white_bishops_bit);
+        int black_major_pieces = countBits(m_black_rooks_bit) + countBits(m_black_queens_bit);
+        int black_minor_pieces = countBits(m_black_knights_bit) + countBits(m_black_bishops_bit);
+
+        // Total number of major and minor pieces
+        int total_major_pieces = white_major_pieces + black_major_pieces;
+        int total_minor_pieces = white_minor_pieces + black_minor_pieces;
+
+        return total_major_pieces <= 2 && total_minor_pieces <= 3;
+    }
+
     // Functions for tests
     void inCheckPawnBlocksNonQueenProms(Move *&move_list) const;
     void inCheckPawnCapturesNonQueenProms(Move *&move_list) const;
@@ -384,7 +406,6 @@ public:
     void rookNonCaptures(Move*& move_list) const;
     void queenNonCaptures(Move*& move_list) const;
     void kingNonCaptures(Move*& move_list) const;
-    void kingNonCaptures(ScoredMove *&move_list) const;
     void kingNonCapturesInCheck(Move *&move_list) const;
 
     Move *setNonCaptures(Move *&move_list_start);
@@ -423,6 +444,15 @@ public:
 
     uint64_t getZobristKey() const { return m_zobrist_key; }
     std::array<uint64_t, 64> getZobristKeysArray() const { return m_zobrist_keys_array; }
+    void printZobristKeys() const
+    {
+        std::array<uint64_t, 64> keys = getZobristKeysArray();
+        for (size_t i = 0; i < keys.size(); ++i)
+        {
+            if (keys[i] != 0)
+                std::cout << "Key[" << i << "] = " << keys[i] << "\n";
+        }
+    }
 
     uint64_t getWhitePawnsBits() const { return m_white_pawns_bit; }
     uint64_t getWhiteKnightsBits() const { return m_white_knights_bit; }

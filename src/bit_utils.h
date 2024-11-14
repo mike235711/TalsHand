@@ -91,4 +91,16 @@ inline std::vector<uint64_t> generateSubbits(uint64_t bit) // Works
     }
     return subbits;
 }
+
+// Helper function to count the number of set bits in a 64-bit integer
+inline int countBits(uint64_t bitboard)
+{
+    int count = 0;
+    while (bitboard)
+    {
+        bitboard &= (bitboard - 1); // Clear the least significant bit set
+        count++;
+    }
+    return count;
+}
 #endif // BIT_UTILS_H

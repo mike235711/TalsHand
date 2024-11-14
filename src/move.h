@@ -89,6 +89,11 @@ public:
         // Rest of moves
         return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare());
     }
+    // Equality operator
+    bool operator==(const Move &other) const
+    {
+        return data == other.data;
+    }
 };
 
 // Moves which contain a score
@@ -107,5 +112,18 @@ struct ScoredMove : public Move
 
 // For move ordering
 inline bool operator<(const ScoredMove &a, const ScoredMove &b) { return a.score < b.score; }
+
+// Hash specialization for Move
+namespace std
+{
+    template <>
+    struct hash<Move>
+    {
+        std::size_t operator()(const Move &move) const
+        {
+            return std::hash<uint16_t>()(move.getData());
+        }
+    };
+}
 
 #endif

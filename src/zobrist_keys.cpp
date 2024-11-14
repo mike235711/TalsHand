@@ -57,7 +57,7 @@ namespace zobrist_keys
             blackKingZobristNumbers[i] = randomNumbers[64 * 11 + i];
         }
         // Initialize zobrist number turn
-        uint64_t blackToMoveZobristNumber = randomNumbers[12 * 64];
+        blackToMoveZobristNumber = randomNumbers[12 * 64];
 
         // 16 Castling numbers, one for each combination
         for (size_t i = 0; i < 16; ++i)
@@ -71,5 +71,34 @@ namespace zobrist_keys
             passantSquaresZobristNumbers[16 + i] = randomNumbers[(12 * 64) + 17 + i];
             passantSquaresZobristNumbers[40 + i] = randomNumbers[(12 * 64) + 25 + i];
         }
+    }
+    template <size_t N>
+    void printZobristArray(const std::array<uint64_t, N> &arr, const std::string &name)
+    {
+        std::cout << name << ":\n";
+        for (size_t i = 0; i < N; ++i)
+        {
+            std::cout << arr[i] << " ";
+        }
+        std::cout << "\n";
+    }
+
+    void printAllZobristKeys()
+    {
+        printZobristArray(whitePawnZobristNumbers, "whitePawnZobristNumbers");
+        printZobristArray(whiteKnightZobristNumbers, "whiteKnightZobristNumbers");
+        printZobristArray(whiteBishopZobristNumbers, "whiteBishopZobristNumbers");
+        printZobristArray(whiteRookZobristNumbers, "whiteRookZobristNumbers");
+        printZobristArray(whiteQueenZobristNumbers, "whiteQueenZobristNumbers");
+        printZobristArray(whiteKingZobristNumbers, "whiteKingZobristNumbers");
+        printZobristArray(blackPawnZobristNumbers, "blackPawnZobristNumbers");
+        printZobristArray(blackKnightZobristNumbers, "blackKnightZobristNumbers");
+        printZobristArray(blackBishopZobristNumbers, "blackBishopZobristNumbers");
+        printZobristArray(blackRookZobristNumbers, "blackRookZobristNumbers");
+        printZobristArray(blackQueenZobristNumbers, "blackQueenZobristNumbers");
+        printZobristArray(blackKingZobristNumbers, "blackKingZobristNumbers");
+        std::cout << "blackToMoveZobristNumber: " << blackToMoveZobristNumber << "\n";
+        printZobristArray(castlingRightsZobristNumbers, "castlingRightsZobristNumbers");
+        printZobristArray(passantSquaresZobristNumbers, "passantSquaresZobristNumbers");
     }
 }

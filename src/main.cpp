@@ -22,11 +22,11 @@
 
 TranspositionTable globalTT;
 TranspositionTableNNUE nnueTT; // For position generator
-bool ENGINEISWHITE;
-int OURTIME;
-int OURINC;
-std::chrono::time_point<std::chrono::high_resolution_clock> STARTTIME;
-int TTSIZE{24};
+bool ENGINEISWHITE; 
+int OURTIME; // Talhands time left
+int OURINC; // Increment per move
+std::chrono::time_point<std::chrono::high_resolution_clock> STARTTIME; // Starting thinking time point
+int TTSIZE{23};
 
 void printArray(const char *name, const int16_t *array, size_t size)
 {
@@ -129,6 +129,8 @@ Move findCaptureMoveFromString(std::string moveString, BitPosition position)
 
 int main()
 {
+    int startDepth{0};
+
     // Initialize std::vectors of NNUEInput layers as global variables
     NNUE::initNNUEParameters();
 
@@ -136,7 +138,7 @@ int main()
     initmagicmoves();
     zobrist_keys::initializeZobristNumbers();
 
-    zobrist_keys::printAllZobristKeys();
+    // zobrist_keys::printAllZobristKeys();
 
     // Initialize position object
     std::string inputLine;
@@ -186,14 +188,16 @@ int main()
             // Initialize NNUE input std::vec
             NNUE::initializeNNUEInput(position);
             
-            std::string moveUci;
+            Move move;
+            Move lastMove;
             while (iss >> command)
             {
                 // Apply each move in the moves list
-                moveUci = command;
-                Move move{findNormalMoveFromString(moveUci, position)};
-
-                bool reseterMove{false};             
+                std::string moveUci{command};
+                move = findNormalMoveFromString(moveUci, position);
+                if (move.getData() != 0)
+                    lastMove = move;
+                bool reseterMove{false};
 
                 if (move.getData() != 0)
                 {
@@ -204,13 +208,12 @@ int main()
                 }
 
                 // If we make a capture we cant go back to previous positions so we empty
-                // the plyInfo (for threefold checking) in position and the TransPosition table
+                // the plyInfo (for threefold checking) in position
                 if (reseterMove)
-                {
                     position.resetPlyInfo();
-                    globalTT.resize(1 << TTSIZE);
-                }
+                globalTT.resize(1 << TTSIZE);
             }
+            startDepth = 2;
         }
         // Thinking after opponent made move
         else if (inputLine.substr(0, 2) == "go")
@@ -232,7 +235,7 @@ int main()
             std::cout << "Static Eval Before Move: " << NNUE::evaluationFunction(true) << "\n";
             // Call the engine
             STARTTIME = std::chrono::high_resolution_clock::now();
-            auto [bestMove, bestValue]{iterativeSearch(position)};
+            auto [bestMove, bestValue]{iterativeSearch(position, startDepth)};
 
             // Send our best move through a UCI command
             std::cout << "Eval: " << bestValue << "\n";
@@ -245,17 +248,10 @@ int main()
             NNUE::initializeNNUEInput(position);
             std::cout << "Static Eval After Move: " << NNUE::evaluationFunction(false) << "\n";
 
+            // position.printZobristKeys();
+
             // Check transposition table memory
             globalTT.printTableMemory();
-
-            // Debugging purposes
-            // for (uint64_t zobrist_key : position.getZobristKeysArray())
-            //     std::cout << zobrist_key << "\n";
-            
-            // if (position.isThreeFoldOr50MoveRule())
-            //     std::cout <<" True \n";
-            // else
-            //     std::cout << " False \n";
         }
 
         ////////////////////////////////////////////////////////////
@@ -526,6 +522,7 @@ int main()
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
                 position_2 = BitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"); // This is because we are searching moves from start again
+                // position_2.makeMove(findNormalMoveFromString("f3h3", position_2));
                 std::cout << runNonPVMovesPerftTest(position_2, depth) << " moves\n";
             }
             end = std::chrono::high_resolution_clock::now(); // End timing
@@ -539,7 +536,8 @@ int main()
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
                 position_3 = BitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"); // This is because we are searching moves from start again
-                // position_3.makeMove(findNormalMoveFromString("b4f4", position_3));
+                // position_3.makeMove(findNormalMoveFromString("a5a4", position_3));
+                // position_3.makeMove(findNormalMoveFromString("h5b5", position_3));
                 std::cout << runNonPVMovesPerftTest(position_3, depth) << " moves\n";
             }
             end = std::chrono::high_resolution_clock::now(); // End timing
@@ -731,7 +729,7 @@ int main()
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
                 position_1 = BitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"); // This is because we are searching moves from start again
-                //position_1.makeMove(findCaptureMoveFromString("e2e3", position_1));
+                // position_1.makeMove(findNormalMoveFromString("c2c3", position_1));
                 std::cout << runCapturesPerftTest(position_1, depth) << " moves\n";
             }
             auto end = std::chrono::high_resolution_clock::now(); // End timing
@@ -801,6 +799,7 @@ int main()
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
                 position_6 = BitPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 "); // This is because we are searching moves from start again
+                // position_6.makeMove(findNormalMoveFromString("c4e6", position_6));
                 std::cout << runCapturesPerftTest(position_6, depth) << " moves\n";
             }
             end = std::chrono::high_resolution_clock::now(); // End timing
@@ -848,7 +847,7 @@ int main()
             {
                 STARTTIME = std::chrono::high_resolution_clock::now();
                 position_1 = BitPosition("kbK5/pp6/1P6/8/8/8/8/R7 w - - 0 1"); // This is because we are searching moves from start again
-                std::cout << iterativeSearch(position_1, depth).first.toString() << "\n";
+                std::cout << iterativeSearch(position_1, 1, depth).first.toString() << "\n";
             }
             auto end = std::chrono::high_resolution_clock::now(); // End timing
             duration += (end - start); // Calculate duration
@@ -863,7 +862,7 @@ int main()
             {
                 STARTTIME = std::chrono::high_resolution_clock::now();
                 position_2 = BitPosition("rR6/p7/KnPk4/P7/8/8/8/8 w - - 0 1"); // This is because we are searching moves from start again
-                std::cout << iterativeSearch(position_2, depth).first.toString() << "\n";
+                std::cout << iterativeSearch(position_2, 1, depth).first.toString() << "\n";
             }
             end = std::chrono::high_resolution_clock::now();    // End timing
             duration += (end - start); // Calculate duration
@@ -878,7 +877,7 @@ int main()
             {
                 STARTTIME = std::chrono::high_resolution_clock::now();
                 position_3 = BitPosition("1b1q4/8/P2p4/1N1Pp2p/5P1k/7P/1B1P3K/8 w - - 0 1"); // This is because we are searching moves from start again
-                std::cout << iterativeSearch(position_3, depth).first.toString() << "\n";
+                std::cout << iterativeSearch(position_3, 1, depth).first.toString() << "\n";
             }
             end = std::chrono::high_resolution_clock::now();    // End timing
             duration += (end - start); // Calculate duration
@@ -893,7 +892,7 @@ int main()
             {
                 STARTTIME = std::chrono::high_resolution_clock::now();
                 position_4 = BitPosition("2r2rk1/1b3ppp/p1qpp3/1P6/1Pn1P2b/2NB1P1P/1BP1R1P1/R2Q2K1 b - - 0 19"); // This is because we are searching moves from start again
-                std::cout << iterativeSearch(position_4, depth).first.toString() << "\n";
+                std::cout << iterativeSearch(position_4, 1, depth).first.toString() << "\n";
             }
             end = std::chrono::high_resolution_clock::now();    // End timing
             duration += (end - start); // Calculate duration
@@ -908,7 +907,7 @@ int main()
             {
                 STARTTIME = std::chrono::high_resolution_clock::now();
                 position_5 = BitPosition("rn2kb1r/1bq2pp1/pp3n1p/4p3/2PQ1B1P/2N3P1/PP2PPB1/2KR3R w kq - 0 12"); // This is because we are searching moves from start again
-                std::cout << iterativeSearch(position_5, depth).first.toString() << "\n";
+                std::cout << iterativeSearch(position_5, 1, depth).first.toString() << "\n";
             }
             end = std::chrono::high_resolution_clock::now();    // End timing
             duration += (end - start); // Calculate duration
@@ -923,7 +922,7 @@ int main()
             {
                 STARTTIME = std::chrono::high_resolution_clock::now();
                 position_6 = BitPosition("3k2rr/4b3/p3Qpq1/P2pn3/1p1Nb3/6B1/1PP1B2P/3R1RK1 b - - 0 25"); // This is because we are searching moves from start again
-                std::cout << iterativeSearch(position_6, depth).first.toString() << "\n";
+                std::cout << iterativeSearch(position_6, 1, depth).first.toString() << "\n";
             }
             end = std::chrono::high_resolution_clock::now();    // End timing
             duration += (end - start); // Calculate duration
@@ -938,7 +937,7 @@ int main()
             {
                 STARTTIME = std::chrono::high_resolution_clock::now();
                 position_7 = BitPosition("4k3/Q6n/8/8/8/8/PR5P/4K1NR w K - 0 1"); // This is because we are searching moves from start again
-                std::cout << iterativeSearch(position_7, depth).first.toString() << "\n";
+                std::cout << iterativeSearch(position_7, 1, depth).first.toString() << "\n";
             }
             end = std::chrono::high_resolution_clock::now();    // End timing
             duration += (end - start); // Calculate duration
