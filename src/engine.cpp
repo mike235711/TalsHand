@@ -60,7 +60,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
 // This search is done when depth is less than or equal to 0 and considers only captures and promotions
 {
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
-    int16_t value{NNUE::evaluationFunction(our_turn)};
+    int16_t value{NNUEU::evaluationFunction(our_turn)};
     Move best_move;
     bool no_captures{true};
     bool cutoff{false};
@@ -222,7 +222,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
             }
             // In check quiet position
             else
-                return NNUE::evaluationFunction(our_turn);
+                return NNUEU::evaluationFunction(our_turn);
         }
         // If there is no check we check for bad captures
         else
@@ -232,7 +232,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
                 return 2048;
             // Quiet position
             else
-                return NNUE::evaluationFunction(our_turn);
+                return NNUEU::evaluationFunction(our_turn);
         }
     }
     return value;
@@ -819,6 +819,6 @@ std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t start_dept
 
     }
 
-    std::cout << "Depth: " << DEPTH << "\n";
+    //std::cout << "Depth: " << DEPTH << "\n";
     return std::pair<Move, int16_t>(bestMove, bestValue);
 }
