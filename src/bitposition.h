@@ -94,7 +94,7 @@ private:
     std::array<unsigned short, 64> m_promoted_piece_array{};
     std::array<unsigned short, 64> m_psquare_array{};
 
-    std::array<uint64_t, 64> m_zobrist_keys_array{};
+    std::array<uint64_t, 128> m_zobrist_keys_array{};
 
     std::array<unsigned short, 64> m_captured_piece_array{}; // For unmakeMove
     std::array<uint64_t, 64> m_unsafe_squares_array{};
@@ -443,10 +443,10 @@ public:
     }
 
     uint64_t getZobristKey() const { return m_zobrist_key; }
-    std::array<uint64_t, 64> getZobristKeysArray() const { return m_zobrist_keys_array; }
+    std::array<uint64_t, 128> getZobristKeysArray() const { return m_zobrist_keys_array; }
     void printZobristKeys() const
     {
-        std::array<uint64_t, 64> keys = getZobristKeysArray();
+        std::array<uint64_t, 128> keys = getZobristKeysArray();
         for (size_t i = 0; i < keys.size(); ++i)
         {
             if (keys[i] != 0)

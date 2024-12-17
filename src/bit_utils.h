@@ -6,18 +6,25 @@
 // Here we use inline because this permits the compiler copy inline the function
 // definitions whenever the functions name appears in the project.
 
-inline int invertIndex(int index)
-{
-    int newRow{7 - (index / 8)};
-    return newRow * 8 + (index % 8);
-}
-
 inline unsigned short getLeastSignificantBitIndex(uint64_t bitboard)
 {
     if (bitboard == 0)
         return 65;
     else
-        return static_cast<unsigned short>(__builtin_ctzll(bitboard));
+        return __builtin_ctzll(bitboard);
+}
+
+inline unsigned short popLeastSignificantBit(uint64_t &b)
+{
+    const unsigned short s = getLeastSignificantBitIndex(b);
+    b &= b - 1;
+    return s;
+}
+
+inline int invertIndex(int index)
+{
+    int newRow{7 - (index / 8)};
+    return newRow * 8 + (index % 8);
 }
 
 inline std::vector<unsigned short> getBitIndices(uint64_t bitboard)

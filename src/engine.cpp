@@ -41,7 +41,7 @@ bool stopSearch(const std::vector<int16_t> &values, int streak, int depth, BitPo
     // If endgame
     else
     {
-        if (streak > 8 && depth > 9)
+        if (streak > 7 && depth > 8)
             return true;
         // Check if the move's score has just increased over time
         for (std::size_t i = 1; i < values.size(); ++i)
@@ -330,12 +330,12 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
     {
         if (not is_check) // Not in check
         {
-            if (is_pv_node) // PV Nodes usually dont produce cutoffs so we generate all moves in one
+            if (not is_pv_node) // Non PV Nodes usually produce cutoffs so we generate all moves in one
             {
                 if (not cutoff)
                 {
                     // Refutation moves ordered
-                    Move refutationMoves[64];
+                    Move refutationMoves[32];
                     Move *current_move = refutationMoves;
                     Move *end_move = position.setRefutationMovesOrdered(current_move);
                     Move move = position.nextMove(current_move, end_move, tt_move);
@@ -389,7 +389,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                 if (not cutoff)
                 {
                     // Good captures ordered
-                    Move goodCaptures[64];
+                    Move goodCaptures[32];
                     Move *current_move = goodCaptures;
                     Move *end_move = position.setGoodCapturesOrdered(current_move);
                     Move move = position.nextMove(current_move, end_move);
@@ -443,7 +443,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                 if (not cutoff)
                 {
                     // Safe moves
-                    ScoredMove safeMoves[128];
+                    ScoredMove safeMoves[64];
                     ScoredMove *currSafeMove = safeMoves;
                     ScoredMove *endSafeMove = position.setSafeMovesAndScores(currSafeMove);
                     ScoredMove safe_move = position.nextScoredMove(currSafeMove, endSafeMove);
@@ -497,7 +497,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                 if (not cutoff)
                 {
                     // Bad captures
-                    Move badCaptures[64];
+                    Move badCaptures[32];
                     Move *current_move = badCaptures;
                     Move *end_move = position.setBadCapturesOrUnsafeMoves(current_move);
                     Move move = position.nextMove(current_move, end_move);
@@ -549,7 +549,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     }
                 }
             }
-            else // Non PV nodes
+            else // PV nodes
             {
                 ScoredMove moves[256];
                 ScoredMove *current_move = moves;
@@ -759,7 +759,7 @@ std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t start_dept
     moveDepthValues = {};
     std::vector<Move> first_moves;
     int lastFirstMoveTimeTakenMS {1};
-    std::chrono::milliseconds timeForMoveMS{(OURTIME + OURINC) / 6};
+    std::chrono::milliseconds timeForMoveMS{(OURTIME + OURINC) / 8};
 
     if (position.getIsCheck())
         first_moves = position.inCheckAllMoves();
