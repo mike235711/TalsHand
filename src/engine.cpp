@@ -241,10 +241,6 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
 int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int16_t beta, bool our_turn)
 // This search is done when depth is more than 0 and considers all moves and stores positions in the transposition table
 {
-    // Threefold repetition
-    if (position.isThreeFoldOr50MoveRule())
-        return 2048;
-
     bool no_moves{true};
     bool cutoff{false};
     bool is_check{position.getIsCheck()};
@@ -297,30 +293,42 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
         position.setBlockers(); // For discovered checks
         if (our_turn) // Maximize
         {
-            position.makeTTMove(tt_move);
-            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
+            int16_t child_value;
+            if (position.positionIsDrawnAfterMove(tt_move))
+                child_value = 2048;
+            else
+            {
+                position.makeTTMove(tt_move);
+                child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
+                position.unmakeTTMove(tt_move);
+            }
             if (child_value > value)
             {
                 value = child_value;
                 best_move = tt_move;
+                if (value >= beta)
+                    cutoff = true;
             }
-            position.unmakeTTMove(tt_move);
-            if (value >= beta)
-                cutoff = true;
             alpha = std::max(alpha, value);
         }
         else // Minimize
         {
-            position.makeTTMove(tt_move);
-            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
+            int16_t child_value;
+            if (position.positionIsDrawnAfterMove(tt_move))
+                child_value = 2048;
+            else
+            {
+                position.makeTTMove(tt_move);
+                child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
+                position.unmakeTTMove(tt_move);
+            }
             if (child_value < value)
             {
                 value = child_value;
                 best_move = tt_move;
+                if (value <= alpha)
+                    cutoff = true;
             }
-            position.unmakeTTMove(tt_move);
-            if (value <= alpha)
-                cutoff = true;
             beta = std::min(beta, value);
         }
     }
@@ -341,24 +349,30 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     Move move = position.nextMove(current_move, end_move, tt_move);
                     if (move.getData() != 0)
                         no_moves = false;
+
                     if (our_turn) // Maximize
                     {
                         while (move.getData() != 0)
                         {
-                            position.makeMove(move);
-                            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
+                            int16_t child_value;
+                            if (position.positionIsDrawnAfterMove(move))
+                                child_value = 2048;
+                            else
+                            {
+                                position.makeMove(move);
+                                child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
+                                position.unmakeMove(move);
+                            }
                             if (child_value > value)
                             {
                                 value = child_value;
                                 best_move = move;
+                                if (value >= beta)
+                                {
+                                    cutoff = true;
+                                    break;
+                                }
                             }
-                            position.unmakeMove(move);
-                            if (value >= beta)
-                            {
-                                cutoff = true;
-                                break;
-                            }
-
                             alpha = std::max(alpha, value);
                             move = position.nextMove(current_move, end_move, tt_move);
                         }
@@ -367,20 +381,25 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     {
                         while (move.getData() != 0)
                         {
-                            position.makeMove(move);
-                            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
+                            int16_t child_value;
+                            if (position.positionIsDrawnAfterMove(move))
+                                child_value = 2048;
+                            else
+                            {
+                                position.makeMove(move);
+                                child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
+                                position.unmakeMove(move);
+                            }
                             if (child_value < value)
                             {
                                 value = child_value;
                                 best_move = move;
+                                if (value <= alpha)
+                                {
+                                    cutoff = true;
+                                    break;
+                                }
                             }
-                            position.unmakeMove(move);
-                            if (value <= alpha)
-                            {
-                                cutoff = true;
-                                break;
-                            }
-
                             beta = std::min(beta, value);
                             move = position.nextMove(current_move, end_move, tt_move);
                         }
@@ -399,18 +418,24 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     {
                         while (move.getData() != 0)
                         {
-                            position.makeMove(move);
-                            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
+                            int16_t child_value;
+                            if (position.positionIsDrawnAfterMove(move))
+                                child_value = 2048;
+                            else
+                            {
+                                position.makeMove(move);
+                                child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
+                                position.unmakeMove(move);
+                            }
                             if (child_value > value)
                             {
                                 value = child_value;
                                 best_move = move;
-                            }
-                            position.unmakeMove(move);
-                            if (value >= beta)
-                            {
-                                cutoff = true;
-                                break;
+                                if (value >= beta)
+                                {
+                                    cutoff = true;
+                                    break;
+                                }
                             }
 
                             alpha = std::max(alpha, value);
@@ -421,20 +446,25 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     {
                         while (move.getData() != 0)
                         {
-                            position.makeMove(move);
-                            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
+                            int16_t child_value;
+                            if (position.positionIsDrawnAfterMove(move))
+                                child_value = 2048;
+                            else
+                            {
+                                position.makeMove(move);
+                                child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
+                                position.unmakeMove(move);
+                            }
                             if (child_value < value)
                             {
                                 value = child_value;
                                 best_move = move;
+                                if (value <= alpha)
+                                {
+                                    cutoff = true;
+                                    break;
+                                }
                             }
-                            position.unmakeMove(move);
-                            if (value <= alpha)
-                            {
-                                cutoff = true;
-                                break;
-                            }
-
                             beta = std::min(beta, value);
                             move = position.nextMove(current_move, end_move, tt_move);
                         }
@@ -453,20 +483,25 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     {
                         while (safe_move.getData() != 0)
                         {
-                            position.makeMove(safe_move);
-                            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
+                            int16_t child_value;
+                            if (position.positionIsDrawnAfterMove(safe_move))
+                                child_value = 2048;
+                            else
+                            {
+                                position.makeMove(safe_move);
+                                child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
+                                position.unmakeMove(safe_move);
+                            }
                             if (child_value > value)
                             {
                                 value = child_value;
                                 best_move = safe_move;
+                                if (value >= beta)
+                                {
+                                    cutoff = true;
+                                    break;
+                                }
                             }
-                            position.unmakeMove(safe_move);
-                            if (value >= beta)
-                            {
-                                cutoff = true;
-                                break;
-                            }
-
                             alpha = std::max(alpha, value);
                             safe_move = position.nextScoredMove(currSafeMove, endSafeMove, tt_move);
                         }
@@ -475,18 +510,24 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     {
                         while (safe_move.getData() != 0)
                         {
-                            position.makeMove(safe_move);
-                            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
+                            int16_t child_value;
+                            if (position.positionIsDrawnAfterMove(safe_move))
+                                child_value = 2048;
+                            else
+                            {
+                                position.makeMove(safe_move);
+                                child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
+                                position.unmakeMove(safe_move);
+                            }
                             if (child_value < value)
                             {
                                 value = child_value;
                                 best_move = safe_move;
-                            }
-                            position.unmakeMove(safe_move);
-                            if (value <= alpha)
-                            {
-                                cutoff = true;
-                                break;
+                                if (value <= alpha)
+                                {
+                                    cutoff = true;
+                                    break;
+                                }
                             }
 
                             beta = std::min(beta, value);
@@ -507,20 +548,25 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     {
                         while (move.getData() != 0)
                         {
-                            position.makeMove(move);
-                            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
+                            int16_t child_value;
+                            if (position.positionIsDrawnAfterMove(move))
+                                child_value = 2048;
+                            else
+                            {
+                                position.makeMove(move);
+                                child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
+                                position.unmakeMove(move);
+                            }
                             if (child_value > value)
                             {
                                 value = child_value;
                                 best_move = move;
+                                if (value >= beta)
+                                {
+                                    cutoff = true;
+                                    break;
+                                }
                             }
-                            position.unmakeMove(move);
-                            if (value >= beta)
-                            {
-                                cutoff = true;
-                                break;
-                            }
-
                             alpha = std::max(alpha, value);
                             move = position.nextMove(current_move, end_move, tt_move);
                         }
@@ -529,20 +575,25 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     {
                         while (move.getData() != 0)
                         {
-                            position.makeMove(move);
-                            int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
+                            int16_t child_value;
+                            if (position.positionIsDrawnAfterMove(move))
+                                child_value = 2048;
+                            else
+                            {
+                                position.makeMove(move);
+                                child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
+                                position.unmakeMove(move);
+                            }
                             if (child_value < value)
                             {
                                 value = child_value;
                                 best_move = move;
+                                if (value <= alpha)
+                                {
+                                    cutoff = true;
+                                    break;
+                                }
                             }
-                            position.unmakeMove(move);
-                            if (value <= alpha)
-                            {
-                                cutoff = true;
-                                break;
-                            }
-
                             beta = std::min(beta, value);
                             move = position.nextMove(current_move, end_move, tt_move);
                         }
@@ -561,20 +612,25 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                 {
                     while (move.getData() != 0)
                     {
-                        position.makeMove(move);
-                        int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
+                        int16_t child_value;
+                        if (position.positionIsDrawnAfterMove(move))
+                            child_value = 2048;
+                        else
+                        {
+                            position.makeMove(move);
+                            child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
+                            position.unmakeMove(move);
+                        }
                         if (child_value > value)
                         {
                             value = child_value;
                             best_move = move;
+                            if (value >= beta)
+                            {
+                                cutoff = true;
+                                break;
+                            }
                         }
-                        position.unmakeMove(move);
-                        if (value >= beta)
-                        {
-                            cutoff = true;
-                            break;
-                        }
-
                         alpha = std::max(alpha, value);
                         move = position.nextScoredMove(current_move, end_move, tt_move);
                     }
@@ -583,20 +639,25 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                 {
                     while (move.getData() != 0)
                     {
-                        position.makeMove(move);
-                        int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
+                        int16_t child_value;
+                        if (position.positionIsDrawnAfterMove(move))
+                            child_value = 2048;
+                        else
+                        {
+                            position.makeMove(move);
+                            child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
+                            position.unmakeMove(move);
+                        }
                         if (child_value < value)
                         {
                             value = child_value;
                             best_move = move;
+                            if (value <= alpha)
+                            {
+                                cutoff = true;
+                                break;
+                            }
                         }
-                        position.unmakeMove(move);
-                        if (value <= alpha)
-                        {
-                            cutoff = true;
-                            break;
-                        }
-
                         beta = std::min(beta, value);
                         move = position.nextScoredMove(current_move, end_move, tt_move);
                     }
@@ -616,20 +677,25 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
             {
                 while (move.getData() != 0)
                 {
-                    position.makeMove(move);
-                    int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
+                    int16_t child_value;
+                    if (position.positionIsDrawnAfterMove(move))
+                        child_value = 2048;
+                    else
+                    {
+                        position.makeMove(move);
+                        child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
+                        position.unmakeMove(move);
+                    }
                     if (child_value > value)
                     {
                         value = child_value;
                         best_move = move;
+                        if (value >= beta)
+                        {
+                            cutoff = true;
+                            break;
+                        }
                     }
-                    position.unmakeMove(move);
-                    if (value >= beta)
-                    {
-                        cutoff = true;
-                        break;
-                    }
-
                     alpha = std::max(alpha, value);
                     move = position.nextMove(current_move, end_move, tt_move);
                 }
@@ -638,20 +704,25 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
             {
                 while (move.getData() != 0)
                 {
-                    position.makeMove(move);
-                    int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, true)};
+                    int16_t child_value;
+                    if (position.positionIsDrawnAfterMove(move))
+                        child_value = 2048;
+                    else
+                    {
+                        position.makeMove(move);
+                        child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
+                        position.unmakeMove(move);
+                    }
                     if (child_value < value)
                     {
                         value = child_value;
                         best_move = move;
+                        if (value <= alpha)
+                        {
+                            cutoff = true;
+                            break;
+                        }
                     }
-                    position.unmakeMove(move);
-                    if (value <= alpha)
-                    {
-                        cutoff = true;
-                        break;
-                    }
-
                     beta = std::min(beta, value);
                     move = position.nextMove(current_move, end_move, tt_move);
                 }
@@ -759,7 +830,7 @@ std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t start_dept
     moveDepthValues = {};
     std::vector<Move> first_moves;
     int lastFirstMoveTimeTakenMS {1};
-    std::chrono::milliseconds timeForMoveMS{(OURTIME + OURINC) / 8};
+    std::chrono::milliseconds timeForMoveMS{(OURTIME + OURINC) / 9};
 
     if (position.getIsCheck())
         first_moves = position.inCheckAllMoves();

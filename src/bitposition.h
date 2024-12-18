@@ -39,7 +39,7 @@ private:
     bool m_black_queenside_castling{};
 
     // Index of passant square a1 = 0, h8 = 63
-    unsigned short m_psquare{};
+    unsigned short m_psquare{0};
 
     // Unsigned short representing kings' positions
     unsigned short m_white_king_position{};
@@ -380,6 +380,10 @@ public:
 
     std::vector<Move> inCheckAllMoves();
     std::vector<Move> allMoves();
+
+    uint64_t updateZobristKeyPiecePartBeforeMove(unsigned short origin_square, unsigned short destination_square, unsigned short promoted_piece) const;
+    template <typename T>
+    bool positionIsDrawnAfterMove(T move) const;
 
     bool isEndgame() const
     {

@@ -1085,6 +1085,43 @@ int main()
                 }
             }
         }
+
+        else if (inputLine == "threefoldTest")
+        {
+            BitPosition position_1{"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"};
+
+            auto checkAndMakeMove = [&](const std::string &moveStr)
+            {
+                Move move = findNormalMoveFromString(moveStr, position_1);
+                if (position_1.positionIsDrawnAfterMove(move))
+                    std::cout << "Draw\n";
+                else
+                    std::cout << "Not Draw\n";
+                position_1.makeMove(move);
+            };
+
+            checkAndMakeMove("b1a3");
+            checkAndMakeMove("b8a6");
+            checkAndMakeMove("a3b1");
+            checkAndMakeMove("a6b8");
+
+            checkAndMakeMove("b1a3");
+            checkAndMakeMove("b8a6");
+            checkAndMakeMove("a3b1");
+            checkAndMakeMove("a6b8");
+
+            checkAndMakeMove("b1a3");
+            checkAndMakeMove("b8a6");
+            checkAndMakeMove("a3b1");
+            checkAndMakeMove("a6b8");
+
+            checkAndMakeMove("b1a3");
+            checkAndMakeMove("b8a6");
+            checkAndMakeMove("a3b1");
+            checkAndMakeMove("a6b8");
+
+            position_1.printZobristKeys();
+        }
     }
     return 0;
 }

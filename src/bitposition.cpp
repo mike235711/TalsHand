@@ -28,6 +28,9 @@ template void BitPosition::makeCaptureWithoutNNUE<ScoredMove>(ScoredMove move);
 template void BitPosition::unmakeCaptureWithoutNNUE<Move>(Move move);
 template void BitPosition::unmakeCaptureWithoutNNUE<ScoredMove>(ScoredMove move);
 
+template bool BitPosition::positionIsDrawnAfterMove<Move>(Move move) const;
+template bool BitPosition::positionIsDrawnAfterMove<ScoredMove>(ScoredMove move) const;
+
 std::array<Move, 4> castling_moves{Move(16772), Move(16516), Move(20412), Move(20156)}; // WKS, WQS, BKS, BQS
 
 constexpr uint64_t NON_LEFT_BITBOARD = 0b1111111011111110111111101111111011111110111111101111111011111110;
@@ -383,6 +386,93 @@ void BitPosition::updateZobristKeyPiecePartAfterMove(unsigned short origin_squar
                 m_zobrist_key ^= zobrist_keys::blackQueenZobristNumbers[destination_square] ^ zobrist_keys::blackPawnZobristNumbers[destination_square];
         }
     }
+}
+uint64_t BitPosition::updateZobristKeyPiecePartBeforeMove(unsigned short origin_square, unsigned short destination_square, unsigned short promoted_piece) const
+// Since the zobrist hashes are done by XOR on each individual key. And XOR is its own inverse.
+// We can efficiently update the hash by XORing the previous key with the key of the piece origin
+// square and with the key of the piece destination square.
+// Applied inside positionIsDrawnAfterMove to check for draws before making a move
+{
+    uint64_t temp_zobrist_key{m_zobrist_key};
+    uint64_t origin_bit = (1ULL << origin_square);
+    uint64_t destination_bit = (1ULL << destination_square);
+    if (m_turn)
+    {
+        if (origin_bit & m_white_pawns_bit)
+            temp_zobrist_key ^= zobrist_keys::whitePawnZobristNumbers[origin_square] ^ zobrist_keys::whitePawnZobristNumbers[destination_square];
+        else if (origin_bit & m_white_knights_bit)
+            temp_zobrist_key ^= zobrist_keys::whiteKnightZobristNumbers[origin_square] ^ zobrist_keys::whiteKnightZobristNumbers[destination_square];
+        else if (origin_bit & m_white_bishops_bit)
+            temp_zobrist_key ^= zobrist_keys::whiteBishopZobristNumbers[origin_square] ^ zobrist_keys::whiteBishopZobristNumbers[destination_square];
+        else if (origin_bit & m_white_rooks_bit)
+            temp_zobrist_key ^= zobrist_keys::whiteRookZobristNumbers[origin_square] ^ zobrist_keys::whiteRookZobristNumbers[destination_square];
+        else if (origin_bit & m_white_queens_bit)
+            temp_zobrist_key ^= zobrist_keys::whiteQueenZobristNumbers[origin_square] ^ zobrist_keys::whiteQueenZobristNumbers[destination_square];
+        else // King
+            temp_zobrist_key ^= zobrist_keys::whiteKingZobristNumbers[origin_square] ^ zobrist_keys::whiteKingZobristNumbers[destination_square];
+
+        if (destination_bit & m_black_pawns_bit) // Pawn
+            temp_zobrist_key ^= zobrist_keys::blackPawnZobristNumbers[destination_square];
+        else if (destination_bit & m_black_knights_bit) // Knight
+            temp_zobrist_key ^= zobrist_keys::blackKnightZobristNumbers[destination_square];
+        else if (destination_bit & m_black_bishops_bit) // Bishop
+            temp_zobrist_key ^= zobrist_keys::blackBishopZobristNumbers[destination_square];
+        else if (destination_bit & m_black_rooks_bit) // Rook
+            temp_zobrist_key ^= zobrist_keys::blackRookZobristNumbers[destination_square];
+        else if (destination_bit & m_black_queens_bit) // Queen
+            temp_zobrist_key ^= zobrist_keys::blackQueenZobristNumbers[destination_square];
+            
+        if (promoted_piece != 7)
+        {
+            if (promoted_piece == 1) // Knight
+                temp_zobrist_key ^= zobrist_keys::whiteKnightZobristNumbers[destination_square] ^ zobrist_keys::whitePawnZobristNumbers[destination_square];
+            else if (promoted_piece == 2) // Bishop
+                temp_zobrist_key ^= zobrist_keys::whiteBishopZobristNumbers[destination_square] ^ zobrist_keys::whitePawnZobristNumbers[destination_square];
+            else if (promoted_piece == 3) // Rook
+                temp_zobrist_key ^= zobrist_keys::whiteRookZobristNumbers[destination_square] ^ zobrist_keys::whitePawnZobristNumbers[destination_square];
+            else // Queen
+                temp_zobrist_key ^= zobrist_keys::whiteQueenZobristNumbers[destination_square] ^ zobrist_keys::whitePawnZobristNumbers[destination_square];
+        }
+    }
+    else
+    {
+        if (origin_bit & m_black_pawns_bit) // Pawn
+            temp_zobrist_key ^= zobrist_keys::blackPawnZobristNumbers[origin_square] ^ zobrist_keys::blackPawnZobristNumbers[destination_square];
+        else if (origin_bit & m_black_knights_bit) // Knight
+            temp_zobrist_key ^= zobrist_keys::blackKnightZobristNumbers[origin_square] ^ zobrist_keys::blackKnightZobristNumbers[destination_square];
+        else if (origin_bit & m_black_bishops_bit) // Bishop
+            temp_zobrist_key ^= zobrist_keys::blackBishopZobristNumbers[origin_square] ^ zobrist_keys::blackBishopZobristNumbers[destination_square];
+        else if (origin_bit & m_black_rooks_bit) // Rook
+            temp_zobrist_key ^= zobrist_keys::blackRookZobristNumbers[origin_square] ^ zobrist_keys::blackRookZobristNumbers[destination_square];
+        else if (origin_bit & m_black_queens_bit) // Queen
+            temp_zobrist_key ^= zobrist_keys::blackQueenZobristNumbers[origin_square] ^ zobrist_keys::blackQueenZobristNumbers[destination_square];
+        else // King
+            temp_zobrist_key ^= zobrist_keys::blackKingZobristNumbers[origin_square] ^ zobrist_keys::blackKingZobristNumbers[destination_square];
+
+        if (destination_bit & m_white_pawns_bit) // Pawn
+            temp_zobrist_key ^= zobrist_keys::whitePawnZobristNumbers[destination_square];
+        else if (destination_bit & m_white_knights_bit) // Knight
+            temp_zobrist_key ^= zobrist_keys::whiteKnightZobristNumbers[destination_square];
+        else if (destination_bit & m_white_bishops_bit) // Bishop
+            temp_zobrist_key ^= zobrist_keys::whiteBishopZobristNumbers[destination_square];
+        else if (destination_bit & m_white_rooks_bit) // Rook
+            temp_zobrist_key ^= zobrist_keys::whiteRookZobristNumbers[destination_square];
+        else if (destination_bit & m_white_queens_bit) // Queen
+            temp_zobrist_key ^= zobrist_keys::whiteQueenZobristNumbers[destination_square];
+
+        if (promoted_piece != 7)
+        {
+            if (promoted_piece == 1) // Knight
+                temp_zobrist_key ^= zobrist_keys::blackKnightZobristNumbers[destination_square] ^ zobrist_keys::blackPawnZobristNumbers[destination_square];
+            else if (promoted_piece == 2) // Bishop
+                temp_zobrist_key ^= zobrist_keys::blackBishopZobristNumbers[destination_square] ^ zobrist_keys::blackPawnZobristNumbers[destination_square];
+            else if (promoted_piece == 3) // Rook
+                temp_zobrist_key ^= zobrist_keys::blackRookZobristNumbers[destination_square] ^ zobrist_keys::blackPawnZobristNumbers[destination_square];
+            else // Queen
+                temp_zobrist_key ^= zobrist_keys::blackQueenZobristNumbers[destination_square] ^ zobrist_keys::blackPawnZobristNumbers[destination_square];
+        }
+    }
+    return temp_zobrist_key;
 }
 
 // Functions for making transposition table moves
@@ -5284,6 +5374,139 @@ bool BitPosition::moveIsReseter(Move move)
 }
 
 template <typename T>
+bool BitPosition::positionIsDrawnAfterMove(T move) const
+{
+    // 50 move rule
+    if (m_50_move_count > 98)
+        return true;
+
+    // Threefold repetitions
+    unsigned short origin_square = move.getOriginSquare();
+    uint64_t origin_bit = (1ULL << origin_square);
+    unsigned short destination_square = move.getDestinationSquare();
+    uint64_t destination_bit = (1ULL << destination_square);
+    unsigned short promoted_piece{7};
+    // Promotions
+    if (m_turn && (move.getData() & 0b0100000000000000) == 0b0100000000000000 && (destination_bit & EIGHT_ROW_BITBOARD) != 0)
+        promoted_piece = move.getPromotingPiece() + 1;
+    if (not m_turn && (move.getData() & 0b0100000000000000) == 0b0100000000000000 && (destination_bit & FIRST_ROW_BITBOARD) != 0)
+        promoted_piece = move.getPromotingPiece() + 1;
+    // Update the moved piece, captured piece and promoted piece part of the zobrist key
+    uint64_t temp_zobrist_key{updateZobristKeyPiecePartBeforeMove(origin_square, destination_square, promoted_piece)};
+    // Update the turn part in the zobrist key
+    temp_zobrist_key ^= zobrist_keys::blackToMoveZobristNumber;
+
+    // Update special parts of the zobrist key
+    if (m_turn)
+    {   
+        if (origin_square == 0) // Moving from a1
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            caslting_key_index = (m_white_kingside_castling | (false << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+
+        else if (origin_square == 7) // Moving from h1
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            caslting_key_index = (false | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+
+        if (destination_square == 63) // Capturing on a8
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (false << 2) | (m_black_queenside_castling << 3));
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+
+        else if (destination_square == 56) // Capturing on h8
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (false << 3));
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+
+        if (origin_bit == m_white_king_bit) // Moving king
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            caslting_key_index = (false | (false << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+        // Updating passant square
+        temp_zobrist_key ^= zobrist_keys::passantSquaresZobristNumbers[m_psquare];
+        unsigned short psquare{0};
+        if ((origin_bit & m_white_pawns_bit) != 0  && (destination_square - origin_square) == 16)
+            psquare = origin_square + 8;
+        temp_zobrist_key ^= zobrist_keys::passantSquaresZobristNumbers[psquare];
+    }
+    else
+    {
+        if (destination_square == 0) // Capturing on a1
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            caslting_key_index = (m_white_kingside_castling | (false << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+
+        else if (destination_square == 7) // Capturing on h1
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            caslting_key_index = (false | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3));
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+
+        if (origin_square == 63) // Moving from a8
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (false << 2) | (m_black_queenside_castling << 3));
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+
+        else if (origin_square == 56) // Moving from h8
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (false << 3));
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+
+        if (origin_bit == m_black_king_bit) // Moving king
+        {
+            int caslting_key_index{m_white_kingside_castling | (m_white_queenside_castling << 1) | (m_black_kingside_castling << 2) | (m_black_queenside_castling << 3)};
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+            caslting_key_index = (m_white_kingside_castling | (m_white_queenside_castling << 1) | (false << 2) | (false << 3));
+            temp_zobrist_key ^= zobrist_keys::castlingRightsZobristNumbers[caslting_key_index];
+        }
+        // Updating passant square
+        temp_zobrist_key ^= zobrist_keys::passantSquaresZobristNumbers[m_psquare];
+        unsigned short psquare{0};
+        if ((origin_bit & m_black_pawns_bit) != 0 && (origin_square - destination_square) == 16)
+            psquare = destination_square + 8;
+        temp_zobrist_key ^= zobrist_keys::passantSquaresZobristNumbers[psquare];
+    }
+    // Find how many keys are equal to this zobrist key
+    int count = 0;
+    for (uint64_t key : m_zobrist_keys_array)
+    {
+        if (key == temp_zobrist_key)
+        {
+            if (++count == 2)
+                return true;
+        }
+    }
+    return false;
+}
+
+template <typename T>
 void BitPosition::makeMove(T move)
 // Move piece and switch white and black roles, without rotating the board.
 // After making move, set pins and checks to 0.
@@ -5694,9 +5917,9 @@ void BitPosition::makeMove(T move)
 
     BitPosition::setAllPiecesBits();
 
-    m_turn = not m_turn;
     BitPosition::updateZobristKeyPiecePartAfterMove(m_last_origin_square, m_last_destination_square);
     m_zobrist_key ^= zobrist_keys::blackToMoveZobristNumber;
+    m_turn = not m_turn;
     // Note, we store the zobrist key in it's array when making the move. However the rest of the ply info
     // is stored when making the next move to be able to go back.
     // So we store it in the m_ply+1 position because the initial position (or position after capture) is the m_ply 0.
