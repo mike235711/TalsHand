@@ -6,7 +6,7 @@
 // Here we use inline because this permits the compiler copy inline the function
 // definitions whenever the functions name appears in the project.
 
-inline unsigned short getLeastSignificantBitIndex(uint64_t bitboard)
+inline int getLeastSignificantBitIndex(uint64_t bitboard)
 {
     if (bitboard == 0)
         return 65;
@@ -14,9 +14,14 @@ inline unsigned short getLeastSignificantBitIndex(uint64_t bitboard)
         return __builtin_ctzll(bitboard);
 }
 
-inline unsigned short popLeastSignificantBit(uint64_t &b)
+inline int getLeastSignificantBitIndexx(uint64_t bitboard)
 {
-    const unsigned short s = getLeastSignificantBitIndex(b);
+    return __builtin_ctzll(bitboard);
+}
+
+inline int popLeastSignificantBit(uint64_t &b)
+{
+    const int_least32_t s = getLeastSignificantBitIndexx(b);
     b &= b - 1;
     return s;
 }
@@ -27,20 +32,20 @@ inline int invertIndex(int index)
     return newRow * 8 + (index % 8);
 }
 
-inline std::vector<unsigned short> getBitIndices(uint64_t bitboard)
+inline std::vector<int> getBitIndices(uint64_t bitboard)
 {
     if (bitboard == 0)
     {
         return {};
     }
 
-    std::vector<unsigned short> indices;
+    std::vector<int> indices;
     indices.reserve(32); 
 
     while (bitboard)
     {
         // Get the index of the least significant bit
-        unsigned short lsbi = getLeastSignificantBitIndex(bitboard);
+        int lsbi = getLeastSignificantBitIndex(bitboard);
         indices.push_back(lsbi);
 
         // Remove the least significant bit from the bitboard
@@ -50,23 +55,21 @@ inline std::vector<unsigned short> getBitIndices(uint64_t bitboard)
     return indices;
 }
 
-inline bool hasOneOne(uint64_t bitboard) // Works
-// Given a bitboard determine if bit has one one or not (for pins)
+inline bool hasOneOne(uint64_t bitboard)
 {
-    // If the result is zero, it had only one 1-bit
     return (bitboard & (bitboard - 1)) == 0;
 }
 
-inline std::vector<std::vector<unsigned short>> generateSubvectors(const std::vector<unsigned short> &vec) // Works
+inline std::vector<std::vector<int>> generateSubvectors(const std::vector<int> &vec) // Works
 // Returns all subvectors from a vector. Used in generate_subbits.
 {
-    std::vector<std::vector<unsigned short>> subvectors;
+    std::vector<std::vector<int>> subvectors;
     int n = vec.size();
     unsigned int powSetSize = 1 << n; // There are 2^n subsets
 
     for (unsigned int counter = 0; counter < powSetSize; ++counter)
     {
-        std::vector<unsigned short> subvec;
+        std::vector<int> subvec;
         for (int j = 0; j < n; ++j)
         {
             // Check if jth element is in the current subset
@@ -84,13 +87,13 @@ inline std::vector<std::vector<unsigned short>> generateSubvectors(const std::ve
 inline std::vector<uint64_t> generateSubbits(uint64_t bit) // Works
 // Returns the all the subbits of a given bit. Used in generate_blocker_configurations.
 {
-    std::vector<unsigned short> indeces{getBitIndices(bit)};                                 // Indeces of 1's in bit
-    std::vector<std::vector<unsigned short>> subvector_indeces{generateSubvectors(indeces)}; // Vector of subvectors containing all the indeces of the subbits
+    std::vector<int> indeces{getBitIndices(bit)};                                 // Indeces of 1's in bit
+    std::vector<std::vector<int>> subvector_indeces{generateSubvectors(indeces)}; // Vector of subvectors containing all the indeces of the subbits
     std::vector<uint64_t> subbits{};
-    for (std::vector<unsigned short> indeces : subvector_indeces)
+    for (std::vector<int> indeces : subvector_indeces)
     {
         uint64_t bit{};
-        for (unsigned short index : indeces)
+        for (int index : indeces)
         {
             bit |= (1ULL << index);
         }

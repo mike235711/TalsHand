@@ -1,490 +1,18 @@
 #ifndef TESTS_H
 #define TESTS_H
 #include "bitposition.h"
+#include "move_selectors.h"
+#include "ttable.h"
 #include <vector>
 #include <iostream> // For printing
 
+extern TranspositionTable globalTT;
 
 // Additional helper function for printing moves
 void printMove(const Move &move)
 {
     // Assuming you have a way to convert 'Move' to a string or standard notation
     std::cout << move.toString() << ": ";
-}
-
-unsigned long long runCapturesPerftTest(BitPosition &position, int depth, int currentDepth = 0)
-// Function to test the captures and non captures move generators, it outputs the number of
-// final moves leading from each of the first legal moves (Perft Test)
-{
-    if (depth == 0)
-        return 1;
-    unsigned long long moveCount = 0;
-    if (currentDepth == 0 && position.getIsCheck()) // First move search in check
-    {
-        // Generate all moves
-        Move moves[32];
-        Move *currMove = moves;
-        Move *endMove = position.setCapturesInCheckTest(currMove);
-        Move move = position.nextMove(currMove, endMove);
-
-        Move nonCaptures[64];
-        Move *currNonCapture = nonCaptures;
-        Move *endNonCapture = position.setNonCapturesInCheck(currNonCapture);
-        Move nonCapture = position.nextMove(currNonCapture, endNonCapture);
-
-        // Captures in check
-        while (move.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(move);
-            }
-            position.makeCaptureWithoutNNUE(move);
-
-            unsigned long long subCount = runCapturesPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeCaptureWithoutNNUE(move);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            move = position.nextMove(currMove, endMove);
-        }
-        // Non captures in check
-        while (nonCapture.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(nonCapture);
-            }
-            position.makeMove(nonCapture);
-
-            unsigned long long subCount = runCapturesPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeMove(nonCapture);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            nonCapture = position.nextMove(currNonCapture, endNonCapture);
-        }
-    }
-    else if (not position.getIsCheck() && currentDepth == 0) // First move search not in check
-    {
-        ScoredMove moves[256];
-        ScoredMove *currMove = moves;
-        // Add scored moves and set starting pointer and ending pointer
-        ScoredMove *endMove = position.setMovesAndScores(currMove);
-        // Go to the next move with highest score
-        ScoredMove move = position.nextScoredMove(currMove, endMove, Move(0));
-        while (move.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(move);
-            }
-            position.makeMove(move);
-
-            unsigned long long subCount = runCapturesPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeMove(move);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            move = position.nextScoredMove(currMove, endMove, Move(0));
-        }
-    }
-    else if (not position.getIsCheck()) // Non first move search not in check
-    {
-        // Generate pawn refutation moves
-        Move refutationMove = position.getBestRefutation();
-        // Pawn captures not in check
-        if (refutationMove.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(refutationMove);
-            }
-            // else
-            // {
-            //     printMove(refutationMove);
-            // }
-            position.makeCaptureWithoutNNUE(refutationMove);
-
-            unsigned long long subCount = runCapturesPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeCaptureWithoutNNUE(refutationMove);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-            moveCount += subCount;
-        }
-
-        // Generate all moves
-        ScoredMove moves[64];
-        ScoredMove *currMove = moves;
-        ScoredMove* endMove = position.setCapturesAndScores(currMove);
-        ScoredMove move = position.nextScoredMove(currMove, endMove, refutationMove);
-
-        Move nonCaptures[128];
-        Move *currNonCapture = nonCaptures;
-        Move *endNonCapture = position.setNonCaptures(currNonCapture);
-        Move nonCapture = position.nextMove(currNonCapture, endNonCapture);
-
-        // Captures not in check
-        while (move.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(move);
-            }
-            // else
-            // {
-            //     printMove(move);
-            // }
-            position.makeCaptureWithoutNNUE(move);
-
-            unsigned long long subCount = runCapturesPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeCaptureWithoutNNUE(move);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            move = position.nextScoredMove(currMove, endMove, refutationMove);
-        }
-        // Non captures not in check
-        while (nonCapture.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(nonCapture);
-            }
-            // else
-            // {
-            //     printMove(nonCapture);
-            //     std::cout << "Depth: " << currentDepth << "\n";
-            // }
-            position.makeMove(nonCapture);
-
-            unsigned long long subCount = runCapturesPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeMove(nonCapture);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            nonCapture = position.nextMove(currNonCapture, endNonCapture);
-        }
-    }
-    else // Non first move search in check
-    {
-        // Generate all moves
-        Move moves[32];
-        Move *currMove = moves;
-        Move *endMove = position.setOrderedCapturesInCheck(currMove);
-        Move move = position.nextMove(currMove, endMove);
-
-        Move nonCaptures[64];
-        Move *currNonCapture = nonCaptures;
-        Move *endNonCapture = position.setNonCapturesInCheck(currNonCapture);
-        Move nonCapture = position.nextMove(currNonCapture, endNonCapture);
-        
-        // Captures in check
-        while (move.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(move);
-            }
-            position.makeCaptureWithoutNNUE(move);
-
-            unsigned long long subCount = runCapturesPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeCaptureWithoutNNUE(move);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            move = position.nextMove(currMove, endMove);
-        }
-        // Non captures in check
-        while (nonCapture.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(nonCapture);
-            }
-            position.makeMove(nonCapture);
-
-            unsigned long long subCount = runCapturesPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeMove(nonCapture);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            nonCapture = position.nextMove(currNonCapture, endNonCapture);
-        }
-    }
-    return moveCount;
-}
-
-unsigned long long runNormalPerftTest(BitPosition &position, int depth, int currentDepth = 0)
-// Function to test the allMoves move generator, it outputs the number of
-// final moves leading from each of the first legal moves (Perft Test)
-{
-
-    if (depth == 0)
-        return 1;
-    unsigned long long moveCount = 0;
-    if (currentDepth == 0 && position.getIsCheck()) // In check first moves
-    {
-        Move moves[64];
-        Move *currMove = moves;
-        // Set moves without score already ordered
-        Move *endMove = position.setMovesInCheckTest(currMove);
-        Move move = position.nextMove(currMove, endMove, Move(0));
-        while (move.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(move);
-            }
-            position.makeMove(move);
-
-            unsigned long long subCount = runNormalPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeMove(move);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            move = position.nextMove(currMove, endMove, Move(0));
-        }
-    }
-    else if (not position.getIsCheck()) // Not in check
-    {
-        ScoredMove moves[256];
-        ScoredMove *currMove = moves;
-        // Add scored moves and set starting pointer and ending pointer
-        ScoredMove *endMove = position.setMovesAndScores(currMove);
-        // Go to the next move with highest score
-        ScoredMove move = position.nextScoredMove(currMove, endMove, Move(0));
-        while (move.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(move);
-            }
-            position.makeMove(move);
-
-            unsigned long long subCount = runNormalPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeMove(move);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            move = position.nextScoredMove(currMove, endMove, Move(0));
-        }
-    }
-    else // In check
-    {
-        Move moves[64];
-        Move *currMove = moves;
-        // Set moves without score already ordered
-        Move *endMove = position.setMovesInCheck(currMove);
-        Move move = position.nextMove(currMove, endMove, Move(0));
-        while (move.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(move);
-            }
-            position.makeMove(move);
-
-            unsigned long long subCount = runNormalPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeMove(move);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            move = position.nextMove(currMove, endMove, Move(0));
-        }
-    }
-    return moveCount;
-}
-
-unsigned long long runTTPerftTest(BitPosition &position, int depth, int currentDepth = 0)
-// Function to test the allMoves move generator, it outputs the number of
-// final moves leading from each of the first legal moves (Perft Test)
-{
-
-    if (depth == 0)
-        return 1;
-    unsigned long long moveCount = 0;
-    if (currentDepth == 0 && position.getIsCheck()) // In check first moves
-    {
-        Move moves[64];
-        Move *currMove = moves;
-        // Set moves without score already ordered
-        Move *endMove = position.setMovesInCheckTest(currMove);
-        Move move = position.nextMove(currMove, endMove, Move(0));
-        while (move.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(move);
-            }
-            position.makeMove(move);
-
-            unsigned long long subCount = runNormalPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeMove(move);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            move = position.nextMove(currMove, endMove, Move(0));
-        }
-    }
-    else if (not position.getIsCheck()) // Not in check
-    {
-        ScoredMove moves[256];
-        ScoredMove *currMove = moves;
-        // Add scored moves and set starting pointer and ending pointer
-        ScoredMove *endMove = position.setMovesAndScores(currMove);
-        // TTMove 
-        ScoredMove ttmove = position.nextScoredMove(currMove, endMove, Move(0));
-        if (ttmove.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(ttmove);
-            }
-            position.makeTTMove(ttmove);
-
-            unsigned long long subCount = runNormalPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeTTMove(ttmove);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-            moveCount += subCount;
-        }
-        // Go to the next move with highest score
-        ScoredMove move = position.nextScoredMove(currMove, endMove, ttmove);
-        while (move.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(move);
-            }
-            position.makeMove(move);
-
-            unsigned long long subCount = runNormalPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeMove(move);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            move = position.nextScoredMove(currMove, endMove, ttmove);
-        }
-    }
-    else // In check
-    {
-        Move moves[64];
-        Move *currMove = moves;
-        // Set moves without score already ordered
-        Move *endMove = position.setMovesInCheck(currMove);
-        // TTMove
-        Move ttmove = position.nextMove(currMove, endMove, Move(0));
-        if (ttmove.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(ttmove);
-            }
-            position.makeTTMove(ttmove);
-
-            unsigned long long subCount = runNormalPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeTTMove(ttmove);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-        }
-        Move move = position.nextMove(currMove, endMove, ttmove);
-        while (move.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(move);
-            }
-            position.makeMove(move);
-
-            unsigned long long subCount = runNormalPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeMove(move);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            move = position.nextMove(currMove, endMove, ttmove);
-        }
-    }
-    return moveCount;
 }
 
 unsigned long long runFirstMovesPerftTest(BitPosition &position, int depth, int currentDepth = 0)
@@ -495,6 +23,10 @@ unsigned long long runFirstMovesPerftTest(BitPosition &position, int depth, int 
     if (depth == 0)
         return 1;
     unsigned long long moveCount = 0;
+
+    StateInfo state_info;
+    position.setIsCheckOnInitialization();
+
     if (position.getIsCheck()) // In check first moves
     {
         // All moves
@@ -505,9 +37,9 @@ unsigned long long runFirstMovesPerftTest(BitPosition &position, int depth, int 
             {
                 printMove(move);
             }
-            position.makeMove(move);
+            position.makeMove(move, state_info);
 
-            unsigned long long subCount = runNormalPerftTest(position, depth - 1, currentDepth + 1);
+            unsigned long long subCount = runFirstMovesPerftTest(position, depth - 1, currentDepth + 1);
 
             position.unmakeMove(move);
 
@@ -529,9 +61,9 @@ unsigned long long runFirstMovesPerftTest(BitPosition &position, int depth, int 
             {
                 printMove(move);
             }
-            position.makeMove(move);
+            position.makeMove(move, state_info);
 
-            unsigned long long subCount = runNormalPerftTest(position, depth - 1, currentDepth + 1);
+            unsigned long long subCount = runFirstMovesPerftTest(position, depth - 1, currentDepth + 1);
 
             position.unmakeMove(move);
 
@@ -546,29 +78,82 @@ unsigned long long runFirstMovesPerftTest(BitPosition &position, int depth, int 
     return moveCount;
 }
 
-unsigned long long runNonPVMovesPerftTest(BitPosition &position, int depth, int currentDepth = 0)
+unsigned long long runQSPerftTest(BitPosition &position, int depth, int currentDepth = 0)
 // Function to test the captures and non captures move generators, it outputs the number of
 // final moves leading from each of the first legal moves (Perft Test)
 {
     if (depth == 0)
         return 1;
     unsigned long long moveCount = 0;
-    if (currentDepth == 0 && position.getIsCheck()) // First move search in check
+    StateInfo state_info;
+
+    if (not position.getIsCheck()) // Non first move search not in check
     {
-        Move moves[64];
-        Move *currMove = moves;
-        // Set moves without score already ordered
-        Move *endMove = position.setMovesInCheckTest(currMove);
-        Move move = position.nextMove(currMove, endMove, Move(0));
-        while (move.getData() != 0)
+        // Generate refutation moves if not first move
+        Move refutation = Move(0);
+        if (currentDepth)
+            refutation = position.getBestRefutation();
+
+        // Pawn captures not in check
+        if (refutation.getData() != 0)
+        {
+            position.setBlockersAndPinsInQS();
+            if (position.isRefutationLegal(refutation))
+            {
+                if (currentDepth == 0)
+                {
+                    printMove(refutation);
+                }
+                position.makeCaptureTest(refutation, state_info);
+
+                unsigned long long subCount = runQSPerftTest(position, depth - 1, currentDepth + 1);
+
+                position.unmakeCapture(refutation);
+
+                if (currentDepth == 0)
+                {
+                    std::cout << subCount << std::endl; // Print the number of moves leading from this move
+                }
+                moveCount += subCount;
+            }
+        }
+
+        // Captures not in check
+        Move move;
+        QSMoveSelectorNotCheck move_selector(position, refutation);
+        move_selector.init();
+        while ((move = move_selector.select_legal()) != Move(0))
         {
             if (currentDepth == 0)
             {
                 printMove(move);
             }
-            position.makeMove(move);
+            position.makeCaptureTest(move, state_info);
 
-            unsigned long long subCount = runNonPVMovesPerftTest(position, depth - 1, currentDepth + 1);
+            unsigned long long subCount = runQSPerftTest(position, depth - 1, currentDepth + 1);
+
+            position.unmakeCapture(move);
+
+            if (currentDepth == 0)
+            {
+                std::cout << subCount << std::endl; // Print the number of moves leading from this move
+            }
+
+            moveCount += subCount;
+        }
+        // Non captures not in check
+        position.setBlockersAndPinsInAB();
+        QSMoveSelectorNotCheckNonCaptures move_selector_non_capture(position, refutation);
+        move_selector_non_capture.init();
+        while ((move = move_selector_non_capture.select_legal()) != Move(0))
+        {
+            if (currentDepth == 0)
+            {
+                printMove(move);
+            }
+            position.makeMove(move, state_info);
+
+            unsigned long long subCount = runQSPerftTest(position, depth - 1, currentDepth + 1);
 
             position.unmakeMove(move);
 
@@ -578,26 +163,48 @@ unsigned long long runNonPVMovesPerftTest(BitPosition &position, int depth, int 
             }
 
             moveCount += subCount;
-            move = position.nextMove(currMove, endMove, Move(0));
         }
     }
-    else if (not position.getIsCheck() && currentDepth == 0)
-    {
-        ScoredMove moves[256];
-        ScoredMove *currMove = moves;
-        // Add scored moves and set starting pointer and ending pointer
-        ScoredMove *endMove = position.setMovesAndScores(currMove);
-        // Go to the next move with highest score
-        ScoredMove move = position.nextScoredMove(currMove, endMove, Move(0));
-        while (move.getData() != 0)
+    else // Move search in check
+    {       
+        // Captures in check
+        Move move;
+        position.setCheckInfo();
+        QSMoveSelectorCheck move_selector(position);
+        move_selector.init();
+        while ((move = move_selector.select_legal()) != Move(0))
         {
             if (currentDepth == 0)
             {
                 printMove(move);
             }
-            position.makeMove(move);
+            position.makeCaptureTest(move, state_info);
 
-            unsigned long long subCount = runNonPVMovesPerftTest(position, depth - 1, currentDepth + 1);
+            unsigned long long subCount = runQSPerftTest(position, depth - 1, currentDepth + 1);
+
+            position.unmakeCapture(move);
+
+            if (currentDepth == 0)
+            {
+                std::cout << subCount << std::endl; // Print the number of moves leading from this move
+            }
+
+            moveCount += subCount;
+        }
+        // Non captures in check
+        position.setBlockersAndPinsInAB();
+        position.setCheckInfo();
+        QSMoveSelectorCheckNonCaptures move_selector_non_capture(position);
+        move_selector_non_capture.init();
+        while ((move = move_selector_non_capture.select_legal()) != Move(0))
+        {
+            if (currentDepth == 0)
+            {
+                printMove(move);
+            }
+            position.makeMove(move, state_info);
+
+            unsigned long long subCount = runQSPerftTest(position, depth - 1, currentDepth + 1);
 
             position.unmakeMove(move);
 
@@ -607,154 +214,59 @@ unsigned long long runNonPVMovesPerftTest(BitPosition &position, int depth, int 
             }
 
             moveCount += subCount;
-            move = position.nextScoredMove(currMove, endMove, Move(0));
         }
     }
-    else if (not position.getIsCheck()) // Non first move search not in check
+    return moveCount;
+}
+
+unsigned long long runPVPerftTest(BitPosition &position, int depth, int currentDepth = 0)
+{
+    if (depth == 0)
+        return 1;
+    unsigned long long moveCount = 0;
+    Move lastMove = Move(0); // For ttTable 
+    position.setBlockersAndPinsInAB(); // For discovered checks and move generators
+    // TTmove
+    Move tt_move = Move(0);
+    TTEntry *ttEntry = globalTT.probe(position.getZobristKey());
+    StateInfo state_info;
+    // If position is stored in ttable
+    if (ttEntry != nullptr)
+        tt_move = ttEntry->getMove();
+    if (tt_move.getData() != 0 && position.ttMoveIsOk(tt_move))
     {
-        // std::cout << "Refutation Moves: \n";
-        // Refutation moves
-        Move refutationMoves[64];
-        Move *currRefutationMove = refutationMoves;
-        Move *endRefutationMove = position.setRefutationMovesOrdered(currRefutationMove);
-        Move refutationMove = position.nextMove(currRefutationMove, endRefutationMove);
-
-        while (refutationMove.getData() != 0)
+        if (currentDepth == 0)
         {
-            if (currentDepth == 0)
-            {
-                printMove(refutationMove);
-            }
-            // else
-            // {
-            //     printMove(refutationMove);
-            //     std::cout << "Depth: " << currentDepth << "\n";
-            // }
-            position.makeMove(refutationMove);
-
-            unsigned long long subCount = runNonPVMovesPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeMove(refutationMove);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            refutationMove = position.nextMove(currRefutationMove, endRefutationMove);
+            printMove(tt_move);
         }
+        position.makeMove(tt_move, state_info);
 
-        // std::cout << "Good Captures: \n";
-        // Good captures not in check
-        Move goodCaptures[64];
-        Move *currGoodCapture = goodCaptures;
-        Move *endGoodCapture = position.setGoodCapturesOrdered(currGoodCapture);
-        Move goodCapture = position.nextMove(currGoodCapture, endGoodCapture);
-        while (goodCapture.getData() != 0)
+        unsigned long long subCount = runPVPerftTest(position, depth - 1, currentDepth + 1);
+
+        position.unmakeMove(tt_move);
+
+        if (currentDepth == 0)
         {
-            if (currentDepth == 0)
-            {
-                printMove(goodCapture);
-            }
-            // else
-            // {
-            //     printMove(goodCapture);
-            //     std::cout << "Depth: " << currentDepth << "\n";
-            // }
-            position.makeMove(goodCapture);
-
-            unsigned long long subCount = runNonPVMovesPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeMove(goodCapture);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            goodCapture = position.nextMove(currGoodCapture, endGoodCapture);
+            std::cout << subCount << std::endl; // Print the number of moves leading from this move
         }
-        // std::cout << "Safe Moves: \n";
-        // Safe moves
-        ScoredMove safeMoves[128];
-        ScoredMove *currSafeMove = safeMoves;
-        ScoredMove *endSafeMove = position.setSafeMovesAndScores(currSafeMove);
-        ScoredMove safeMove = position.nextScoredMove(currSafeMove, endSafeMove);
-        while (safeMove.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(safeMove);
-            }
-            // else
-            // {
-            //     printMove(safeMove);
-            //     std::cout << "Depth: " << currentDepth << "\n";
-            // }
-            position.makeMove(safeMove);
-
-            unsigned long long subCount = runNonPVMovesPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeMove(safeMove);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            safeMove = position.nextScoredMove(currSafeMove, endSafeMove);
-        }
-        // std::cout << "Bad Moves: \n";
-        // Bad captures and unsafe moves
-        Move badCaptures[64];
-        Move *currBadCapture = badCaptures;
-        Move *endBadCapture = position.setBadCapturesOrUnsafeMoves(currBadCapture);
-        Move badCapture = position.nextMove(currBadCapture, endBadCapture);
-        while (badCapture.getData() != 0)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(badCapture);
-            }
-            // else
-            // {
-            //     printMove(badCapture);
-            //     std::cout << "Depth: " << currentDepth << "\n";
-            // }
-            position.makeMove(badCapture);
-
-            unsigned long long subCount = runNonPVMovesPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeMove(badCapture);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-            badCapture = position.nextMove(currBadCapture, endBadCapture);
-        }
+        moveCount += subCount;
     }
-    else // Non first move search in check
+
+    if (position.getIsCheck()) // In check moves
     {
-        Move moves[64];
-        Move *currMove = moves;
-        // Set moves without score already ordered
-        Move *endMove = position.setMovesInCheck(currMove);
-        Move move = position.nextMove(currMove, endMove, Move(0));
-        while (move.getData() != 0)
+        position.setCheckInfo();
+        Move move;
+        ABMoveSelectorCheck move_selector(position, tt_move);
+        move_selector.init();
+        while ((move = move_selector.select_legal()) != Move(0))
         {
             if (currentDepth == 0)
             {
                 printMove(move);
             }
-            position.makeMove(move);
+            position.makeMove(move, state_info);
 
-            unsigned long long subCount = runNonPVMovesPerftTest(position, depth - 1, currentDepth + 1);
+            unsigned long long subCount = runPVPerftTest(position, depth - 1, currentDepth + 1);
 
             position.unmakeMove(move);
 
@@ -764,9 +276,177 @@ unsigned long long runNonPVMovesPerftTest(BitPosition &position, int depth, int 
             }
 
             moveCount += subCount;
-            move = position.nextMove(currMove, endMove, Move(0));
         }
     }
+    else // Not in check
+    {
+        Move move;
+        ABMoveSelectorNotCheck move_selector(position, tt_move);
+        move_selector.init_all();
+        while ((move = move_selector.select_legal()) != Move(0))
+        {
+            // if (depth == 4 && move.toString() == "g5c1")
+            //     std::cout << "klk\n";
+            // if (depth == 3 && move.toString() == "e7e6")
+            //     std::cout << "klk\n";
+            // if (depth == 2 && move.toString() == "c4e6")
+            //     std::cout << "klk\n";
+            lastMove = move;
+            if (currentDepth == 0)
+            {
+                printMove(move);
+            }
+            position.makeMove(move, state_info);
+
+            unsigned long long subCount = runPVPerftTest(position, depth - 1, currentDepth + 1);
+
+            position.unmakeMove(move);
+
+            if (currentDepth == 0)
+            {
+                std::cout << subCount << std::endl; // Print the number of moves leading from this move
+            }
+
+            moveCount += subCount;
+        }
+    }
+    // if (position.getZobristKey() == 10095184848992382700)
+    //     std::cout << "klk\n";
+    // Saving a tt value
+    globalTT.save(position.getZobristKey(), 0, depth, lastMove, false);
+    return moveCount;
+}
+
+unsigned long long runNonPVPerftTest(BitPosition &position, int depth, int currentDepth = 0)
+{
+    if (depth == 0)
+        return 1;
+    unsigned long long moveCount = 0;
+    Move lastMove = Move(0);           // For ttTable
+    position.setBlockersAndPinsInAB(); // For discovered checks and move generators
+    // TTmove
+    Move tt_move = Move(0);
+    TTEntry *ttEntry = globalTT.probe(position.getZobristKey());
+    StateInfo state_info;
+    // If position is stored in ttable
+    if (ttEntry != nullptr)
+        tt_move = ttEntry->getMove();
+    if (tt_move.getData() != 0 && position.ttMoveIsOk(tt_move))
+    {
+        if (currentDepth == 0)
+        {
+            printMove(tt_move);
+        }
+        position.makeMove(tt_move, state_info);
+
+        unsigned long long subCount = runPVPerftTest(position, depth - 1, currentDepth + 1);
+
+        position.unmakeMove(tt_move);
+
+        if (currentDepth == 0)
+        {
+            std::cout << subCount << std::endl; // Print the number of moves leading from this move
+        }
+        moveCount += subCount;
+    }
+
+    if (position.getIsCheck()) // In check first moves
+    {
+        position.setCheckInfo();
+        Move move;
+        ABMoveSelectorCheck move_selector(position, tt_move);
+        move_selector.init();
+        while ((move = move_selector.select_legal()) != Move(0))
+        {
+            if (currentDepth == 0)
+            {
+                printMove(move);
+            }
+            position.makeMove(move, state_info);
+
+            unsigned long long subCount = runPVPerftTest(position, depth - 1, currentDepth + 1);
+
+            position.unmakeMove(move);
+
+            if (currentDepth == 0)
+            {
+                std::cout << subCount << std::endl; // Print the number of moves leading from this move
+            }
+
+            moveCount += subCount;
+        }
+    }
+    else // Not in check
+    {
+        Move move;
+        ABMoveSelectorNotCheck move_selector(position, tt_move);
+        if (currentDepth)
+        {
+            move_selector.init_refutations();
+            while ((move = move_selector.select_legal()) != Move(0))
+            {
+                lastMove = move;
+                if (currentDepth == 0)
+                {
+                    printMove(move);
+                }
+                position.makeMove(move, state_info);
+
+                unsigned long long subCount = runPVPerftTest(position, depth - 1, currentDepth + 1);
+
+                position.unmakeMove(move);
+
+                if (currentDepth == 0)
+                {
+                    std::cout << subCount << std::endl; // Print the number of moves leading from this move
+                }
+
+                moveCount += subCount;
+            }
+        }
+        move_selector.init_good_captures();
+        while ((move = move_selector.select_legal()) != Move(0))
+        {
+            if (currentDepth == 0)
+            {
+                printMove(move);
+            }
+            position.makeMove(move, state_info);
+
+            unsigned long long subCount = runPVPerftTest(position, depth - 1, currentDepth + 1);
+
+            position.unmakeMove(move);
+
+            if (currentDepth == 0)
+            {
+                std::cout << subCount << std::endl; // Print the number of moves leading from this move
+            }
+
+            moveCount += subCount;
+        }
+        move_selector.init_rest();
+        while ((move = move_selector.select_legal()) != Move(0))
+        {
+            if (currentDepth == 0)
+            {
+                printMove(move);
+            }
+            position.makeMove(move, state_info);
+
+            unsigned long long subCount = runPVPerftTest(position, depth - 1, currentDepth + 1);
+
+            position.unmakeMove(move);
+
+            if (currentDepth == 0)
+            {
+                std::cout << subCount << std::endl; // Print the number of moves leading from this move
+            }
+
+            moveCount += subCount;
+        }
+    }
+    // Saving a tt value
+    globalTT.save(position.getZobristKey(), 0, depth, lastMove, false);
     return moveCount;
 }
 #endif

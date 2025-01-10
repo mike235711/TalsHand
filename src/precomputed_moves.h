@@ -187,10 +187,7 @@ namespace precomputed_moves
                 else
                 {
                     ray = getBishopInclusiveRayFromTo(i, (1ULL << j));
-                    if (ray != 0)
-                        table[i][j] = ray | (1ULL << j);
-                    else
-                        table[i][j] = 0;
+                    table[i][j] = ray;
                 }
             }
         }
@@ -211,10 +208,7 @@ namespace precomputed_moves
                 else
                 {
                     ray = getRookInclusiveRayFromTo(i, (1ULL << j));
-                    if (ray != 0)
-                        table[i][j] = ray | (1ULL << j);
-                    else
-                        table[i][j] = 0;
+                    table[i][j] = ray;
                 }
             }
         }
@@ -352,14 +346,32 @@ namespace precomputed_moves
         }
         return result;
     }();
-    
+
+    constexpr std::array<std::array<uint64_t, 64>, 64> elementWiseOr(
+        const std::array<std::array<uint64_t, 64>, 64> &table1,
+        const std::array<std::array<uint64_t, 64>, 64> &table2)
+    {
+
+        std::array<std::array<uint64_t, 64>, 64> result{};
+        for (size_t i = 0; i < 64; ++i)
+        {
+            for (size_t j = 0; j < 64; ++j)
+            {
+                result[i][j] = table1[i][j] | table2[i][j];
+            }
+        }
+        return result;
+    }
+
     // Bitboards of rays from square_1 to square_2, excluding square_1 and excluding square_2
     inline constexpr std::array<std::array<uint64_t, 64>, 64> precomputedBishopMovesTableOneBlocker {getBishopOneBlockerTable()};
     inline constexpr std::array<std::array<uint64_t, 64>, 64> precomputedRookMovesTableOneBlocker {getRookOneBlockerTable()};
+    inline constexpr std::array<std::array<uint64_t, 64>, 64> precomputedQueenMovesTableOneBlocker{elementWiseOr(getRookOneBlockerTable(), getBishopOneBlockerTable())};
 
     // Bitboards of rays from square_1 to square_2, excluding square_1 and including square_2 (for direct checks)
     inline constexpr std::array<std::array<uint64_t, 64>, 64> precomputedBishopMovesTableOneBlocker2 {getBishopOneBlockerTable2()};
     inline constexpr std::array<std::array<uint64_t, 64>, 64> precomputedRookMovesTableOneBlocker2 {getRookOneBlockerTable2()};
+    inline constexpr std::array<std::array<uint64_t, 64>, 64> precomputedQueenMovesTableOneBlocker2{elementWiseOr(getRookOneBlockerTable2(), getBishopOneBlockerTable2())};
 
     // Bitboards of full line (8 squares) containing squares, otherwise 0 
     inline constexpr std::array<std::array<uint64_t, 64>, 64> OnLineBitboards{getOnLineBitboardsTable()};

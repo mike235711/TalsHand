@@ -41,20 +41,20 @@ public:
     explicit Move(uint16_t value) : data{value} {}
 
     // Neither checks or promotion
-    explicit Move(unsigned short origin, unsigned short destination)
+    explicit Move(int origin, int destination)
         : data{static_cast<uint16_t>(origin | (destination << 6))}
     {
     }
     // Promotions/passant/castling without check
-    explicit Move(unsigned short origin, unsigned short destination, unsigned short promotionPiece)
+    explicit Move(int origin, int destination, int promotionPiece)
     {
         data = static_cast<uint16_t>(origin | (destination << 6) | (promotionPiece << 12) | 0x4000);
     }
     uint16_t getData() const { return data; }
 
-    unsigned short getOriginSquare() const { return data & 63; }
-    unsigned short getDestinationSquare() const { return (data >> 6) & 63; }
-    unsigned short getPromotingPiece() const { return (data >> 12) & 3; }
+    int getOriginSquare() const { return data & 63; }
+    int getDestinationSquare() const { return (data >> 6) & 63; }
+    int getPromotingPiece() const { return (data >> 12) & 3; }
 
     std::string toString() const
     {
@@ -90,10 +90,8 @@ public:
         return squareToAlgebraic(getOriginSquare()) + squareToAlgebraic(getDestinationSquare());
     }
     // Equality operator
-    bool operator==(const Move &other) const
-    {
-        return data == other.data;
-    }
+    constexpr bool operator==(const Move& m) const { return data == m.data; }
+    constexpr bool operator!=(const Move& m) const { return data != m.data; }
 };
 
 // Moves which contain a score
