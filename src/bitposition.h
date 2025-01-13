@@ -12,6 +12,10 @@
 
 
 extern bool ENGINEISWHITE;
+
+extern int16_t firstLayerWeights2Indices[640][640][8];
+extern int16_t firstLayerInvertedWeights2Indices[640][640][8];
+
 extern int16_t firstLayerWeights[640][8];
 extern int16_t firstLayerInvertedWeights[640][8];
 
@@ -459,6 +463,13 @@ public:
     // NNUEU updates
     // Helper functions to update the input vector
     // They are used in bitposition.cpp inside makeNormalMove, makeCapture, setPiece and removePiece.
+    void addAndRemoveOnInput(int subIndexAdd, int subIndexRemove)
+    {
+        // White turn (use normal NNUE)
+        add_8_int16(state_info->inputWhiteTurn, firstLayerWeights2Indices[subIndexAdd][subIndexRemove]);
+        // Black turn (use inverted NNUE)
+        add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights2Indices[subIndexAdd][subIndexRemove]);
+    }
     void addOnInput(int subIndex)
     {
         // White turn (use normal NNUE)
@@ -578,11 +589,8 @@ public:
         m_last_nnue_bq_bits = m_black_queens_bit;
     }
 
-    void updateAccumulator1()
+    void updateAccumulator()
     {
-        // Constants for piece indexing
-        constexpr int pieceOffsets[10] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-
         // Current and previous bitboards for each piece type
         const uint64_t currentBits[10] = {
             m_white_pawns_bit, m_white_knights_bit, m_white_bishops_bit,
@@ -602,7 +610,7 @@ public:
             uint64_t piecesAdd = currentBits[i] & ~previousBits[i];
             while (piecesAdd)
             {
-                addOnInput(64 * pieceOffsets[i] + popLeastSignificantBit(piecesAdd));
+                addOnInput(64 * i + popLeastSignificantBit(piecesAdd));
             }
         }
 
@@ -612,13 +620,13 @@ public:
             uint64_t piecesRemove = ~currentBits[i] & previousBits[i];
             while (piecesRemove)
             {
-                removeOnInput(64 * pieceOffsets[i] + popLeastSignificantBit(piecesRemove));
+                removeOnInput(64 * i + popLeastSignificantBit(piecesRemove));
             }
         }
         setLastNNUEBits();
     }
 
-    void updateAccumulator()
+    void updateAccumulator1()
     {
         uint64_t piecesAdd, piecesRemove;
 

@@ -61,25 +61,25 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
 // This search is done when depth is less than or equal to 0 and considers only captures and promotions
 {
     // Check if we have stored this position in ttable
-    TTEntry *ttEntry = globalTT.probe(position.getZobristKey());
-    // If position is stored in ttable
-    if (ttEntry != nullptr)
-    {
-        // We are in a PV-Node
-        if (ttEntry->getIsExact())
-            return ttEntry->getValue();
+    // TTEntry *ttEntry = globalTT.probe(position.getZobristKey());
+    // // If position is stored in ttable
+    // if (ttEntry != nullptr)
+    // {
+    //     // We are in a PV-Node
+    //     if (ttEntry->getIsExact())
+    //         return ttEntry->getValue();
 
-        // We are not in a PV-Node
-        else
-        {
-            // Lower bound at deeper depth
-            if (our_turn)
-                alpha = ttEntry->getValue();
-            // Upper bound at deeper depth
-            else
-                beta = ttEntry->getValue();
-        }
-    }
+    //     // We are not in a PV-Node
+    //     else
+    //     {
+    //         // Lower bound at deeper depth
+    //         if (our_turn)
+    //             alpha = ttEntry->getValue();
+    //         // Upper bound at deeper depth
+    //         else
+    //             beta = ttEntry->getValue();
+    //     }
+    // }
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
     int16_t value{position.evaluationFunction(our_turn)};
 

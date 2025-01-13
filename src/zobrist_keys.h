@@ -1,29 +1,29 @@
 #ifndef ZOBRIST_KEYS_H
 #define ZOBRIST_KEYS_H
 
-#include <array>
 #include <vector>
 #include <unordered_set>
 #include <random>
 #include <iostream>
+#include <cstdint>
 
 namespace zobrist_keys
 {
-    extern std::array<uint64_t, 64> whitePawnZobristNumbers;
-    extern std::array<uint64_t, 64> whiteKnightZobristNumbers;
-    extern std::array<uint64_t, 64> whiteBishopZobristNumbers;
-    extern std::array<uint64_t, 64> whiteRookZobristNumbers;
-    extern std::array<uint64_t, 64> whiteQueenZobristNumbers;
-    extern std::array<uint64_t, 64> whiteKingZobristNumbers;
-    extern std::array<uint64_t, 64> blackPawnZobristNumbers;
-    extern std::array<uint64_t, 64> blackKnightZobristNumbers;
-    extern std::array<uint64_t, 64> blackBishopZobristNumbers;
-    extern std::array<uint64_t, 64> blackRookZobristNumbers;
-    extern std::array<uint64_t, 64> blackQueenZobristNumbers;
-    extern std::array<uint64_t, 64> blackKingZobristNumbers;
+    extern uint64_t whitePawnZobristNumbers[64];
+    extern uint64_t whiteKnightZobristNumbers[64];
+    extern uint64_t whiteBishopZobristNumbers[64];
+    extern uint64_t whiteRookZobristNumbers[64];
+    extern uint64_t whiteQueenZobristNumbers[64];
+    extern uint64_t whiteKingZobristNumbers[64];
+    extern uint64_t blackPawnZobristNumbers[64];
+    extern uint64_t blackKnightZobristNumbers[64];
+    extern uint64_t blackBishopZobristNumbers[64];
+    extern uint64_t blackRookZobristNumbers[64];
+    extern uint64_t blackQueenZobristNumbers[64];
+    extern uint64_t blackKingZobristNumbers[64];
     extern uint64_t blackToMoveZobristNumber;
-    extern std::array<uint64_t, 16> castlingRightsZobristNumbers;
-    extern std::array<uint64_t, 64> passantSquaresZobristNumbers;
+    extern uint64_t castlingRightsZobristNumbers[16];
+    extern uint64_t passantSquaresZobristNumbers[64];
 
     std::vector<uint64_t> generateRandomNumbers(size_t count, uint64_t seed);
     void initializeZobristNumbers();

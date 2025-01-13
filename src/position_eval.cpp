@@ -6,6 +6,7 @@
 #include "precomputed_moves.h"
 #include "simd.h"
 
+// NNUEU parameter loading
 
 int8_t *load_int8_1D_array(const std::string &file_path, size_t cols)
 {
@@ -129,6 +130,47 @@ void load_inverted_int16_2D_array1(const std::string &file_path, int16_t weights
     }
 }
 
+void initializeDoubleWeights()
+{
+    for (int i = 0; i < 640; i++)
+    {
+        for (int j = 0; j < 640; j++)
+        {
+            for (int k = 0; k < 8; k++)
+            {
+                // Sum with overflow handling for firstLayerWeights2Indices
+                int32_t sum1 = (int32_t)firstLayerWeights[i][k] - (int32_t)firstLayerWeights[j][k];
+                if (sum1 > INT16_MAX)
+                {
+                    firstLayerWeights2Indices[i][j][k] = INT16_MAX;
+                }
+                else if (sum1 < INT16_MIN)
+                {
+                    firstLayerWeights2Indices[i][j][k] = INT16_MIN;
+                }
+                else
+                {
+                    firstLayerWeights2Indices[i][j][k] = (int16_t)sum1;
+                }
+
+                // Sum with overflow handling for firstLayerInvertedWeights2Indices
+                int32_t sum2 = (int32_t)firstLayerInvertedWeights[i][k] - (int32_t)firstLayerInvertedWeights[j][k];
+                if (sum2 > INT16_MAX)
+                {
+                    firstLayerInvertedWeights2Indices[i][j][k] = INT16_MAX;
+                }
+                else if (sum2 < INT16_MIN)
+                {
+                    firstLayerInvertedWeights2Indices[i][j][k] = INT16_MIN;
+                }
+                else
+                {
+                    firstLayerInvertedWeights2Indices[i][j][k] = (int16_t)sum2;
+                }
+            }
+        }
+    }
+}
 
 namespace NNUEU
 {
@@ -221,6 +263,8 @@ namespace NNUEU
         delete[] tempThirdLayerBiases;
 
         finalLayerBias = load_int16(modelDir + "final_layer_biases.csv");
+
+        initializeDoubleWeights();
 
         // Print arrays
         // print2DArray("First Layer Weights", firstLayerWeights, 640);

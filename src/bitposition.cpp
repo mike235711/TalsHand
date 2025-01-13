@@ -9,6 +9,8 @@
 #include "zobrist_keys.h"
 #include "position_eval.h" // Utility functions to update NNUE Input
 
+int16_t firstLayerWeights2Indices[640][640][8] = {0};
+int16_t firstLayerInvertedWeights2Indices[640][640][8] = {0};
 
 int16_t firstLayerWeights[640][8] = {0};
 int16_t firstLayerInvertedWeights[640][8] = {0};
@@ -4477,8 +4479,10 @@ void BitPosition::makeCapture(T move, StateInfo& new_state_info)
             {
                 BitPosition::setPiece(origin_bit, (state_info->lastDestinationBit));
                 // Set NNUE input
-                addOnInput(64 * m_moved_piece + m_last_destination_square);
-                removeOnInput(64 * m_moved_piece + state_info->lastOriginSquare);
+                // addOnInput(64 * m_moved_piece + m_last_destination_square);
+                // removeOnInput(64 * m_moved_piece + state_info->lastOriginSquare);
+
+                addAndRemoveOnInput(64 * m_moved_piece + m_last_destination_square, 64 * m_moved_piece + state_info->lastOriginSquare);
             }
             // Captures (Non passant)
             if (((state_info->lastDestinationBit) & m_black_pawns_bit) != 0)
@@ -4589,8 +4593,9 @@ void BitPosition::makeCapture(T move, StateInfo& new_state_info)
             {
                 BitPosition::setPiece(origin_bit, (state_info->lastDestinationBit));
                 // Set NNUE input
-                addOnInput(64 * (5 + m_moved_piece) + m_last_destination_square);
-                removeOnInput(64 *(5+ m_moved_piece) + state_info->lastOriginSquare);
+                // addOnInput(64 * (5 + m_moved_piece) + m_last_destination_square);
+                // removeOnInput(64 *(5+ m_moved_piece) + state_info->lastOriginSquare);
+                addAndRemoveOnInput(64 * (5 + m_moved_piece) + m_last_destination_square, 64 * (5 + m_moved_piece) + state_info->lastOriginSquare);
             }
 
             // Captures (Non passant)

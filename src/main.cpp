@@ -115,6 +115,8 @@ int main()
 
     // Initialize std::vectors of NNUEInput layers as global variables
     NNUEU::initNNUEParameters();
+    precomputed_moves::init_precomputed_moves();
+    // precomputed_moves::pretty_print_all();
 
     // Initialize magic numbers and zobrist numbers
     initmagicmoves();
