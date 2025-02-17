@@ -6,18 +6,7 @@
 
 namespace zobrist_keys
 {
-    uint64_t whitePawnZobristNumbers[64];
-    uint64_t whiteKnightZobristNumbers[64];
-    uint64_t whiteBishopZobristNumbers[64];
-    uint64_t whiteRookZobristNumbers[64];
-    uint64_t whiteQueenZobristNumbers[64];
-    uint64_t whiteKingZobristNumbers[64];
-    uint64_t blackPawnZobristNumbers[64];
-    uint64_t blackKnightZobristNumbers[64];
-    uint64_t blackBishopZobristNumbers[64];
-    uint64_t blackRookZobristNumbers[64];
-    uint64_t blackQueenZobristNumbers[64];
-    uint64_t blackKingZobristNumbers[64];
+    uint64_t pieceZobristNumbers[2][6][64];
     uint64_t blackToMoveZobristNumber;
     uint64_t castlingRightsZobristNumbers[16];
     uint64_t passantSquaresZobristNumbers[64];
@@ -44,18 +33,18 @@ namespace zobrist_keys
 
         for (size_t i = 0; i < 64; ++i)
         {
-            whitePawnZobristNumbers[i] = randomNumbers[i];
-            whiteKnightZobristNumbers[i] = randomNumbers[64 + i];
-            whiteBishopZobristNumbers[i] = randomNumbers[128 + i];
-            whiteRookZobristNumbers[i] = randomNumbers[192 + i];
-            whiteQueenZobristNumbers[i] = randomNumbers[256 + i];
-            whiteKingZobristNumbers[i] = randomNumbers[320 + i];
-            blackPawnZobristNumbers[i] = randomNumbers[384 + i];
-            blackKnightZobristNumbers[i] = randomNumbers[448 + i];
-            blackBishopZobristNumbers[i] = randomNumbers[512 + i];
-            blackRookZobristNumbers[i] = randomNumbers[576 + i];
-            blackQueenZobristNumbers[i] = randomNumbers[640 + i];
-            blackKingZobristNumbers[i] = randomNumbers[704 + i];
+            pieceZobristNumbers[0][0][i] = randomNumbers[i];
+            pieceZobristNumbers[0][1][i] = randomNumbers[64 + i];
+            pieceZobristNumbers[0][2][i] = randomNumbers[128 + i];
+            pieceZobristNumbers[0][3][i] = randomNumbers[192 + i];
+            pieceZobristNumbers[0][4][i] = randomNumbers[256 + i];
+            pieceZobristNumbers[0][5][i] = randomNumbers[320 + i];
+            pieceZobristNumbers[1][0][i] = randomNumbers[384 + i];
+            pieceZobristNumbers[1][1][i] = randomNumbers[448 + i];
+            pieceZobristNumbers[1][2][i] = randomNumbers[512 + i];
+            pieceZobristNumbers[1][3][i] = randomNumbers[576 + i];
+            pieceZobristNumbers[1][4][i] = randomNumbers[640 + i];
+            pieceZobristNumbers[1][5][i] = randomNumbers[704 + i];
         }
 
         blackToMoveZobristNumber = randomNumbers[768];
@@ -84,18 +73,6 @@ namespace zobrist_keys
 
     void printAllZobristKeys()
     {
-        printArray(whitePawnZobristNumbers, 64, "whitePawnZobristNumbers");
-        printArray(whiteKnightZobristNumbers, 64, "whiteKnightZobristNumbers");
-        printArray(whiteBishopZobristNumbers, 64, "whiteBishopZobristNumbers");
-        printArray(whiteRookZobristNumbers, 64, "whiteRookZobristNumbers");
-        printArray(whiteQueenZobristNumbers, 64, "whiteQueenZobristNumbers");
-        printArray(whiteKingZobristNumbers, 64, "whiteKingZobristNumbers");
-        printArray(blackPawnZobristNumbers, 64, "blackPawnZobristNumbers");
-        printArray(blackKnightZobristNumbers, 64, "blackKnightZobristNumbers");
-        printArray(blackBishopZobristNumbers, 64, "blackBishopZobristNumbers");
-        printArray(blackRookZobristNumbers, 64, "blackRookZobristNumbers");
-        printArray(blackQueenZobristNumbers, 64, "blackQueenZobristNumbers");
-        printArray(blackKingZobristNumbers, 64, "blackKingZobristNumbers");
         std::cout << "blackToMoveZobristNumber: " << blackToMoveZobristNumber << "\n";
         printArray(castlingRightsZobristNumbers, 16, "castlingRightsZobristNumbers");
         printArray(passantSquaresZobristNumbers, 64, "passantSquaresZobristNumbers");

@@ -14,8 +14,7 @@ namespace precomputed_moves
     // Initialize precomputed move tables (generated using my python move generator)
     extern uint64_t knight_moves[64];
     extern uint64_t king_moves[64];
-    extern uint64_t white_pawn_attacks[64];
-    extern uint64_t black_pawn_attacks[64];
+    extern uint64_t pawn_attacks[2][64];
 
     // Moveable squares bitboard for bishop and rook without taking into account the edge squares
     // Used for computing blocker_bits given a position, used in BitPosition class
@@ -39,9 +38,6 @@ namespace precomputed_moves
 
     // Bitboards of full line (8 squares) containing squares, otherwise 0
     extern uint64_t OnLineBitboards[64][64];
-
-    // Bitboards of full line (8 squares) containing squares, otherwise full bitboard (for discovered checks)
-    extern uint64_t OnLineBitboards2[64][64];
 
     void init_precomputed_moves();
     void pretty_print_all();

@@ -7,8 +7,7 @@ namespace precomputed_moves
     // Initialize precomputed move tables (generated using my python move generator)
     uint64_t knight_moves[64];
     uint64_t king_moves[64];
-    uint64_t white_pawn_attacks[64];
-    uint64_t black_pawn_attacks[64];
+    uint64_t pawn_attacks[2][64];
 
     // Moveable squares bitboard for bishop and rook without taking into account the edge squares
     // Used for computing blocker_bits given a position, used in BitPosition class
@@ -32,9 +31,6 @@ namespace precomputed_moves
 
     // Bitboards of full line (8 squares) containing squares, otherwise 0
     uint64_t OnLineBitboards[64][64];
-
-    // Bitboards of full line (8 squares) containing squares, otherwise full bitboard (for discovered checks)
-    uint64_t OnLineBitboards2[64][64];
 
     // Helper to check if a square is on the board
     inline bool is_valid_square(int file, int rank)
@@ -235,8 +231,8 @@ namespace precomputed_moves
             // These bellow are all OK
             knight_moves[square] = calculate_knight_moves(square);
             king_moves[square] = calculate_king_moves(square);
-            white_pawn_attacks[square] = calculate_pawn_attacks(square, true);
-            black_pawn_attacks[square] = calculate_pawn_attacks(square, false);
+            pawn_attacks[0][square] = calculate_pawn_attacks(square, true);
+            pawn_attacks[1][square] = calculate_pawn_attacks(square, false);
 
             bishop_unfull_rays[square] = 0;
             rook_unfull_rays[square] = 0;
@@ -270,19 +266,6 @@ namespace precomputed_moves
                 precomputedQueenMovesTableOneBlocker2[square][target] = precomputedBishopMovesTableOneBlocker2[square][target] | precomputedRookMovesTableOneBlocker2[square][target];
 
                 OnLineBitboards[square][target] = calculate_full_between(square, target);
-            }
-        }
-        for (int square = 0; square < 64; ++square)
-        {
-            int target = 0;
-            for (uint64_t bitboard : OnLineBitboards[square])
-            {
-                if (bitboard == 0)
-                    OnLineBitboards2[square][target] = ~0ULL;
-                else
-                    OnLineBitboards2[square][target] = bitboard;
-
-                target++;
             }
         }
     }
@@ -324,14 +307,14 @@ namespace precomputed_moves
         for (int square = 0; square < 64; ++square)
         {
             std::cout << "Square " << square << ":\n";
-            pretty_print_bitboard(white_pawn_attacks[square]);
+            pretty_print_bitboard(pawn_attacks[0][square]);
         }
 
         std::cout << "Black Pawn Attacks:\n";
         for (int square = 0; square < 64; ++square)
         {
             std::cout << "Square " << square << ":\n";
-            pretty_print_bitboard(black_pawn_attacks[square]);
+            pretty_print_bitboard(pawn_attacks[1][square]);
         }
 
         std::cout << "Bishop Unfull Rays:\n";

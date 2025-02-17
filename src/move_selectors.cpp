@@ -22,18 +22,12 @@ void sort_moves(ScoredMove *begin, ScoredMove *end)
 void ABMoveSelectorNotCheck::score()
 {
     for (auto &move : *this)
-    {
-        move.score -= pos.pieceValueFrom(move.getOriginSquare());
-        move.score += pos.pieceValueTo(move.getDestinationSquare());
-    }
+        move.score = pos.qSMoveValue(move);
 }
 void QSMoveSelectorNotCheck::score()
 {
     for (auto &move : *this)
-    {
-        move.score -= pos.pieceValueFrom(move.getOriginSquare());
-        move.score += pos.pieceValueTo(move.getDestinationSquare());
-    }
+        move.score = pos.aBMoveValue(move);
 }
 
 // This never returns the TT move, as it was emitted before.

@@ -11,6 +11,7 @@
 #include "position_eval.h"
 #include "engine.h"
 #include "move_selectors.h"
+#include <unordered_map>
 
 extern TranspositionTable globalTT;
 extern int OURTIME;
@@ -60,26 +61,6 @@ bool stopSearch(const std::vector<int16_t> &values, int streak, int depth, BitPo
 int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool our_turn)
 // This search is done when depth is less than or equal to 0 and considers only captures and promotions
 {
-    // Check if we have stored this position in ttable
-    // TTEntry *ttEntry = globalTT.probe(position.getZobristKey());
-    // // If position is stored in ttable
-    // if (ttEntry != nullptr)
-    // {
-    //     // We are in a PV-Node
-    //     if (ttEntry->getIsExact())
-    //         return ttEntry->getValue();
-
-    //     // We are not in a PV-Node
-    //     else
-    //     {
-    //         // Lower bound at deeper depth
-    //         if (our_turn)
-    //             alpha = ttEntry->getValue();
-    //         // Upper bound at deeper depth
-    //         else
-    //             beta = ttEntry->getValue();
-    //     }
-    // }
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
     int16_t value{position.evaluationFunction(our_turn)};
 
@@ -91,8 +72,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
     if (not position.getIsCheck()) // Not in check
     {
         bool cutoff{false};
-        Move refutation = Move(0);
-        refutation = position.getBestRefutation();
+        Move refutation = position.getBestRefutation();
         // Refutation
         if (refutation.getData() != 0)
         {
@@ -235,6 +215,9 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
 int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int16_t beta, bool our_turn)
 // This search is done when depth is more than 0 and considers all moves and stores positions in the transposition table
 {
+    if (position.isDraw())
+        return 2048;
+
     bool no_moves{true};
     bool cutoff{false};
 
@@ -247,7 +230,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
     // At depths <= 0 we enter quiesence search
     if (depth <= 0)
     {
-        position.updateAccumulator();
+        // position.updateAccumulator();
         return quiesenceSearch(position, alpha, beta, our_turn);
     }
 
@@ -292,14 +275,9 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
 
         if (our_turn) // Maximize
         {
-            if (position.positionIsDrawnAfterMove(tt_move))
-                child_value = 2048;
-            else
-            {
-                position.makeMove(tt_move, state_info);
-                child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
-                position.unmakeMove(tt_move);
-            }
+            position.makeMove(tt_move, state_info);
+            child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
+            position.unmakeMove(tt_move);
             if (child_value > value)
             {
                 value = child_value;
@@ -311,14 +289,9 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
         }
         else // Minimize
         {
-            if (position.positionIsDrawnAfterMove(tt_move))
-                child_value = 2048;
-            else
-            {
-                position.makeMove(tt_move, state_info);
-                child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
-                position.unmakeMove(tt_move);
-            }
+            position.makeMove(tt_move, state_info);
+            child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
+            position.unmakeMove(tt_move);
             if (child_value < value)
             {
                 value = child_value;
@@ -345,15 +318,9 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     no_moves = false;
                     if (our_turn) // Maximize
                     {
-                        // If this move will lead to a draw we return the draw value 2048
-                        if (position.positionIsDrawnAfterMove(move))
-                            child_value = 2048;
-                        else
-                        {
-                            position.makeMove(move, state_info);
-                            child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
-                            position.unmakeMove(move);
-                        }
+                        position.makeMove(move, state_info);
+                        child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
+                        position.unmakeMove(move);
                         if (child_value > value)
                         {
                             value = child_value;
@@ -368,14 +335,9 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     }
                     else // Minimize
                     {
-                        if (position.positionIsDrawnAfterMove(move))
-                            child_value = 2048;
-                        else
-                        {
-                            position.makeMove(move, state_info);
-                            child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
-                            position.unmakeMove(move);
-                        }
+                        position.makeMove(move, state_info);
+                        child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
+                        position.unmakeMove(move);
                         if (child_value < value)
                         {
                             value = child_value;
@@ -397,14 +359,9 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                         no_moves = false;
                         if (our_turn) // Maximize
                         {
-                            if (position.positionIsDrawnAfterMove(move))
-                                child_value = 2048;
-                            else
-                            {
-                                position.makeMove(move, state_info);
-                                child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
-                                position.unmakeMove(move);
-                            }
+                            position.makeMove(move, state_info);
+                            child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
+                            position.unmakeMove(move);
                             if (child_value > value)
                             {
                                 value = child_value;
@@ -420,14 +377,9 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                         }
                         else // Minimize
                         {
-                            if (position.positionIsDrawnAfterMove(move))
-                                child_value = 2048;
-                            else
-                            {
-                                position.makeMove(move, state_info);
-                                child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
-                                position.unmakeMove(move);
-                            }
+                            position.makeMove(move, state_info);
+                            child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
+                            position.unmakeMove(move);
                             if (child_value < value)
                             {
                                 value = child_value;
@@ -450,14 +402,9 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                         no_moves = false;
                         if (our_turn) // Maximize
                         {
-                            if (position.positionIsDrawnAfterMove(move))
-                                child_value = 2048;
-                            else
-                            {
-                                position.makeMove(move, state_info);
-                                child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
-                                position.unmakeMove(move);
-                            }
+                            position.makeMove(move, state_info);
+                            child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
+                            position.unmakeMove(move);
                             if (child_value > value)
                             {
                                 value = child_value;
@@ -472,14 +419,9 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                         }
                         else // Minimize
                         {
-                            if (position.positionIsDrawnAfterMove(move))
-                                child_value = 2048;
-                            else
-                            {
-                                position.makeMove(move, state_info);
-                                child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
-                                position.unmakeMove(move);
-                            }
+                            position.makeMove(move, state_info);
+                            child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
+                            position.unmakeMove(move);
                             if (child_value < value)
                             {
                                 value = child_value;
@@ -506,14 +448,9 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     no_moves = false;
                     if (our_turn) // Maximize
                     {
-                        if (position.positionIsDrawnAfterMove(move))
-                            child_value = 2048;
-                        else
-                        {
-                            position.makeMove(move, state_info);
-                            child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
-                            position.unmakeMove(move);
-                        }
+                        position.makeMove(move, state_info);
+                        child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
+                        position.unmakeMove(move);
                         if (child_value > value)
                         {
                             value = child_value;
@@ -528,14 +465,9 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                     }
                     else // Minimize
                     {
-                        if (position.positionIsDrawnAfterMove(move))
-                            child_value = 2048;
-                        else
-                        {
-                            position.makeMove(move, state_info);
-                            child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
-                            position.unmakeMove(move);
-                        }
+                        position.makeMove(move, state_info);
+                        child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
+                        position.unmakeMove(move);
                         if (child_value < value)
                         {
                             value = child_value;
@@ -562,14 +494,9 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                 no_moves = false;
                 if (our_turn) // Maximize
                 {
-                    if (position.positionIsDrawnAfterMove(move))
-                        child_value = 2048;
-                    else
-                    {
-                        position.makeMove(move, state_info);
-                        child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
-                        position.unmakeMove(move);
-                    }
+                    position.makeMove(move, state_info);
+                    child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
+                    position.unmakeMove(move);
                     if (child_value > value)
                     {
                         value = child_value;
@@ -584,14 +511,9 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
                 }
                 else // Minimize
                 {
-                    if (position.positionIsDrawnAfterMove(move))
-                        child_value = 2048;
-                    else
-                    {
-                        position.makeMove(move, state_info);
-                        child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
-                        position.unmakeMove(move);
-                    }
+                    position.makeMove(move, state_info);
+                    child_value = alphaBetaSearch(position, depth - 1, alpha, beta, true);
+                    position.unmakeMove(move);
                     if (child_value < value)
                     {
                         value = child_value;
@@ -776,7 +698,6 @@ std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t start_dept
         // Check if the duration has been exceeded
         if (duration >= timeForMoveMS)
             break;
-
     }
 
     // std::cout << "Depth: " << DEPTH << "\n";

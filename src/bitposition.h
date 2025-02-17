@@ -9,7 +9,8 @@
 #include <sstream> 
 #include <vector>
 #include <unordered_set>
-
+#include <cstring>
+#include <algorithm>
 
 extern bool ENGINEISWHITE;
 
@@ -43,11 +44,12 @@ struct StateInfo
     bool blackKSCastling;
     bool blackQSCastling;
     int fiftyMoveCount;
+    uint64_t blockersForKing;
+    int16_t inputWhiteTurn[8]; // NUUEU Input
+    int16_t inputBlackTurn[8]; // NNUEU Input
+    int reversibleMovesMade; // Used for three-fold checks
     int pSquare; // Used to update zobrist key
     uint64_t zobristKey;
-    uint64_t blockersForKing;
-    int16_t inputWhiteTurn[8];
-    int16_t inputBlackTurn[8];
 
     // Not copied when making a move (will be recomputed anyhow), used for unmaking moves
     uint64_t straightPinnedPieces;
@@ -66,23 +68,16 @@ struct StateInfo
 class BitPosition
 {
 private:
+    // Board of color pieces 7s where no pieces
+    int m_white_board[64];
+    int m_black_board[64];
+
     // 64-bit to represent pieces on board
-    uint64_t m_white_pawns_bit{};
-    uint64_t m_white_knights_bit{};
-    uint64_t m_white_bishops_bit{};
-    uint64_t m_white_rooks_bit{};
-    uint64_t m_white_queens_bit{};
-    uint64_t m_white_king_bit{};
-    uint64_t m_black_pawns_bit{};
-    uint64_t m_black_knights_bit{};
-    uint64_t m_black_bishops_bit{};
-    uint64_t m_black_rooks_bit{};
-    uint64_t m_black_queens_bit{};
-    uint64_t m_black_king_bit{};
+    uint64_t m_pieces[2][6];
 
     // Bits to represent all pieces of each player
-    uint64_t m_white_pieces_bit{};
-    uint64_t m_black_pieces_bit{};
+    uint64_t m_pieces_bit[2];
+
     uint64_t m_all_pieces_bit{};
 
     // True white's turn, False black's
@@ -94,8 +89,7 @@ private:
     int m_last_destination_square;
 
     // int representing kings' positions
-    int m_white_king_position{};
-    int m_black_king_position{};
+    int m_king_position[2];
 
     // For discovered checks
     bool m_blockers_set{false};
@@ -113,59 +107,11 @@ private:
 
     StateInfo *state_info;
 
-    uint64_t m_last_nnue_wp_bits;
-    uint64_t m_last_nnue_wn_bits;
-    uint64_t m_last_nnue_wb_bits;
-    uint64_t m_last_nnue_wr_bits;
-    uint64_t m_last_nnue_wq_bits;
-
-    uint64_t m_last_nnue_bp_bits;
-    uint64_t m_last_nnue_bn_bits;
-    uint64_t m_last_nnue_bb_bits;
-    uint64_t m_last_nnue_br_bits;
-    uint64_t m_last_nnue_bq_bits;
+    uint64_t m_last_nnue_bits[2][6];
 
     // std::array<std::string, 64> m_fen_array{}; // For debugging purposes
 
 public:
-    // I define the short member functions here, the rest are defined in bitposition.cpp
-    // Member function declarations (defined in bitposition.cpp)
-    BitPosition(uint64_t white_pawns_bit, uint64_t white_knights_bit, uint64_t white_bishops_bit,
-                uint64_t white_rooks_bit, uint64_t white_queens_bit, uint64_t white_king_bit,
-                uint64_t black_pawns_bit, uint64_t black_knights_bit, uint64_t black_bishops_bit,
-                uint64_t black_rooks_bit, uint64_t black_queens_bit, uint64_t black_king_bit,
-                bool turn, bool white_kingside_castling, bool white_queenside_castling,
-                bool black_kingside_castling, bool black_queenside_castling)
-        : m_white_pawns_bit(white_pawns_bit),
-          m_white_knights_bit(white_knights_bit),
-          m_white_bishops_bit(white_bishops_bit),
-          m_white_rooks_bit(white_rooks_bit),
-          m_white_queens_bit(white_queens_bit),
-          m_white_king_bit(white_king_bit),
-          m_black_pawns_bit(black_pawns_bit),
-          m_black_knights_bit(black_knights_bit),
-          m_black_bishops_bit(black_bishops_bit),
-          m_black_rooks_bit(black_rooks_bit),
-          m_black_queens_bit(black_queens_bit),
-          m_black_king_bit(black_king_bit),
-          m_turn(turn)
-    {
-        state_info = new StateInfo(); // Allocate memory for state_info
-        state_info->whiteKSCastling = white_kingside_castling;
-        state_info->whiteQSCastling = white_queenside_castling;
-        state_info->blackKSCastling = black_kingside_castling;
-        state_info->blackQSCastling = black_queenside_castling;
-
-        m_white_pieces_bit = m_white_pawns_bit | m_white_knights_bit | m_white_bishops_bit | m_white_rooks_bit | m_white_queens_bit | m_white_king_bit;
-        m_black_pieces_bit = m_black_pawns_bit | m_black_knights_bit | m_black_bishops_bit | m_black_rooks_bit | m_black_queens_bit | m_black_king_bit;
-        m_all_pieces_bit = m_white_pieces_bit | m_black_pieces_bit;
-
-        setKingPosition();
-        setIsCheckOnInitialization();
-        setCheckInfoOnInitialization();
-        setBlockersAndPinsInAB();
-        initializeZobristKey();
-    }
     // Function to convert a FEN string to a BitPosition object
     BitPosition(const std::string &fen)
     {
@@ -174,9 +120,11 @@ public:
         fenStream >> board >> turn >> castling >> enPassant;
 
         // Initialize all bitboards to 0
-        m_white_pawns_bit = 0, m_white_knights_bit = 0, m_white_bishops_bit = 0, m_white_rooks_bit = 0, m_white_queens_bit = 0, m_white_king_bit = 0;
-        m_black_pawns_bit = 0, m_black_knights_bit = 0, m_black_bishops_bit = 0, m_black_rooks_bit = 0, m_black_queens_bit = 0, m_black_king_bit = 0;
+        m_pieces[0][0] = 0, m_pieces[0][1] = 0, m_pieces[0][2] = 0, m_pieces[0][3] = 0, m_pieces[0][4] = 0, m_pieces[0][5] = 0;
+        m_pieces[1][0] = 0, m_pieces[1][1] = 0, m_pieces[1][2] = 0, m_pieces[1][3] = 0, m_pieces[1][4] = 0, m_pieces[1][5] = 0;
 
+        std::fill(std::begin(m_white_board), std::end(m_white_board), 7);
+        std::fill(std::begin(m_black_board), std::end(m_black_board), 7);
         int square = 56; // Start from the top-left corner of the chess board
         for (char c : board)
         {
@@ -194,40 +142,52 @@ public:
                 switch (c)
                 {
                 case 'P':
-                    m_white_pawns_bit |= bit;
+                    m_pieces[0][0] |= bit;
+                    m_white_board[square] = 0;
                     break;
                 case 'N':
-                    m_white_knights_bit |= bit;
+                    m_pieces[0][1] |= bit;
+                    m_white_board[square] = 1;
                     break;
                 case 'B':
-                    m_white_bishops_bit |= bit;
+                    m_pieces[0][2] |= bit;
+                    m_white_board[square] = 2;
                     break;
                 case 'R':
-                    m_white_rooks_bit |= bit;
+                    m_pieces[0][3] |= bit;
+                    m_white_board[square] = 3;
                     break;
                 case 'Q':
-                    m_white_queens_bit |= bit;
+                    m_pieces[0][4] |= bit;
+                    m_white_board[square] = 4;
                     break;
                 case 'K':
-                    m_white_king_bit |= bit;
+                    m_pieces[0][5] |= bit;
+                    m_white_board[square] = 5;
                     break;
                 case 'p':
-                    m_black_pawns_bit |= bit;
+                    m_pieces[1][0] |= bit;
+                    m_black_board[square] = 0;
                     break;
                 case 'n':
-                    m_black_knights_bit |= bit;
+                    m_pieces[1][1] |= bit;
+                    m_black_board[square] = 1;
                     break;
                 case 'b':
-                    m_black_bishops_bit |= bit;
+                    m_pieces[1][2] |= bit;
+                    m_black_board[square] = 2;
                     break;
                 case 'r':
-                    m_black_rooks_bit |= bit;
+                    m_pieces[1][3] |= bit;
+                    m_black_board[square] = 3;
                     break;
                 case 'q':
-                    m_black_queens_bit |= bit;
+                    m_pieces[1][4] |= bit;
+                    m_black_board[square] = 4;
                     break;
                 case 'k':
-                    m_black_king_bit |= bit;
+                    m_pieces[1][5] |= bit;
+                    m_black_board[square] = 5;
                     break;
                 }
                 square++;
@@ -259,7 +219,6 @@ public:
 
     void initializeZobristKey();
     void updateZobristKeyPiecePartAfterMove(int origin_square, int destination_square);
-    void updateAccumulatorAfterMove(int origin_square, int destination_square);
 
     void setBlockersAndPinsInAB();
     void setBlockersAndPinsInQS();
@@ -275,16 +234,10 @@ public:
     bool ttMoveIsOk(Move move) const;
 
     // These set the checks bits, m_is_check and m_num_checks    
-    void setDiscoverCheckForWhite();
-    void setDiscoverCheckForBlack();
 
     void setCheckInfo();
 
-    bool newWhiteKingSquareIsSafe(int new_position) const;
-    bool newBlackKingSquareIsSafe(int new_position) const;
-
-    bool whiteKingSquareIsSafe() const;
-    bool blackKingSquareIsSafe() const;
+    bool newKingSquareIsSafe(int new_position) const;
 
     bool kingIsSafeAfterPassant(int removed_square_1, int removed_square_2) const;
 
@@ -323,23 +276,17 @@ public:
     Move *inCheckRookBlocks(Move *&move_list) const;
     Move *inCheckQueenBlocks(Move *&move_list) const;
 
-    bool isDiscoverCheckForWhiteAfterPassant(int origin_square, int destination_square) const;
-    bool isDiscoverCheckForBlackAfterPassant(int origin_square, int destination_square) const;
+    bool isDiscoverCheckAfterPassant(int origin_square, int destination_square) const;
 
-    bool isDiscoverCheckForWhite(int origin_square, int destination_square) const;
-    bool isDiscoverCheckForBlack(int origin_square, int destination_square) const;
+    bool isDiscoverCheck(int origin_square, int destination_square) const;
 
-    bool isPawnCheckOrDiscoverForWhite(int origin_square, int destination_square) const;
-    bool isKnightCheckOrDiscoverForWhite(int origin_square, int destination_square) const;
-    bool isBishopCheckOrDiscoverForWhite(int origin_square, int destination_square) const;
-    bool isRookCheckOrDiscoverForWhite(int origin_square, int destination_square) const;
-    bool isQueenCheckOrDiscoverForWhite(int origin_square, int destination_square) const;
+    bool isPawnCheckOrDiscover(int origin_square, int destination_square) const;
+    bool isKnightCheckOrDiscover(int origin_square, int destination_square) const;
+    bool isBishopCheckOrDiscover(int origin_square, int destination_square) const;
+    bool isRookCheckOrDiscover(int origin_square, int destination_square) const;
+    bool isQueenCheckOrDiscover(int origin_square, int destination_square) const;
 
-    bool isPawnCheckOrDiscoverForBlack(int origin_square, int destination_square) const;
-    bool isKnightCheckOrDiscoverForBlack(int origin_square, int destination_square) const;
-    bool isBishopCheckOrDiscoverForBlack(int origin_square, int destination_square) const;
-    bool isRookCheckOrDiscoverForBlack(int origin_square, int destination_square) const;
-    bool isQueenCheckOrDiscoverForBlack(int origin_square, int destination_square) const;
+    bool isPieceCheckOrDiscover(int moved_piece, int origin_square, int destination_square) const;
 
     Move *inCheckOrderedCapturesAndKingMoves(Move *&move_list) const;
     Move *inCheckOrderedCaptures(Move *&move_list) const;
@@ -351,9 +298,6 @@ public:
 
     bool isMate() const;
 
-    std::array<int, 64> m_50_move_count_array{};
-
-    void setPiece(uint64_t origin_bit, uint64_t destination_bit);
     bool moveIsReseter(Move move);
     void resetPlyInfo();
 
@@ -373,83 +317,75 @@ public:
     std::vector<Move> inCheckAllMoves();
     std::vector<Move> allMoves();
 
-    uint64_t updateZobristKeyPiecePartBeforeMove(int origin_square, int destination_square, int promoted_piece) const;
-    template <typename T>
-    bool positionIsDrawnAfterMove(T move) const;
+    bool isDraw() const;
 
-    int pieceValueFrom(int square) const
+    int aBMoveValue(Move move) const
     {
+        // Promotions and castling
+        if (move.getData() & 0b0100000000000000)
+        {
+            // Promotions
+            if (m_turn && m_white_board[move.getOriginSquare()] == 0)
+                return 30;
+            // Castling
+            return 2;
+        }
+        // Non promotions
+        int score = 0;
         if (m_turn)
         {
-            if (square == m_white_king_position)
-                return 0;
-            uint64_t bit = 1ULL << square;
-            if (bit & m_white_pawns_bit)
-                return 4;
-            else if (bit & (m_white_knights_bit| m_white_bishops_bit))
-                return 10;
-            else if (bit & m_white_rooks_bit)
-                return 20;
-            else
-                return 36;
+            int piece_at = m_black_board[move.getDestinationSquare()];
+            if (piece_at != 7)
+                score += piece_at + 2;
+
+            piece_at = m_white_board[move.getOriginSquare()];
+            if (piece_at != 7 && piece_at != 5)
+                score -= piece_at;
         }
         else
         {
-            if (square == m_black_king_position)
-                return 0;
-            uint64_t bit = 1ULL << square;
-            if (bit & m_black_pawns_bit)
-                return 4;
-            else if (bit & (m_black_knights_bit | m_black_bishops_bit))
-                return 10;
-            else if (bit & m_black_rooks_bit)
-                return 20;
-            else
-                return 36;
+            int piece_at = m_white_board[move.getDestinationSquare()];
+            if (piece_at != 7)
+                score += piece_at + 2;
+
+            piece_at = m_black_board[move.getOriginSquare()];
+            if (piece_at != 7 && piece_at != 5)
+                score -= piece_at;
         }
+        return score;
     }
-    int pieceValueTo(int square) const
+    int qSMoveValue(Move move) const
+    // Captures and queen promotions
     {
-        uint64_t bit = (1ULL << square);
+        // Promotions
+        if (move.getData() & 0b0100000000000000)
+        {
+            return 30;
+        }
+        // Non promotions
+        int score = 0;
         if (m_turn)
         {
-            if (bit & m_black_pieces_bit)
-            {
-                if (bit & m_black_pawns_bit)
-                    return 5;
-                else if (bit & (m_black_knights_bit | m_black_bishops_bit))
-                    return 12;
-                else if (bit & m_black_rooks_bit)
-                    return 23;
-                else
-                    return 40;
-            }
-            return 0;
+            int piece_at = m_black_board[move.getDestinationSquare()];
+            if (piece_at != 7)
+                score += piece_at + 1;
         }
         else
         {
-            if (bit & m_white_pieces_bit)
-            {
-                if (bit & m_white_pawns_bit)
-                    return 5;
-                else if (bit & (m_white_knights_bit | m_white_bishops_bit))
-                    return 12;
-                else if (bit & m_white_rooks_bit)
-                    return 23;
-                else
-                    return 40;
-            }
-            return 0;
+            int piece_at = m_white_board[move.getDestinationSquare()];
+            if (piece_at != 7)
+                score += piece_at + 1;
         }
+        return score;
     }
 
     bool isEndgame() const
     {
         // Count the number of set bits (pieces) for each piece type
-        int white_major_pieces = countBits(m_white_rooks_bit) + countBits(m_white_queens_bit);
-        int white_minor_pieces = countBits(m_white_knights_bit) + countBits(m_white_bishops_bit);
-        int black_major_pieces = countBits(m_black_rooks_bit) + countBits(m_black_queens_bit);
-        int black_minor_pieces = countBits(m_black_knights_bit) + countBits(m_black_bishops_bit);
+        int white_major_pieces = countBits(m_pieces[0][3]) + countBits(m_pieces[0][4]);
+        int white_minor_pieces = countBits(m_pieces[0][1]) + countBits(m_pieces[0][2]);
+        int black_major_pieces = countBits(m_pieces[1][3]) + countBits(m_pieces[1][4]);
+        int black_minor_pieces = countBits(m_pieces[1][1]) + countBits(m_pieces[1][2]);
 
         // Total number of major and minor pieces
         int total_major_pieces = white_major_pieces + black_major_pieces;
@@ -462,7 +398,7 @@ public:
 
     // NNUEU updates
     // Helper functions to update the input vector
-    // They are used in bitposition.cpp inside makeNormalMove, makeCapture, setPiece and removePiece.
+    // They are used in bitposition.cpp inside makeCapture.
     void addAndRemoveOnInput(int subIndexAdd, int subIndexRemove)
     {
         // White turn (use normal NNUE)
@@ -487,13 +423,13 @@ public:
     // Move King functions to update nnueInput vector
     void moveWhiteKingNNUEInput()
     {
-        std::memcpy(secondLayer1WeightsBlockWhiteTurn, secondLayer1Weights[m_white_king_position], 32);
-        std::memcpy(secondLayer2WeightsBlockBlackTurn, secondLayer2Weights[invertIndex(m_white_king_position)], 32);
+        std::memcpy(secondLayer1WeightsBlockWhiteTurn, secondLayer1Weights[m_king_position[0]], 32);
+        std::memcpy(secondLayer2WeightsBlockBlackTurn, secondLayer2Weights[invertIndex(m_king_position[0])], 32);
     }
     void moveBlackKingNNUEInput()
     {
-        std::memcpy(secondLayer2WeightsBlockWhiteTurn, secondLayer2Weights[m_black_king_position], 32);
-        std::memcpy(secondLayer1WeightsBlockBlackTurn, secondLayer1Weights[invertIndex(m_black_king_position)], 32);
+        std::memcpy(secondLayer2WeightsBlockWhiteTurn, secondLayer2Weights[m_king_position[1]], 32);
+        std::memcpy(secondLayer1WeightsBlockBlackTurn, secondLayer1Weights[invertIndex(m_king_position[1])], 32);
     }
 
     void initializeNNUEInput()
@@ -502,70 +438,70 @@ public:
         std::memcpy(state_info->inputWhiteTurn, firstLayerBiases, sizeof(firstLayerBiases));
         std::memcpy(state_info->inputBlackTurn, firstLayerBiases, sizeof(firstLayerBiases));
 
-        for (unsigned short index : getBitIndices(m_white_pawns_bit))
+        for (unsigned short index : getBitIndices(m_pieces[0][0]))
         {
             add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[index]);
             add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[index]);
         }
 
-        for (unsigned short index : getBitIndices(m_white_knights_bit))
+        for (unsigned short index : getBitIndices(m_pieces[0][1]))
         {
             add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 + index]);
             add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 + index]);
         }
 
-        for (unsigned short index : getBitIndices(m_white_bishops_bit))
+        for (unsigned short index : getBitIndices(m_pieces[0][2]))
         {
             add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 * 2 + index]);
             add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 * 2 + index]);
         }
 
-        for (unsigned short index : getBitIndices(m_white_rooks_bit))
+        for (unsigned short index : getBitIndices(m_pieces[0][3]))
         {
             add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 * 3 + index]);
             add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 * 3 + index]);
         }
 
-        for (unsigned short index : getBitIndices(m_white_queens_bit))
+        for (unsigned short index : getBitIndices(m_pieces[0][4]))
         {
             add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 * 4 + index]);
             add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 * 4 + index]);
         }
 
-        for (unsigned short index : getBitIndices(m_black_pawns_bit))
+        for (unsigned short index : getBitIndices(m_pieces[1][0]))
         {
             add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 * 5 + index]);
             add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 * 5 + index]);
         }
 
-        for (unsigned short index : getBitIndices(m_black_knights_bit))
+        for (unsigned short index : getBitIndices(m_pieces[1][1]))
         {
             add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 * 6 + index]);
             add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 * 6 + index]);
         }
 
-        for (unsigned short index : getBitIndices(m_black_bishops_bit))
+        for (unsigned short index : getBitIndices(m_pieces[1][2]))
         {
             add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 * 7 + index]);
             add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 * 7 + index]);
         }
 
-        for (unsigned short index : getBitIndices(m_black_rooks_bit))
+        for (unsigned short index : getBitIndices(m_pieces[1][3]))
         {
             add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 * 8 + index]);
             add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 * 8 + index]);
         }
 
-        for (unsigned short index : getBitIndices(m_black_queens_bit))
+        for (unsigned short index : getBitIndices(m_pieces[1][4]))
         {
             add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 * 9 + index]);
             add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 * 9 + index]);
         }
 
-        std::memcpy(secondLayer1WeightsBlockWhiteTurn, secondLayer1Weights[m_white_king_position], sizeof(secondLayer1Weights[m_white_king_position]));
-        std::memcpy(secondLayer1WeightsBlockBlackTurn, secondLayer1Weights[invertIndex(m_black_king_position)], sizeof(secondLayer1Weights[invertIndex(m_black_king_position)]));
-        std::memcpy(secondLayer2WeightsBlockWhiteTurn, secondLayer2Weights[m_black_king_position], sizeof(secondLayer2Weights[m_black_king_position]));
-        std::memcpy(secondLayer2WeightsBlockBlackTurn, secondLayer2Weights[invertIndex(m_white_king_position)], sizeof(secondLayer2Weights[invertIndex(m_white_king_position)]));
+        std::memcpy(secondLayer1WeightsBlockWhiteTurn, secondLayer1Weights[m_king_position[0]], sizeof(secondLayer1Weights[m_king_position[0]]));
+        std::memcpy(secondLayer1WeightsBlockBlackTurn, secondLayer1Weights[invertIndex(m_king_position[1])], sizeof(secondLayer1Weights[invertIndex(m_king_position[1])]));
+        std::memcpy(secondLayer2WeightsBlockWhiteTurn, secondLayer2Weights[m_king_position[1]], sizeof(secondLayer2Weights[m_king_position[1]]));
+        std::memcpy(secondLayer2WeightsBlockBlackTurn, secondLayer2Weights[invertIndex(m_king_position[0])], sizeof(secondLayer2Weights[invertIndex(m_king_position[0])]));
 
         setLastNNUEBits();
     }
@@ -574,165 +510,40 @@ public:
     // We call it in initializeNNUEInput and updateAccumulator
     void setLastNNUEBits()
     {
-        // White pieces
-        m_last_nnue_wp_bits = m_white_pawns_bit;
-        m_last_nnue_wn_bits = m_white_knights_bit;
-        m_last_nnue_wb_bits = m_white_bishops_bit;
-        m_last_nnue_wr_bits = m_white_rooks_bit;
-        m_last_nnue_wq_bits = m_white_queens_bit;
-
-        // Black pieces
-        m_last_nnue_bp_bits = m_black_pawns_bit;
-        m_last_nnue_bn_bits = m_black_knights_bit;
-        m_last_nnue_bb_bits = m_black_bishops_bit;
-        m_last_nnue_br_bits = m_black_rooks_bit;
-        m_last_nnue_bq_bits = m_black_queens_bit;
+        std::memcpy(m_last_nnue_bits, m_pieces, 8 * 6 * 2);
     }
 
     void updateAccumulator()
     {
-        // Current and previous bitboards for each piece type
-        const uint64_t currentBits[10] = {
-            m_white_pawns_bit, m_white_knights_bit, m_white_bishops_bit,
-            m_white_rooks_bit, m_white_queens_bit,
-            m_black_pawns_bit, m_black_knights_bit, m_black_bishops_bit,
-            m_black_rooks_bit, m_black_queens_bit};
-
-        const uint64_t previousBits[10] = {
-            m_last_nnue_wp_bits, m_last_nnue_wn_bits, m_last_nnue_wb_bits,
-            m_last_nnue_wr_bits, m_last_nnue_wq_bits,
-            m_last_nnue_bp_bits, m_last_nnue_bn_bits, m_last_nnue_bb_bits,
-            m_last_nnue_br_bits, m_last_nnue_bq_bits};
-
         // ADD PIECES
-        for (int i = 0; i < 10; ++i)
+        for (int i = 0; i < 5; ++i)
         {
-            uint64_t piecesAdd = currentBits[i] & ~previousBits[i];
+            uint64_t piecesAdd = m_pieces[0][i] & ~m_last_nnue_bits[0][i];
             while (piecesAdd)
             {
                 addOnInput(64 * i + popLeastSignificantBit(piecesAdd));
             }
+            piecesAdd = m_pieces[1][i] & ~m_last_nnue_bits[1][i];
+            while (piecesAdd)
+            {
+                addOnInput(64 * (i + 5) + popLeastSignificantBit(piecesAdd));
+            }
         }
 
         // REMOVE PIECES
-        for (int i = 0; i < 10; ++i)
+        for (int i = 0; i < 5; ++i)
         {
-            uint64_t piecesRemove = ~currentBits[i] & previousBits[i];
-            while (piecesRemove)
+            uint64_t piecesAdd = ~m_pieces[0][i] & m_last_nnue_bits[0][i];
+            while (piecesAdd)
             {
-                removeOnInput(64 * i + popLeastSignificantBit(piecesRemove));
+                removeOnInput(64 * i + popLeastSignificantBit(piecesAdd));
+            }
+            piecesAdd = ~m_pieces[1][i] & m_last_nnue_bits[1][i];
+            while (piecesAdd)
+            {
+                removeOnInput(64 * (i + 5) + popLeastSignificantBit(piecesAdd));
             }
         }
-        setLastNNUEBits();
-    }
-
-    void updateAccumulator1()
-    {
-        uint64_t piecesAdd, piecesRemove;
-
-        // === ADD PIECES ===
-
-        // White pawns
-        piecesAdd = m_white_pawns_bit & ~m_last_nnue_wp_bits;
-        while (piecesAdd)
-            addOnInput(popLeastSignificantBit(piecesAdd));
-
-        // White knights
-        piecesAdd = m_white_knights_bit & ~m_last_nnue_wn_bits;
-        while (piecesAdd)
-            addOnInput(64 + popLeastSignificantBit(piecesAdd));
-
-        // White bishops
-        piecesAdd = m_white_bishops_bit & ~m_last_nnue_wb_bits;
-        while (piecesAdd)
-            addOnInput(64 * 2 + popLeastSignificantBit(piecesAdd));
-        // White rooks
-        piecesAdd = m_white_rooks_bit & ~m_last_nnue_wr_bits;
-        while (piecesAdd)
-            addOnInput(64 * 3 + popLeastSignificantBit(piecesAdd));
-
-        // White queens
-        piecesAdd = m_white_queens_bit & ~m_last_nnue_wq_bits;
-        while (piecesAdd)
-            addOnInput(64 * 4 + popLeastSignificantBit(piecesAdd));
-
-        // Black pawns
-        piecesAdd = m_black_pawns_bit & ~m_last_nnue_bp_bits;
-        while (piecesAdd)
-            addOnInput(64 * 5 + popLeastSignificantBit(piecesAdd));
-
-        // Black knights
-        piecesAdd = m_black_knights_bit & ~m_last_nnue_bn_bits;
-        while (piecesAdd)
-            addOnInput(64 * 6 + popLeastSignificantBit(piecesAdd));
-
-        // Black bishops
-        piecesAdd = m_black_bishops_bit & ~m_last_nnue_bb_bits;
-        while (piecesAdd)
-            addOnInput(64 * 7 + popLeastSignificantBit(piecesAdd));
-
-        // Black rooks
-        piecesAdd = m_black_rooks_bit & ~m_last_nnue_br_bits;
-        while (piecesAdd)
-            addOnInput(64 * 8 + popLeastSignificantBit(piecesAdd));
-
-        // Black queens
-        piecesAdd = m_black_queens_bit & ~m_last_nnue_bq_bits;
-        while (piecesAdd)
-            addOnInput(64 * 9 + popLeastSignificantBit(piecesAdd));
-
-        // === REMOVE PIECES ===
-
-        // White pawns
-        piecesRemove = ~m_white_pawns_bit & m_last_nnue_wp_bits;
-        while (piecesRemove)
-            removeOnInput(popLeastSignificantBit(piecesRemove));
-
-        // White knights
-        piecesRemove = ~m_white_knights_bit & m_last_nnue_wn_bits;
-        while (piecesRemove)
-            removeOnInput(64 + popLeastSignificantBit(piecesRemove));
-
-        // White bishops
-        piecesRemove = ~m_white_bishops_bit & m_last_nnue_wb_bits;
-        while (piecesRemove)
-            removeOnInput(64 * 2 + popLeastSignificantBit(piecesRemove));
-
-        // White rooks
-        piecesRemove = ~m_white_rooks_bit & m_last_nnue_wr_bits;
-        while (piecesRemove)
-            removeOnInput(64 * 3 + popLeastSignificantBit(piecesRemove));
-
-        // White queens
-        piecesRemove = ~m_white_queens_bit & m_last_nnue_wq_bits;
-        while (piecesRemove)
-            removeOnInput(64 * 4 + popLeastSignificantBit(piecesRemove));
-
-        // Black pawns
-        piecesRemove = ~m_black_pawns_bit & m_last_nnue_bp_bits;
-        while (piecesRemove)
-            removeOnInput(64 * 5 + popLeastSignificantBit(piecesRemove));
-
-        // Black knights
-        piecesRemove = ~m_black_knights_bit & m_last_nnue_bn_bits;
-        while (piecesRemove)
-            removeOnInput(64 * 6 + popLeastSignificantBit(piecesRemove));
-
-        // Black bishops
-        piecesRemove = ~m_black_bishops_bit & m_last_nnue_bb_bits;
-        while (piecesRemove)
-            removeOnInput(64 * 7 + popLeastSignificantBit(piecesRemove));
-
-        // Black rooks
-        piecesRemove = ~m_black_rooks_bit & m_last_nnue_br_bits;
-        while (piecesRemove)
-            removeOnInput(64 * 8 + popLeastSignificantBit(piecesRemove));
-
-        // Black queens
-        piecesRemove = ~m_black_queens_bit & m_last_nnue_bq_bits;
-        while (piecesRemove)
-            removeOnInput(64 * 9 + popLeastSignificantBit(piecesRemove));
-
         setLastNNUEBits();
     }
 
@@ -781,16 +592,16 @@ public:
     void setKingPosition()
     // Set the index of the king in the board.
     {
-        m_white_king_position = getLeastSignificantBitIndex(m_white_king_bit);
-        m_black_king_position = getLeastSignificantBitIndex(m_black_king_bit);
+        m_king_position[0] = getLeastSignificantBitIndex(m_pieces[0][5]);
+        m_king_position[1] = getLeastSignificantBitIndex(m_pieces[1][5]);
     }
 
     void setAllPiecesBits()
     // Function that sets the own pieces, opponent pieces and all pieces bits.
     {
-        m_white_pieces_bit = (m_white_pawns_bit | m_white_knights_bit | m_white_bishops_bit | m_white_rooks_bit | m_white_queens_bit | m_white_king_bit);
-        m_black_pieces_bit = (m_black_pawns_bit | m_black_knights_bit | m_black_bishops_bit | m_black_rooks_bit | m_black_queens_bit | m_black_king_bit);
-        m_all_pieces_bit = (m_white_pieces_bit | m_black_pieces_bit);
+        m_pieces_bit[0] = (m_pieces[0][0] | m_pieces[0][1] | m_pieces[0][2] | m_pieces[0][3] | m_pieces[0][4] | m_pieces[0][5]);
+        m_pieces_bit[1] = (m_pieces[1][0] | m_pieces[1][1] | m_pieces[1][2] | m_pieces[1][3] | m_pieces[1][4] | m_pieces[1][5]);
+        m_all_pieces_bit = (m_pieces_bit[0] | m_pieces_bit[1]);
     }
 
     bool getTurn() const { return m_turn; }
@@ -827,53 +638,80 @@ public:
     }
     bool moreThanOneCheck() const { return m_num_checks > 1; }
 
-    uint64_t getWhitePawnsBits() const { return m_white_pawns_bit; }
-    uint64_t getWhiteKnightsBits() const { return m_white_knights_bit; }
-    uint64_t getWhiteBishopsBits() const { return m_white_bishops_bit; }
-    uint64_t getWhiteRooksBits() const { return m_white_rooks_bit; }
-    uint64_t getWhiteQueensBits() const { return m_white_queens_bit; }
-    uint64_t getWhiteKingBits() const { return m_white_king_bit; }
+    uint64_t getWhitePawnsBits() const { return m_pieces[0][0]; }
+    uint64_t getWhiteKnightsBits() const { return m_pieces[0][1]; }
+    uint64_t getWhiteBishopsBits() const { return m_pieces[0][2]; }
+    uint64_t getWhiteRooksBits() const { return m_pieces[0][3]; }
+    uint64_t getWhiteQueensBits() const { return m_pieces[0][4]; }
+    uint64_t getWhiteKingBits() const { return m_pieces[0][5]; }
 
-    uint64_t getBlackPawnsBits() const { return m_black_pawns_bit; }
-    uint64_t getBlackKnightsBits() const { return m_black_knights_bit; }
-    uint64_t getBlackBishopsBits() const { return m_black_bishops_bit; }
-    uint64_t getBlackRooksBits() const { return m_black_rooks_bit; }
-    uint64_t getBlackQueensBits() const { return m_black_queens_bit; }
-    uint64_t getBlackKingBits() const { return m_black_king_bit; }
+    uint64_t getBlackPawnsBits() const { return m_pieces[1][0]; }
+    uint64_t getBlackKnightsBits() const { return m_pieces[1][1]; }
+    uint64_t getBlackBishopsBits() const { return m_pieces[1][2]; }
+    uint64_t getBlackRooksBits() const { return m_pieces[1][3]; }
+    uint64_t getBlackQueensBits() const { return m_pieces[1][4]; }
+    uint64_t getBlackKingBits() const { return m_pieces[1][5]; }
 
-    uint64_t getAllWhitePiecesBits() const { return m_white_pieces_bit; }
-    uint64_t getAllBlackPiecesBits() const { return m_black_pieces_bit; }
 
     int getMovedPiece() const { return m_moved_piece; }
     int getCapturedPiece() const { return state_info->capturedPiece; }
     int getPromotedPiece() const { return m_promoted_piece; }
-    int getWhiteKingPosition() const { return m_white_king_position; }
-    int getBlackKingPosition() const { return m_black_king_position; }
+    int getWhiteKingPosition() const { return m_king_position[0]; }
+    int getBlackKingPosition() const { return m_king_position[1]; }
+
+    void printBoard(const int board[64], const std::string &label)
+    {
+        std::cout << label << ":\n";
+        for (int rank = 7; rank >= 0; --rank) // Start from the top rank (rank 8)
+        {
+            for (int file = 0; file < 8; ++file) // Left-to-right within the rank
+            {
+                int index = rank * 8 + file;
+                std::cout << board[index] << " ";
+            }
+            std::cout << "\n"; // Newline after each rank
+        }
+    }
+
+    void debugBoardState()
+    {
+        printBoard(m_white_board, "White Board");
+        printBoard(m_black_board, "Black Board");
+
+        std::cout << "\nBitboards:\n";
+        for (int color = 0; color < 2; ++color)
+        {
+            std::cout << (color == 0 ? "White" : "Black") << " Pieces:\n";
+            for (int piece = 0; piece < 6; ++piece)
+            {
+                std::cout << "Piece " << piece << ": " << m_pieces[color][piece] << "\n";
+            }
+        }
+        std::cout << std::endl;
+    }
 
     void printBitboards() const
     {
-        std::cout << "White pawns " << m_white_pawns_bit << "\n";
-        std::cout << "White knights " << m_white_knights_bit << "\n";
-        std::cout << "White bishops " << m_white_bishops_bit << "\n";
-        std::cout << "White rooks " << m_white_rooks_bit << "\n";
-        std::cout << "White queens " << m_white_queens_bit << "\n";
-        std::cout << "White king " << m_white_king_bit << "\n";
+        std::cout << "White pawns " << m_pieces[0][0] << "\n";
+        std::cout << "White knights " << m_pieces[0][1] << "\n";
+        std::cout << "White bishops " << m_pieces[0][2] << "\n";
+        std::cout << "White rooks " << m_pieces[0][3] << "\n";
+        std::cout << "White queens " << m_pieces[0][4] << "\n";
+        std::cout << "White king " << m_pieces[0][5] << "\n";
 
-        std::cout << "Black pawns " << m_black_pawns_bit << "\n";
-        std::cout << "Black knights " << m_black_knights_bit << "\n";
-        std::cout << "Black bishops " << m_black_bishops_bit << "\n";
-        std::cout << "Black rooks " << m_black_rooks_bit << "\n";
-        std::cout << "Black queens " << m_black_queens_bit << "\n";
-        std::cout << "Black king " << m_black_king_bit << "\n";
+        std::cout << "Black pawns " << m_pieces[1][0] << "\n";
+        std::cout << "Black knights " << m_pieces[1][1] << "\n";
+        std::cout << "Black bishops " << m_pieces[1][2] << "\n";
+        std::cout << "Black rooks " << m_pieces[1][3] << "\n";
+        std::cout << "Black queens " << m_pieces[1][4] << "\n";
+        std::cout << "Black king " << m_pieces[1][5] << "\n";
 
-        std::cout << "All Whites " << m_white_pieces_bit << "\n";
-        std::cout << "All Blacks " << m_black_pieces_bit << "\n";
         std::cout << "All Pieces " << m_all_pieces_bit << "\n";
 
         std::cout << "psquare " << state_info->pSquare << "\n";
 
-        std::cout << "White king position " << m_white_king_position << "\n";
-        std::cout << "Black king position " << m_black_king_position << "\n";
+        std::cout << "White king position " << m_king_position[0] << "\n";
+        std::cout << "Black king position " << m_king_position[1] << "\n";
     }
     void printChecksInfo() const
     {
@@ -900,29 +738,29 @@ public:
                 int square = row * 8 + col;
                 uint64_t bit = 1ULL << square;
                 char pieceChar = ' ';
-                if (m_white_pawns_bit & bit)
+                if (m_pieces[0][0] & bit)
                     pieceChar = 'P';
-                else if (m_white_knights_bit & bit)
+                else if (m_pieces[0][1] & bit)
                     pieceChar = 'N';
-                else if (m_white_bishops_bit & bit)
+                else if (m_pieces[0][2] & bit)
                     pieceChar = 'B';
-                else if (m_white_rooks_bit & bit)
+                else if (m_pieces[0][3] & bit)
                     pieceChar = 'R';
-                else if (m_white_queens_bit & bit)
+                else if (m_pieces[0][4] & bit)
                     pieceChar = 'Q';
-                else if (m_white_king_bit & bit)
+                else if (m_pieces[0][5] & bit)
                     pieceChar = 'K';
-                else if (m_black_pawns_bit & bit)
+                else if (m_pieces[1][0] & bit)
                     pieceChar = 'p';
-                else if (m_black_knights_bit & bit)
+                else if (m_pieces[1][1] & bit)
                     pieceChar = 'n';
-                else if (m_black_bishops_bit & bit)
+                else if (m_pieces[1][2] & bit)
                     pieceChar = 'b';
-                else if (m_black_rooks_bit & bit)
+                else if (m_pieces[1][3] & bit)
                     pieceChar = 'r';
-                else if (m_black_queens_bit & bit)
+                else if (m_pieces[1][4] & bit)
                     pieceChar = 'q';
-                else if (m_black_king_bit & bit)
+                else if (m_pieces[1][5] & bit)
                     pieceChar = 'k';
 
                 if (pieceChar != ' ')

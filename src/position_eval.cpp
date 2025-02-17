@@ -226,7 +226,7 @@ namespace NNUEU
 
     void initNNUEParameters()
     {
-        const std::string modelDir = "models/NNUEU_quantized_model_v1_param_350_epoch_5/";
+        const std::string modelDir = "models/NNUEU_quantized_model_v4_param_350_epoch_3/";
 
         // Load weights into fixed-size arrays
         load_int16_2D_array1(modelDir + "first_linear_weights.csv", firstLayerWeights);

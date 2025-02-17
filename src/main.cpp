@@ -111,7 +111,7 @@ Move findCaptureMoveFromString(std::string moveString, BitPosition position)
 
 int main()
 {
-    int startDepth{0};
+    int startDepth = 1;
 
     // Initialize std::vectors of NNUEInput layers as global variables
     NNUEU::initNNUEParameters();
@@ -158,6 +158,7 @@ int main()
         {
             iss >> command;
             std::string fen;
+            std::string line;
             if (command == "startpos")
             {
                 fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -165,8 +166,37 @@ int main()
             }
             else if (command == "fen")
             {
-                getline(iss, fen);   // Read the rest of the line as the FEN string
-                fen = fen.substr(1); // Remove the leading space
+                std::string line;
+                std::getline(iss, line);
+
+                // Remove the leading space if any
+                if (!line.empty() && line[0] == ' ')
+                    line.erase(0, 1);
+
+                // Now find where " moves" begins, if it exists
+                // so we can separate the FEN part from the moves part.
+                size_t pos = line.find(" moves");
+                if (pos != std::string::npos)
+                {
+                    // Extract the pure FEN substring
+                    fen = line.substr(0, pos);
+
+                    // Extract the moves substring, e.g. " moves c2c4 e2e4"
+                    std::string movesPart = line.substr(pos); // => " moves c2c4 e2e4"
+
+                    // Remove the initial " moves"
+                    movesPart.erase(0, 6);
+
+                    // Now we clear the old stream and replace its buffer with movesPart
+                    // so that while(iss >> command) can parse "c2c4", "e2e4", etc.
+                    iss.clear();
+                    iss.str(movesPart);
+                }
+                else
+                {
+                    // No " moves" found; the whole line is the FEN
+                    fen = line;
+                }
             }
 
             position = BitPosition(fen);
@@ -196,7 +226,6 @@ int main()
                     position.resetPlyInfo();
                 globalTT.resize(1 << TTSIZE);
             }
-            startDepth = 2;
         }
         // Thinking after opponent made move
         else if (inputLine.substr(0, 2) == "go")
@@ -296,6 +325,9 @@ int main()
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
                 position_3 = BitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"); // This is because we are searching moves from start again
+                // position_3.makeMove(findNormalMoveFromString("a5a4", position_3), state_info);
+                // position_3.makeMove(findNormalMoveFromString("c7c5", position_3), state_info);
+                // position_3.makeMove(findNormalMoveFromString("b5c6", position_3), state_info);
                 std::cout << runFirstMovesPerftTest(position_3, depth) << " moves\n";
             }
             end = std::chrono::high_resolution_clock::now(); // End timing
@@ -402,7 +434,7 @@ int main()
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
                 position_3 = BitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"); // This is because we are searching moves from start again
-                // position_3.makeMove(findNormalMoveFromString("b4f4", position_3));
+                // position_3.makeMove(findNormalMoveFromString("b4d4", position_3), state_info);
                 std::cout << runPVPerftTest(position_3, depth) << " moves\n";
             }
             end = std::chrono::high_resolution_clock::now(); // End timing
@@ -416,7 +448,9 @@ int main()
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
                 position_4 = BitPosition("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1"); // This is because we are searching moves from start again
-                // position_4.makeMove(findNormalMoveFromString("c4c5", position_4));
+                // position_4.makeMove(findNormalMoveFromString("c4c5", position_4), state_info);
+                // position_4.makeMove(findNormalMoveFromString("e8f8", position_4), state_info);
+                // position_4.printChecksInfo();
                 std::cout << runPVPerftTest(position_4, depth) << " moves\n";
             }
             end = std::chrono::high_resolution_clock::now(); // End timing
@@ -431,7 +465,8 @@ int main()
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
                 position_5 = BitPosition("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8"); // This is because we are searching moves from start again
-                position_5.makeMove(findNormalMoveFromString("e1g1", position_5), state_info);
+                // position_5.makeMove(findNormalMoveFromString("c4f7", position_5), state_info);
+                // position_5.makeMove(findNormalMoveFromString("d8e8", position_5), state_info);
                 std::cout << runPVPerftTest(position_5, depth) << " moves\n";
             }
             end = std::chrono::high_resolution_clock::now(); // End timing
@@ -654,7 +689,7 @@ int main()
             {
                 StateInfo state_info;
                 position_5 = BitPosition("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8"); // This is because we are searching moves from start again
-                // position_5.makeMove(findNormalMoveFromString("c4f7", position_5), state_info);
+                // position_5.makeMove(findNormalMoveFromString("e1g1", position_5), state_info);
                 // position_5.makeMove(findNormalMoveFromString("f2d3", position_5), state_info);
                 std::cout << runQSPerftTest(position_5, depth) << " moves\n";
             }
@@ -836,7 +871,7 @@ int main()
             auto checkAndMakeMove = [&](const std::string &moveStr)
             {
                 Move move = findNormalMoveFromString(moveStr, position_1);
-                if (position_1.positionIsDrawnAfterMove(move))
+                if (position_1.isDraw())
                     std::cout << "Draw\n";
                 else
                     std::cout << "Not Draw\n";
@@ -851,9 +886,9 @@ int main()
             checkAndMakeMove("b1a3"); // Not draw
             checkAndMakeMove("b8a6"); // Not draw
             checkAndMakeMove("a3b1"); // Not draw
-            checkAndMakeMove("a6b8"); // Draw
+            checkAndMakeMove("a6b8"); // Not draw
 
-            checkAndMakeMove("b1a3");
+            checkAndMakeMove("b1a3"); // Draw
             checkAndMakeMove("b8a6");
             checkAndMakeMove("a3b1");
             checkAndMakeMove("a6b8");
