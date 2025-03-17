@@ -131,6 +131,10 @@ int main()
     StateInfo state_info;
 
     globalTT.resize(1 << TTSIZE);
+
+    bool fromStart;
+    int movesMade = 0;
+    Move lastMove;
     // Simple loop to read commands from the Python GUI following UCI communication protocol
     while (std::getline(std::cin, inputLine))
     {
@@ -161,11 +165,13 @@ int main()
             std::string line;
             if (command == "startpos")
             {
+                fromStart = true;
                 fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
                 iss >> command; // Consume the 'moves' token if it's there
             }
             else if (command == "fen")
             {
+                fromStart = false;
                 std::string line;
                 std::getline(iss, line);
 
@@ -200,9 +206,8 @@ int main()
             }
 
             position = BitPosition(fen);
-            
+
             Move move;
-            Move lastMove;
             while (iss >> command)
             {
                 // Apply each move in the moves list
@@ -218,6 +223,7 @@ int main()
                         reseterMove = true;
                     position.setBlockersAndPinsInAB();
                     position.makeMove(move, state_info);
+                    movesMade++;
                 }
 
                 // If we make a capture we cant go back to previous positions so we empty
@@ -243,26 +249,63 @@ int main()
                 else if (command == "binc" && (ENGINEISWHITE==false))
                     iss >> OURINC;
             }
+            if (fromStart && movesMade == 0)
+            {
+                // Return a random move
+                std::array<std::string, 2> opening_moves = {"e2e4", "d2d4"};
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_int_distribution<int> dist(0, 1);
 
-            //std::cout << "Static Eval Before Move: " << NNUEU::evaluationFunction(true) << "\n";
-            // Call the engine
-            STARTTIME = std::chrono::high_resolution_clock::now();
-            startDepth = 2;
-            auto [bestMove, bestValue]{iterativeSearch(position, startDepth)};
+                std::string random_move = opening_moves[dist(gen)];
+                std::cout << "bestmove " << random_move << "\n"
+                          << std::flush;
+            }
+            else if ((fromStart) && (movesMade == 1) && (lastMove.toString() == "e2e4"))
+            {
+                // Return a random move
+                std::array<std::string, 2> opening_moves = {"e7e5", "c7c6"};
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_int_distribution<int> dist(0, 1);
 
-            // Send our best move through a UCI command
-            // std::cout << "Eval: " << bestValue << "\n";
-            std::cout << "bestmove " << bestMove.toString() << "\n"
-                      << std::flush;
+                std::string random_move = opening_moves[dist(gen)];
+                std::cout << "bestmove " << random_move << "\n"
+                          << std::flush;
+            }
+            else if ((fromStart) && (movesMade == 1) && (lastMove.toString() == "d2d4"))
+            {
+                // Return a random move
+                std::array<std::string, 2> opening_moves = {"d7d5", "g8f6"};
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_int_distribution<int> dist(0, 1);
 
-            // Static eval after making move (testing purposes)
-            position.makeMove(bestMove, state_info);
+                std::string random_move = opening_moves[dist(gen)];
+                std::cout << "bestmove " << random_move << "\n"
+                          << std::flush;
+            }
+            else
+            {
+                // std::cout << "Static Eval Before Move: " << NNUEU::evaluationFunction(true) << "\n";
+                // Call the engine
+                STARTTIME = std::chrono::high_resolution_clock::now();
+                startDepth = 2;
+                auto [bestMove, bestValue]{iterativeSearch(position, startDepth)};
 
-            // position.printZobristKeys();
-            // position.print50MoveCount();
+                // Send our best move through a UCI command
+                // std::cout << "Eval: " << bestValue << "\n";
+                std::cout << "bestmove " << bestMove.toString() << "\n" << std::flush;
 
-            // Check transposition table memory
-            // globalTT.printTableMemory();
+                // Static eval after making move (testing purposes)
+                position.makeMove(bestMove, state_info);
+
+                // position.printZobristKeys();
+                // position.print50MoveCount();
+
+                // Check transposition table memory
+                // globalTT.printTableMemory();
+            }
         }
 
         ////////////////////////////////////////////////////////////
@@ -448,8 +491,9 @@ int main()
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
                 position_4 = BitPosition("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1"); // This is because we are searching moves from start again
-                // position_4.makeMove(findNormalMoveFromString("c4c5", position_4), state_info);
-                // position_4.makeMove(findNormalMoveFromString("e8f8", position_4), state_info);
+                // position_4.makeMove(findNormalMoveFromString("d2d4", position_4), state_info);
+                // position_4.makeMove(findNormalMoveFromString("a3a2", position_4), state_info);
+                // position_4.makeMove(findNormalMoveFromString("g1f2", position_4), state_info);
                 // position_4.printChecksInfo();
                 std::cout << runPVPerftTest(position_4, depth) << " moves\n";
             }
@@ -647,7 +691,9 @@ int main()
             for (int8_t depth = 1; depth <= maxDepth; ++depth)
             {
                 position_2 = BitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"); // This is because we are searching moves from start again
-                // position_2.makeMove(findCaptureMoveFromString("d5e6", position_2));
+                // position_2.makeMove(findNormalMoveFromString("e5g6", position_2), state_info);
+                // position_2.makeMove(findNormalMoveFromString("b4c3", position_2), state_info);
+                // position_2.makeMove(findNormalMoveFromString("g6h8", position_2), state_info);
                 std::cout << runQSPerftTest(position_2, depth) << " moves\n";
             }
             end = std::chrono::high_resolution_clock::now(); // End timing
@@ -689,7 +735,7 @@ int main()
             {
                 StateInfo state_info;
                 position_5 = BitPosition("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8"); // This is because we are searching moves from start again
-                // position_5.makeMove(findNormalMoveFromString("e1g1", position_5), state_info);
+                // position_5.makeMove(findNormalMoveFromString("e1f2", position_5), state_info);
                 // position_5.makeMove(findNormalMoveFromString("f2d3", position_5), state_info);
                 std::cout << runQSPerftTest(position_5, depth) << " moves\n";
             }

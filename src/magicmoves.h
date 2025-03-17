@@ -150,8 +150,8 @@ extern const U64 *magicmoves_r_indecies[64];
 #else // Don't Minimize database size
 
 #ifndef USE_INLINING
-#define Bmagic(square, occupancy) magicmovesbdb[square][(((occupancy) & magicmoves_b_mask[square]) * magicmoves_b_magics[square]) >> MINIMAL_B_BITS_SHIFT(square)]
-#define Rmagic(square, occupancy) magicmovesrdb[square][(((occupancy) & magicmoves_r_mask[square]) * magicmoves_r_magics[square]) >> MINIMAL_R_BITS_SHIFT(square)]
+// #define Bmagic(square, occupancy) magicmovesbdb[square][(((occupancy) & magicmoves_b_mask[square]) * magicmoves_b_magics[square]) >> MINIMAL_B_BITS_SHIFT(square)]
+// #define Rmagic(square, occupancy) magicmovesrdb[square][(((occupancy) & magicmoves_r_mask[square]) * magicmoves_r_magics[square]) >> MINIMAL_R_BITS_SHIFT(square)]
 #define BmagicNOMASK(square, occupancy) magicmovesbdb[square][((occupancy) * magicmoves_b_magics[square]) >> MINIMAL_B_BITS_SHIFT(square)]
 #define RmagicNOMASK(square, occupancy) magicmovesrdb[square][((occupancy) * magicmoves_r_magics[square]) >> MINIMAL_R_BITS_SHIFT(square)]
 #endif // USE_INLINING
@@ -239,8 +239,8 @@ static inline U64 QmagicNOMASK(const unsigned int square, const U64 occupancy)
 }
 #else //! USE_INLINING
 
-#define Qmagic(square, occupancy) (Bmagic(square, occupancy) | Rmagic(square, occupancy))
-#define QmagicNOMASK(square, occupancy) (BmagicNOMASK(square, occupancy) | RmagicNOMASK(square, occupancy))
+// #define Qmagic(square, occupancy) (Bmagic(square, occupancy) | Rmagic(square, occupancy))
+// #define QmagicNOMASK(square, occupancy) (BmagicNOMASK(square, occupancy) | RmagicNOMASK(square, occupancy))
 
 #endif // USE_INLINING
 

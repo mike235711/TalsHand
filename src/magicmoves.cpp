@@ -49,7 +49,7 @@
 // C64(0x007FFCDDFCED714A - B8 10 bit
 // C64(0x003FFFCDFFD88096 - C8 10 bit
 
-const unsigned int magicmoves_r_shift[64] =
+alignas(32) const unsigned int magicmoves_r_shift[64] =
 	{
 		52, 53, 53, 53, 53, 53, 53, 52,
 		53, 54, 54, 54, 54, 54, 54, 53,
@@ -60,7 +60,7 @@ const unsigned int magicmoves_r_shift[64] =
 		53, 54, 54, 54, 54, 54, 54, 53,
 		53, 54, 54, 53, 53, 53, 53, 53};
 
-const U64 magicmoves_r_magics[64] =
+alignas(32) const U64 magicmoves_r_magics[64] =
 	{
 		C64(0x0080001020400080), C64(0x0040001000200040), C64(0x0080081000200080), C64(0x0080040800100080),
 		C64(0x0080020400080080), C64(0x0080010200040080), C64(0x0080008001000200), C64(0x0080002040800100),
@@ -98,7 +98,7 @@ const U64 magicmoves_r_mask[64] =
 		C64(0x6E10101010101000), C64(0x5E20202020202000), C64(0x3E40404040404000), C64(0x7E80808080808000)};
 
 // my original tables for bishops
-const unsigned int magicmoves_b_shift[64] =
+alignas(32) const unsigned int magicmoves_b_shift[64] =
 	{
 		58, 59, 59, 59, 59, 59, 59, 58,
 		59, 59, 59, 59, 59, 59, 59, 59,
@@ -109,7 +109,7 @@ const unsigned int magicmoves_b_shift[64] =
 		59, 59, 59, 59, 59, 59, 59, 59,
 		58, 59, 59, 59, 59, 59, 59, 58};
 
-const U64 magicmoves_b_magics[64] =
+alignas(32) const U64 magicmoves_b_magics[64] =
 	{
 		C64(0x0002020202020200), C64(0x0002020202020000), C64(0x0004010202000000), C64(0x0004040080000000),
 		C64(0x0001104000000000), C64(0x0000821040000000), C64(0x0000410410400000), C64(0x0000104104104000),

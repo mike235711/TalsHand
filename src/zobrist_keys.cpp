@@ -28,7 +28,7 @@ namespace zobrist_keys
     void initializeZobristNumbers()
     {
         const size_t totalNumbers = 801;
-        uint64_t seed = 71262;
+        uint64_t seed = 71272;
         auto randomNumbers = generateRandomNumbers(totalNumbers, seed);
 
         for (size_t i = 0; i < 64; ++i)

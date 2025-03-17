@@ -20,15 +20,16 @@ extern std::chrono::time_point<std::chrono::high_resolution_clock> STARTTIME;
 
 int DEPTH;
 Move ourMoveMade;
+bool isEndgame;
 
 std::unordered_map<Move, std::vector<int16_t>> moveDepthValues;
 
 bool stopSearch(const std::vector<int16_t> &values, int streak, int depth, BitPosition &position)
 {
     // If not endgame
-    if (not position.isEndgame())
+    if (not isEndgame)
     {
-        if (streak > 6 && depth > 7)
+        if (streak > 8 && depth > 9)
             return true;
         // Check if the move's score has just increased over time
         for (std::size_t i = 1; i < values.size(); ++i)
@@ -37,13 +38,13 @@ bool stopSearch(const std::vector<int16_t> &values, int streak, int depth, BitPo
                 return false;
         }
 
-        if (streak > 5 && depth > 7)
+        if (streak > 7 && depth > 8)
             return true;
     }
     // If endgame
     else
     {
-        if (streak > 7 && depth > 8)
+        if (streak > 9 && depth > 10)
             return true;
         // Check if the move's score has just increased over time
         for (std::size_t i = 1; i < values.size(); ++i)
@@ -52,7 +53,7 @@ bool stopSearch(const std::vector<int16_t> &values, int streak, int depth, BitPo
                 return false;
         }
 
-        if (streak > 6 && depth > 8)
+        if (streak > 7 && depth > 9)
             return true;
     }
     return false;
@@ -69,6 +70,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
     bool no_captures = true;
     StateInfo state_info;
 
+    position.setCheckBits();
     if (not position.getIsCheck()) // Not in check
     {
         bool cutoff{false};
@@ -235,6 +237,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
     }
 
     position.setBlockersAndPinsInAB(); // For discovered checks and move generators
+    position.setCheckBits(); // For direct checks
 
     // Check if we have stored this position in ttable
     TTEntry *ttEntry = globalTT.probe(position.getZobristKey());
@@ -308,7 +311,7 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
     {
         if (not position.getIsCheck()) // Not in check
         {
-            if (is_pv_node) // PV Nodes usually produce cutoffs so we generate moves by parts
+            if (false) // PV Nodes usually produce cutoffs so we generate moves by parts
             {
                 Move move;
                 ABMoveSelectorNotCheck move_selector(position, tt_move);
@@ -561,17 +564,18 @@ std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &pos
 // This search is done when depth is more than 0 and considers all moves
 // Note that here we have no alpha/beta cutoffs, since we are only applying the first move.
 {
+    // Try transposition table first
     TTEntry *ttEntry = globalTT.probe(position.getZobristKey());
     Move tt_move;
+
     // If position is stored in transposition table
     if (ttEntry != nullptr)
     {
         // If depth in ttable is lower than the one we are going to search, we just use the tt_move
         if (ttEntry->getDepth() < depth)
             tt_move = ttEntry->getMove();
-
         // If depth in ttable is higher or equal than the one we are going to search:
-        // 1) Exact value, we just return it (no need to search at a lower depth)
+        // 1) Exact value, we just return it
         else if (ttEntry->getDepth() >= depth && ttEntry->getIsExact())
             return std::tuple<Move, int16_t, std::vector<int16_t>>(ttEntry->getMove(), ttEntry->getValue(), first_moves_scores);
         // 2) Lower bound at deeper depth and best move found
@@ -581,55 +585,107 @@ std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &pos
             alpha = ttEntry->getValue();
         }
     }
-    // Order the moves based on scores
+
+    // Reorder the first moves by last-known scores or first-time ordering
     if (first_moves_scores.empty())
     {
         first_moves = position.orderAllMovesOnFirstIterationFirstTime(first_moves, tt_move);
-        first_moves_scores.reserve(first_moves.size());
+        first_moves_scores.resize(first_moves.size(), -30001);
     }
     else
     {
-        std::pair<std::vector<Move>, std::vector<int16_t>> result = position.orderAllMovesOnFirstIteration(first_moves, first_moves_scores);
+        std::pair<std::vector<Move>, std::vector<int16_t>> result =
+            position.orderAllMovesOnFirstIteration(first_moves, first_moves_scores);
         first_moves = result.first;
         first_moves_scores = result.second;
     }
 
-    // Baseline evaluation
-    int16_t value{static_cast<int16_t>(-30001)};
+    // Baseline initialization
+    int16_t value = static_cast<int16_t>(-30001);
     Move best_move{0};
 
-    std::chrono::time_point<std::chrono::high_resolution_clock> first_move_start_time{std::chrono::high_resolution_clock::now()};
-    Move newKiller{};
-    // Maximize (it's our move)
+    // Keep track of best previous iteration score to decide “penalty”
+    // (If a move’s prior score is way below this, we reduce the depth.)
+    int16_t bestScoreFromPreviousIteration = -30001;
+    for (auto sc : first_moves_scores)
+        if (sc > bestScoreFromPreviousIteration)
+            bestScoreFromPreviousIteration = sc;
+
+    auto first_move_start_time = std::chrono::high_resolution_clock::now();
+
+    // Main loop over candidate moves
     for (std::size_t i = 0; i < first_moves.size(); ++i)
     {
+        Move currentMove = first_moves[i];
+
         StateInfo state_info;
-        ourMoveMade = first_moves[i];
-        position.makeMove(ourMoveMade, state_info);
-        int16_t child_value{alphaBetaSearch(position, depth - 1, alpha, beta, false)};
+        position.makeMove(currentMove, state_info);
+
+        // ----------------------------
+        // Decide on “reduction” based on previous iteration’s score
+        int reduction = 0;
+        if (depth > 1 && !first_moves_scores.empty())
+        {
+            // Example margin: 200 ~ about 2.0 pawns in centipawns
+            // Tweak as desired.
+            constexpr int16_t margin = 200;
+
+            int16_t prevScore = first_moves_scores[i];
+            // If the previous iteration’s score is significantly below
+            // the best previous iteration’s score, reduce by 1 ply.
+            if (prevScore + margin < bestScoreFromPreviousIteration)
+            {
+                reduction = 1;
+            }
+        }
+
+        // Do the “reduced” (or normal) alpha-beta search:
+        int8_t searchDepth = (depth - 1 - reduction);
+        if (searchDepth < 0) // never go below 0
+            searchDepth = 0;
+
+        int16_t child_value = alphaBetaSearch(position, searchDepth, alpha, beta, false);
+
+        // If a reduced search "fails high" (beats alpha),
+        // we re-search at the full depth to avoid missing a good move.
+        if (reduction > 0 && child_value > alpha)
+        {
+            child_value = alphaBetaSearch(position, depth - 1, alpha, beta, false);
+        }
+
+        // Update the move’s new score
         first_moves_scores[i] = child_value;
+
+        // Track if this is the best so far
         if (child_value > value)
         {
             value = child_value;
-            best_move = ourMoveMade;
+            best_move = currentMove;
         }
-        
-        position.unmakeMove(ourMoveMade);
+
+        // Undo the move
+        position.unmakeMove(currentMove);
+
+        // Update alpha
         alpha = std::max(alpha, value);
-        moveDepthValues[ourMoveMade].emplace_back(value);
-        // Calculate the elapsed time in milliseconds
-        std::chrono::duration<double, std::milli> duration = std::chrono::high_resolution_clock::now() - STARTTIME;
-        // Check if the duration has been exceeded
+
+        // Store the move’s score in your debugging structure
+        moveDepthValues[currentMove].emplace_back(value);
+
+        // Check time
+        auto duration = std::chrono::high_resolution_clock::now() - STARTTIME;
         if (duration >= timeForMoveMS)
             break;
     }
 
-    // Find the time taken (milliseconds) to perform search at this depth, to predict the depth + 1 search time taken (lastFirstMoveTimeTaken is an int)
-    lastFirstMoveTimeTakenMS = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                   std::chrono::high_resolution_clock::now() - first_move_start_time)
-                                   .count() + 1;
+    // Time taken for this entire loop
+    lastFirstMoveTimeTakenMS = static_cast<int>(
+                                   std::chrono::duration_cast<std::chrono::milliseconds>(
+                                       std::chrono::high_resolution_clock::now() - first_move_start_time)
+                                       .count()) +
+                               1;
 
-    // Saving an exact value
+    // Save in TT as “exact”
     globalTT.save(position.getZobristKey(), value, depth, best_move, true);
 
     return std::tuple<Move, int16_t, std::vector<int16_t>>(best_move, value, first_moves_scores);
@@ -638,10 +694,11 @@ std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &pos
 std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t start_depth, int8_t fixed_max_depth)
 {
     position.initializeNNUEInput();
+    isEndgame = position.isEndgame();
     moveDepthValues = {};
     std::vector<Move> first_moves;
     int lastFirstMoveTimeTakenMS {1};
-    std::chrono::milliseconds timeForMoveMS{(OURTIME + OURINC) / 6};
+    std::chrono::milliseconds timeForMoveMS{OURTIME / 6};
 
     if (position.getIsCheck())
         first_moves = position.inCheckAllMoves();
@@ -665,10 +722,12 @@ std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t start_dept
         // We are going to perform N searches of time T, where:
         // N is first_moves.size() and T is lastFirstMoveTimeTakenMS
         // Hence we can predict the time taken of this new search to be N * T
-        std::chrono::milliseconds predictedTimeTakenMs{first_moves.size() * lastFirstMoveTimeTakenMS};
+        std::chrono::milliseconds predictedTimeTakenMs{20 * lastFirstMoveTimeTakenMS};
         
         if (predictedTimeTakenMs >= timeForMoveMS)
+        {
             break;
+        }
 
         // Set best current values to worse possible ones (so that we try to improve them)
         int16_t alpha{-31001};
@@ -691,13 +750,17 @@ std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t start_dept
         }
         // Check stop condition based on streak and improvement pattern
         if (stopSearch(moveDepthValues[bestMove], streak, depth, position))
+        {
             break;
+        }
 
         // Calculate the elapsed time in milliseconds
         std::chrono::duration<double, std::milli> duration = std::chrono::high_resolution_clock::now() - STARTTIME;
         // Check if the duration has been exceeded
         if (duration >= timeForMoveMS)
+        {
             break;
+        }
     }
 
     // std::cout << "Depth: " << DEPTH << "\n";

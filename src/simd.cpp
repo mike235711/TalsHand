@@ -1,11 +1,16 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <limits.h>
+#include <iostream> // For std::cerr, std::endl
+#include <cstdlib>  // For exit()
 
 #ifdef __ARM_NEON
 #include <arm_neon.h>
 #endif
 
+#ifdef __SSE4_1__
+#include <smmintrin.h> // SSE4.1
+#endif
 
 ////////////////
 // NNUE
@@ -110,6 +115,8 @@ int16_t fullNnueuPass(int16_t *pInput, int8_t *pWeights11, int8_t *pWeights12, i
 
     // Layer 3
     int8x8_t input3 = vqmovn_s16(vcombine_s16(output2, vdup_n_s16(0)));
+
+    // Load only 4 bytes and zero-pad safely
     int8x8_t weight3 = vld1_s8(pWeights3);
     int16_t bias3 = pBias3[0];
     int16_t output3 = vaddvq_s16(vmull_s8(input3, weight3)) + bias3;

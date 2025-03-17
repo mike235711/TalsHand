@@ -226,7 +226,7 @@ namespace NNUEU
 
     void initNNUEParameters()
     {
-        const std::string modelDir = "models/NNUEU_quantized_model_v4_param_350_epoch_3/";
+        const std::string modelDir = "models/NNUEU_quantized_model_v4_param_350_epoch_10/";
 
         // Load weights into fixed-size arrays
         load_int16_2D_array1(modelDir + "first_linear_weights.csv", firstLayerWeights);
@@ -241,6 +241,7 @@ namespace NNUEU
 
         auto tempFinalLayerWeights = load_int8_1D_array(modelDir + "final_layer_weights.csv", 4);
         std::memcpy(finalLayerWeights, tempFinalLayerWeights, sizeof(int8_t) * 4);
+        std::memset(finalLayerWeights + 4, 0, sizeof(int8_t) * 4);
         delete[] tempFinalLayerWeights;
 
         // Load biases

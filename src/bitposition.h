@@ -29,36 +29,42 @@ extern int8_t secondLayer1WeightsBlockBlackTurn[8 * 4];
 extern int8_t secondLayer2WeightsBlockBlackTurn[8 * 4];
 
 extern int8_t thirdLayerWeights[8 * 4];
-extern int8_t finalLayerWeights[4];
+extern int8_t finalLayerWeights[8];
 
 extern int16_t firstLayerBiases[8];
 extern int16_t secondLayerBiases[8];
 extern int16_t thirdLayerBiases[4];
 extern int16_t finalLayerBias;
 
+enum CastlingRights : uint8_t
+{
+    WHITE_KS = 1 << 0,  // 0x01 (bit 0)
+    WHITE_QS = 1 << 1,  // 0x02 (bit 1)
+    BLACK_KS = 1 << 2,  // 0x04 (bit 2)
+    BLACK_QS = 1 << 3   // 0x08 (bit 3)
+};
+
 struct StateInfo
 {
     // Copied when making a move
-    bool whiteKSCastling;
-    bool whiteQSCastling;
-    bool blackKSCastling;
-    bool blackQSCastling;
-    int fiftyMoveCount;
-    uint64_t blockersForKing;
+    int8_t castlingRights;  // Bits: 0=WhiteKS, 1=WhiteQS, 2=BlackKS, 3=BlackQS
     int16_t inputWhiteTurn[8]; // NUUEU Input
     int16_t inputBlackTurn[8]; // NNUEU Input
     int reversibleMovesMade; // Used for three-fold checks
     int pSquare; // Used to update zobrist key
+    // Bellow this. Not copied when making a capture (will be recomputed anyhow), used for unmaking captures
     uint64_t zobristKey;
 
-    // Not copied when making a move (will be recomputed anyhow), used for unmaking moves
+    // Bellow this. Not copied when making a move (will be recomputed anyhow), used for unmaking moves
     uint64_t straightPinnedPieces;
     uint64_t diagonalPinnedPieces;
     uint64_t pinnedPieces;
+    uint64_t blockersForKing;
     uint64_t lastDestinationBit; // For refutation moves after unmaking a Ttmove
     int capturedPiece;
     int lastOriginSquare; // For when calling setCheckInfo()
     bool isCheck;
+    uint64_t checkBits[5];
 
     // Pointers to previous and next state
     StateInfo *previous;
@@ -84,8 +90,8 @@ private:
     bool m_turn{};
 
     // For updating stuff in makeMove, makeCapture and makeTTMove
-    uint64_t m_moved_piece{7};
-    uint64_t m_promoted_piece{7};
+    int m_moved_piece{7};
+    int m_promoted_piece{7};
     int m_last_destination_square;
 
     // int representing kings' positions
@@ -106,7 +112,7 @@ private:
     std::array<uint64_t, 128> m_zobrist_keys_array{};
 
     StateInfo *state_info;
-
+    int last_nnueu_king_position[2];
     uint64_t m_last_nnue_bits[2][6];
 
     // std::array<std::string, 64> m_fen_array{}; // For debugging purposes
@@ -197,11 +203,22 @@ public:
         // Determine which side is to move
         m_turn = (turn == "w");
         state_info = new StateInfo(); // Allocate memory for state_info
-        // Parse castling rights
-        state_info->whiteKSCastling = (castling.find('K') != std::string::npos);
-        state_info->whiteQSCastling = (castling.find('Q') != std::string::npos);
-        state_info->blackKSCastling = (castling.find('k') != std::string::npos);
-        state_info->blackQSCastling = (castling.find('q') != std::string::npos);
+                                      // Initialize no castling rights
+        uint8_t cr = 0;
+
+        if (castling.find('K') != std::string::npos)
+            cr |= WHITE_KS;
+
+        if (castling.find('Q') != std::string::npos)
+            cr |= WHITE_QS;
+
+        if (castling.find('k') != std::string::npos)
+            cr |= BLACK_KS;
+
+        if (castling.find('q') != std::string::npos)
+            cr |= BLACK_QS;
+
+        state_info->castlingRights = cr;
 
         state_info->pSquare = 0;
         
@@ -215,6 +232,7 @@ public:
     }
 
     void setIsCheckOnInitialization();
+    bool getIsCheckOnInitialization();
     void setCheckInfoOnInitialization();
 
     void initializeZobristKey();
@@ -236,6 +254,10 @@ public:
     // These set the checks bits, m_is_check and m_num_checks    
 
     void setCheckInfo();
+    void setCheckBits();
+
+    bool isQueenCheck(int destination_square);
+    bool isPromotionCheck(int piece, int destination_square);
 
     bool newKingSquareIsSafe(int new_position) const;
 
@@ -276,17 +298,9 @@ public:
     Move *inCheckRookBlocks(Move *&move_list) const;
     Move *inCheckQueenBlocks(Move *&move_list) const;
 
-    bool isDiscoverCheckAfterPassant(int origin_square, int destination_square) const;
+    bool isDiscoverCheckAfterPassant() const;
 
     bool isDiscoverCheck(int origin_square, int destination_square) const;
-
-    bool isPawnCheckOrDiscover(int origin_square, int destination_square) const;
-    bool isKnightCheckOrDiscover(int origin_square, int destination_square) const;
-    bool isBishopCheckOrDiscover(int origin_square, int destination_square) const;
-    bool isRookCheckOrDiscover(int origin_square, int destination_square) const;
-    bool isQueenCheckOrDiscover(int origin_square, int destination_square) const;
-
-    bool isPieceCheckOrDiscover(int moved_piece, int origin_square, int destination_square) const;
 
     Move *inCheckOrderedCapturesAndKingMoves(Move *&move_list) const;
     Move *inCheckOrderedCaptures(Move *&move_list) const;
@@ -553,6 +567,16 @@ public:
     int16_t evaluationFunction(bool ourTurn)
     {
         int16_t out;
+        if (last_nnueu_king_position[0]!=m_king_position[0])
+        {
+            moveWhiteKingNNUEInput();
+            last_nnueu_king_position[0] = m_king_position[0];
+        }
+        if (last_nnueu_king_position[1] != m_king_position[1])
+        {
+            moveBlackKingNNUEInput();
+            last_nnueu_king_position[1] = m_king_position[1];
+        }
 
         // If its our turn in white, or if its not our turn in black then it is white's turn
         if (ourTurn == ENGINEISWHITE)
@@ -583,9 +607,6 @@ public:
     Move *queenNonCaptures(Move *&move_list) const;
     Move *kingNonCaptures(Move *&move_list) const;
     Move *kingNonCapturesInCheck(Move *&move_list) const;
-
-    Move *setNonCaptures(Move *&move_list_start);
-    Move *setNonCapturesInCheck(Move *&move_list_start);
 
     // Simple member function definitions
 
@@ -634,7 +655,7 @@ public:
     }
     void print50MoveCount()
     {
-        std::cout << state_info->fiftyMoveCount << "\n";
+        std::cout << state_info->reversibleMovesMade << "\n";
     }
     bool moreThanOneCheck() const { return m_num_checks > 1; }
 
@@ -789,20 +810,20 @@ public:
 
         // Castling availability
         fen += ' ';
-        if (!state_info->whiteKSCastling && !state_info->whiteQSCastling &&
-            !state_info->blackKSCastling && !state_info->blackKSCastling)
+        if (!(state_info->castlingRights & WHITE_KS) && !(state_info->castlingRights & WHITE_QS) &&
+            !(state_info->castlingRights & BLACK_KS) && !(state_info->castlingRights & BLACK_QS))
         {
             fen += '-';
         }
         else
         {
-            if (state_info->whiteKSCastling)
+            if (state_info->castlingRights & WHITE_KS)
                 fen += 'K';
-            if (state_info->whiteQSCastling)
+            if (state_info->castlingRights & WHITE_QS)
                 fen += 'Q';
-            if (state_info->blackKSCastling)
+            if (state_info->castlingRights & BLACK_KS)
                 fen += 'k';
-            if (state_info->blackQSCastling)
+            if (state_info->castlingRights & BLACK_QS)
                 fen += 'q';
         }
 

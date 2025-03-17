@@ -86,6 +86,7 @@ unsigned long long runQSPerftTest(BitPosition &position, int depth, int currentD
         return 1;
     unsigned long long moveCount = 0;
     StateInfo state_info;
+    position.setCheckBits();
 
     if (not position.getIsCheck()) // Non first move search not in check
     {
@@ -94,7 +95,7 @@ unsigned long long runQSPerftTest(BitPosition &position, int depth, int currentD
         if (currentDepth)
             refutation = position.getBestRefutation();
 
-        // Pawn captures not in check
+        // Refutations not in check
         if (refutation.getData() != 0)
         {
             position.setBlockersAndPinsInQS();
@@ -226,6 +227,7 @@ unsigned long long runPVPerftTest(BitPosition &position, int depth, int currentD
     unsigned long long moveCount = 0;
     Move lastMove = Move(0); // For ttTable 
     position.setBlockersAndPinsInAB(); // For discovered checks and move generators
+    position.setCheckBits();
     // TTmove
     Move tt_move = Move(0);
     TTEntry *ttEntry = globalTT.probe(position.getZobristKey());
@@ -324,6 +326,7 @@ unsigned long long runNonPVPerftTest(BitPosition &position, int depth, int curre
     unsigned long long moveCount = 0;
     Move lastMove = Move(0);           // For ttTable
     position.setBlockersAndPinsInAB(); // For discovered checks and move generators
+    position.setCheckBits();
     // TTmove
     Move tt_move = Move(0);
     TTEntry *ttEntry = globalTT.probe(position.getZobristKey());
