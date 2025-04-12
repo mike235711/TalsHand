@@ -5,8 +5,30 @@
 #include "bit_utils.h" // Bit utility functions
 #include "precomputed_moves.h"
 #include "simd.h"
+#include <cassert>
 
 // NNUEU parameter loading
+int16_t firstLayerWeights2Indices[640][640][8] = {0};
+int16_t firstLayerInvertedWeights2Indices[640][640][8] = {0};
+
+int16_t firstLayerWeights[640][8] = {0};
+int16_t firstLayerInvertedWeights[640][8] = {0};
+
+int8_t secondLayer1Weights[64][8 * 4] = {0};
+int8_t secondLayer2Weights[64][8 * 4] = {0};
+
+int8_t secondLayer1WeightsBlockWhiteTurn[8 * 4] = {0};
+int8_t secondLayer2WeightsBlockWhiteTurn[8 * 4] = {0};
+int8_t secondLayer1WeightsBlockBlackTurn[8 * 4] = {0};
+int8_t secondLayer2WeightsBlockBlackTurn[8 * 4] = {0};
+
+int8_t thirdLayerWeights[8 * 4] = {0};
+int8_t finalLayerWeights[8] = {0};
+
+int16_t firstLayerBiases[8] = {0};
+int16_t secondLayerBiases[8] = {0};
+int16_t thirdLayerBiases[4] = {0};
+int16_t finalLayerBias = 0;
 
 int8_t *load_int8_1D_array(const std::string &file_path, size_t cols)
 {
@@ -174,6 +196,7 @@ void initializeDoubleWeights()
 
 namespace NNUEU
 {
+    AccumulatorStack globalAccumulatorStack;
     ///////////////////////////
     // NNUEU Evaluation
     ///////////////////////////
@@ -223,7 +246,6 @@ namespace NNUEU
         }
         std::cout << std::endl;
     }
-
     void initNNUEParameters()
     {
         const std::string modelDir = "models/NNUEU_quantized_model_v4_param_350_epoch_10/";
@@ -241,7 +263,7 @@ namespace NNUEU
 
         auto tempFinalLayerWeights = load_int8_1D_array(modelDir + "final_layer_weights.csv", 4);
         std::memcpy(finalLayerWeights, tempFinalLayerWeights, sizeof(int8_t) * 4);
-        std::memset(finalLayerWeights + 4, 0, sizeof(int8_t) * 4);
+        // std::memset(finalLayerWeights + 4, 0, sizeof(int8_t) * 4);
         delete[] tempFinalLayerWeights;
 
         // Load biases
@@ -281,4 +303,313 @@ namespace NNUEU
         // printArray("Third Layer Biases", thirdLayerBiases, 4);
         // std::cout << "Final Layer Bias: " << finalLayerBias << std::endl;
     }
-} // namespace NNUEU
+
+    void initializeNNUEInput(const BitPosition &position, AccumulatorState &accumulatorState)
+    {
+        // Start accumulators with the firstLayerBiases
+        std::memcpy(accumulatorState.inputTurn[0], firstLayerBiases, sizeof(firstLayerBiases));
+        std::memcpy(accumulatorState.inputTurn[1], firstLayerBiases, sizeof(firstLayerBiases));
+
+        // White pawns
+        for (unsigned short index : getBitIndices(position.getPieces(0, 0)))
+        {
+            add_8_int16(accumulatorState.inputTurn[0], firstLayerWeights[index]);
+            add_8_int16(accumulatorState.inputTurn[1], firstLayerInvertedWeights[index]);
+        }
+        // White knights
+        for (unsigned short index : getBitIndices(position.getPieces(0, 1)))
+        {
+            add_8_int16(accumulatorState.inputTurn[0], firstLayerWeights[64 + index]);
+            add_8_int16(accumulatorState.inputTurn[1], firstLayerInvertedWeights[64 + index]);
+        }
+        // White bishops
+        for (unsigned short index : getBitIndices(position.getPieces(0, 2)))
+        {
+            add_8_int16(accumulatorState.inputTurn[0], firstLayerWeights[64 * 2 + index]);
+            add_8_int16(accumulatorState.inputTurn[1], firstLayerInvertedWeights[64 * 2 + index]);
+        }
+        // White rooks
+        for (unsigned short index : getBitIndices(position.getPieces(0, 3)))
+        {
+            add_8_int16(accumulatorState.inputTurn[0], firstLayerWeights[64 * 3 + index]);
+            add_8_int16(accumulatorState.inputTurn[1], firstLayerInvertedWeights[64 * 3 + index]);
+        }
+        // White queens
+        for (unsigned short index : getBitIndices(position.getPieces(0, 4)))
+        {
+            add_8_int16(accumulatorState.inputTurn[0], firstLayerWeights[64 * 4 + index]);
+            add_8_int16(accumulatorState.inputTurn[1], firstLayerInvertedWeights[64 * 4 + index]);
+        }
+
+        // Black pawns
+        for (unsigned short index : getBitIndices(position.getPieces(1, 0)))
+        {
+            add_8_int16(accumulatorState.inputTurn[0], firstLayerWeights[64 * 5 + index]);
+            add_8_int16(accumulatorState.inputTurn[1], firstLayerInvertedWeights[64 * 5 + index]);
+        }
+        // Black knights
+        for (unsigned short index : getBitIndices(position.getPieces(1, 1)))
+        {
+            add_8_int16(accumulatorState.inputTurn[0], firstLayerWeights[64 * 6 + index]);
+            add_8_int16(accumulatorState.inputTurn[1], firstLayerInvertedWeights[64 * 6 + index]);
+        }
+        // Black bishops
+        for (unsigned short index : getBitIndices(position.getPieces(1, 2)))
+        {
+            add_8_int16(accumulatorState.inputTurn[0], firstLayerWeights[64 * 7 + index]);
+            add_8_int16(accumulatorState.inputTurn[1], firstLayerInvertedWeights[64 * 7 + index]);
+        }
+        // Black rooks
+        for (unsigned short index : getBitIndices(position.getPieces(1, 3)))
+        {
+            add_8_int16(accumulatorState.inputTurn[0], firstLayerWeights[64 * 8 + index]);
+            add_8_int16(accumulatorState.inputTurn[1], firstLayerInvertedWeights[64 * 8 + index]);
+        }
+        // Black queens
+        for (unsigned short index : getBitIndices(position.getPieces(1, 4)))
+        {
+            add_8_int16(accumulatorState.inputTurn[0], firstLayerWeights[64 * 9 + index]);
+            add_8_int16(accumulatorState.inputTurn[1], firstLayerInvertedWeights[64 * 9 + index]);
+        }
+
+        // Now handle the second layer for the kings
+        const int whiteKing = position.getKingPosition(0);
+        const int blackKing = position.getKingPosition(1);
+
+        assert(whiteKing >= 0 && whiteKing < 64);
+        assert(blackKing >= 0 && blackKing < 64);
+
+        std::memcpy(secondLayer1WeightsBlockWhiteTurn, secondLayer1Weights[whiteKing], sizeof(secondLayer1Weights[whiteKing]));
+        std::memcpy(secondLayer1WeightsBlockBlackTurn, secondLayer1Weights[invertIndex(blackKing)], sizeof(secondLayer1Weights[invertIndex(blackKing)]));
+        std::memcpy(secondLayer2WeightsBlockWhiteTurn, secondLayer2Weights[blackKing], sizeof(secondLayer2Weights[blackKing]));
+        std::memcpy(secondLayer2WeightsBlockBlackTurn, secondLayer2Weights[invertIndex(whiteKing)], sizeof(secondLayer2Weights[invertIndex(whiteKing)]));
+    }
+
+    // Functions to add/remove features from the accumulators
+    void addAndRemoveOnInput(AccumulatorState &st, int subIndexAdd, int subIndexRemove)
+    {
+        assert(subIndexAdd >= 0 && subIndexAdd < 640 && subIndexRemove >= 0 && subIndexRemove < 640);
+        // White perspective
+        add_8_int16(st.inputTurn[0], firstLayerWeights2Indices[subIndexAdd][subIndexRemove]);
+        // Black perspective
+        add_8_int16(st.inputTurn[1], firstLayerInvertedWeights2Indices[subIndexAdd][subIndexRemove]);
+    }
+
+    void addOnInput(AccumulatorState &st, int subIndex)
+    {
+        assert(subIndex >= 0 && subIndex < 640);
+        // White perspective
+        add_8_int16(st.inputTurn[0], firstLayerWeights[subIndex]);
+        // Black perspective
+        add_8_int16(st.inputTurn[1], firstLayerInvertedWeights[subIndex]);
+    }
+
+    void removeOnInput(AccumulatorState &st, int subIndex)
+    {
+        assert(subIndex >= 0 && subIndex < 640);
+        // White perspective
+        substract_8_int16(st.inputTurn[0], firstLayerWeights[subIndex]);
+        // Black perspective
+        substract_8_int16(st.inputTurn[1], firstLayerInvertedWeights[subIndex]);
+    }
+    void moveWhiteKingNNUEInput(int kingPos)
+    {
+        assert(kingPos >= 0 && kingPos < 64);
+        std::memcpy(secondLayer1WeightsBlockWhiteTurn, secondLayer1Weights[kingPos], 32);
+        std::memcpy(secondLayer2WeightsBlockBlackTurn, secondLayer2Weights[invertIndex(kingPos)], 32);
+        globalAccumulatorStack.changeWhiteKingPosition(kingPos);
+    }
+    void moveBlackKingNNUEInput(int kingPos)
+    {
+        assert(kingPos >= 0 && kingPos < 64);
+        std::memcpy(secondLayer2WeightsBlockWhiteTurn, secondLayer2Weights[kingPos], 32);
+        std::memcpy(secondLayer1WeightsBlockBlackTurn, secondLayer1Weights[invertIndex(kingPos)], 32);
+        globalAccumulatorStack.changeBlackKingPosition(kingPos);
+    }
+
+    // Overload for a normal (non-capture) move: two indices
+    void NNUEUChange::add(int idx0, int idx1)
+    {
+        assert(idx0 >= 0 && idx0 < 640);
+        assert(idx1 >= 0 && idx1 < 640);
+        is_capture = false; // No capture
+        indices[0] = idx0;
+        indices[1] = idx1;
+    }
+
+    // Overload for a capture move: three indices
+    void NNUEUChange::add(int idx0, int idx1, int idx2)
+    {
+        assert(idx0 >= 0 && idx0 < 640);
+        assert(idx1 >= 0 && idx1 < 640);
+        assert(idx2 >= 0 && idx2 < 640);
+        is_capture = true; // It's a capture
+        indices[0] = idx0;
+        indices[1] = idx1;
+        indices[2] = idx2;
+    }
+
+    void NNUEUChange::addlast(int idx2)
+    {
+        assert(idx2 >= 0 && idx2 < 640);
+        is_capture = true; // It's a capture
+        indices[2] = idx2;
+    }
+    bool NNUEUChange::isEmpty() const
+    {
+        return !is_capture && (indices[0] == indices[1]);
+    }
+    bool NNUEUChange::isKingCaptureOnly() const
+    {
+        // King captured something, but didn't affect NNUE input for the king
+        return is_capture && (indices[0] == indices[1]);
+    }
+
+    // Reset to a new root position
+    void AccumulatorStack::reset(const BitPosition &rootPos)
+    {
+        m_current_idx = 1;
+        AccumulatorState &rootState = stack[0];
+
+        // Build a fresh accumulator for the root
+        initializeNNUEInput(rootPos, rootState);
+        // Set the king positions
+        nnueu_king_positions[0] = rootPos.getKingPosition(0);
+        nnueu_king_positions[1] = rootPos.getKingPosition(1);
+        rootState.computed = true;
+    }
+    // Reset to a new root position with a current idx different from 1 (for debugging)
+    void AccumulatorStack::reset(const BitPosition &rootPos, size_t current_idx)
+    {
+        m_current_idx = current_idx;
+        AccumulatorState &rootState = stack[0];
+
+        // Build a fresh accumulator for the root
+        initializeNNUEInput(rootPos, rootState);
+        // Set the king positions
+        nnueu_king_positions[0] = rootPos.getKingPosition(0);
+        nnueu_king_positions[1] = rootPos.getKingPosition(1);
+        rootState.computed = true;
+    }
+    void AccumulatorStack::changeWhiteKingPosition(int kingPos)
+    {
+        nnueu_king_positions[0] = kingPos;
+    }
+    void AccumulatorStack::changeBlackKingPosition(int kingPos)
+    {
+        nnueu_king_positions[1] = kingPos;
+    }
+    int AccumulatorStack::getNNUEUKingPosition(int color) const
+    {
+        return nnueu_king_positions[color];
+    }
+
+    void AccumulatorStack::push(const NNUEUChange &chngs)
+    {
+        assert(m_current_idx < stack.size()); // Ensure space exists
+        stack[m_current_idx].newAcc(chngs);
+        m_current_idx++;
+    }
+
+    // Pop the top state when unmaking a move
+    void AccumulatorStack::pop()
+    {
+        assert(m_current_idx > 1); // Never pop below 1, since root accumulator should be computed
+        m_current_idx--;
+    }
+
+    AccumulatorState &AccumulatorStack::top()
+    {
+        assert(m_current_idx - 1 < stack.size());
+        assert(stack[m_current_idx - 1].computed);
+        return stack[m_current_idx - 1];
+    }
+    // From top down to 0, find the first node that has both sides computed
+    int AccumulatorStack::findLastComputedNode() const
+    {
+        for (std::size_t curr_idx = m_current_idx - 1; curr_idx > 0; curr_idx--)
+        {
+            if (stack[curr_idx].computed)
+                return curr_idx;
+        }
+        return 0;
+    }
+    void AccumulatorStack::forward_update_incremental(const std::size_t begin)
+    {
+        for (std::size_t next = begin + 1; next < m_current_idx; next++)
+            applyIncrementalChanges(stack[next], stack[next - 1]);
+    }
+
+    // This applies the “NNUEUChange” to the current node
+    void AccumulatorStack::applyIncrementalChanges(AccumulatorState &curr, const AccumulatorState &prev)
+    {
+        assert(prev.computed);
+        // Copy previous accumulators
+        std::memcpy(curr.inputTurn[0], prev.inputTurn[0], 16);
+        std::memcpy(curr.inputTurn[1], prev.inputTurn[1], 16);
+
+        const NNUEUChange &c = curr.changes;
+        // For king moves
+        if (c.isEmpty())
+        {
+            curr.computed = true;
+            return;
+        }
+        // For captures with king
+        if (c.isKingCaptureOnly())
+        {
+            removeOnInput(curr, c.indices[2]);
+            curr.computed = true;
+            return;
+        }
+        if (!c.is_capture)
+        {
+            addAndRemoveOnInput(curr, c.indices[0], c.indices[1]);
+        }
+        else
+        {
+            addAndRemoveOnInput(curr, c.indices[0], c.indices[1]);
+            removeOnInput(curr, c.indices[2]);
+        }
+        curr.computed = true;
+    }
+
+    // The engine is built to get an evaluation of the position with high values being good for the engine.
+    // The NNUE is built to give an evaluation of the position with high values being good for whose turn it is.
+    // This function gives an evaluation with high values being good for engine.
+    int16_t evaluationFunction(BitPosition &position, bool ourTurn)
+    {
+        // Update incrementally from the last computed node
+        globalAccumulatorStack.forward_update_incremental(globalAccumulatorStack.findLastComputedNode());
+
+        // Change the NNUEU king positions if needed
+        if (globalAccumulatorStack.getNNUEUKingPosition(0) != position.getKingPosition(0))
+        {
+            moveWhiteKingNNUEInput(position.getKingPosition(0));
+        }
+        if (globalAccumulatorStack.getNNUEUKingPosition(1) != position.getKingPosition(1))
+        {
+            moveBlackKingNNUEInput(position.getKingPosition(1));
+        }
+        assert(position.getKingPosition(0) == globalAccumulatorStack.getNNUEUKingPosition(0));
+        assert(position.getKingPosition(1) == globalAccumulatorStack.getNNUEUKingPosition(1));
+
+        int16_t out;
+        AccumulatorState &updatedAcc = globalAccumulatorStack.top();
+
+        if (position.getTurn())
+        {
+            out = fullNnueuPass(updatedAcc.inputTurn[0], secondLayer1WeightsBlockWhiteTurn, secondLayer2WeightsBlockWhiteTurn);
+        }
+        else
+        {
+            out = fullNnueuPass(updatedAcc.inputTurn[1], secondLayer1WeightsBlockBlackTurn, secondLayer2WeightsBlockBlackTurn);
+        }
+        // Change evaluation from player to move perspective to our perspective
+        if (ourTurn)
+            return out;
+
+        return 4096 - out;
+    }
+
+    } // namespace NNUEU

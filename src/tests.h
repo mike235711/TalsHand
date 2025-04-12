@@ -15,68 +15,6 @@ void printMove(const Move &move)
     std::cout << move.toString() << ": ";
 }
 
-unsigned long long runFirstMovesPerftTest(BitPosition &position, int depth, int currentDepth = 0)
-// Function to test the allMoves move generator, it outputs the number of
-// final moves leading from each of the first legal moves (Perft Test)
-{
-
-    if (depth == 0)
-        return 1;
-    unsigned long long moveCount = 0;
-
-    StateInfo state_info;
-    position.setIsCheckOnInitialization();
-
-    if (position.getIsCheck()) // In check first moves
-    {
-        // All moves
-        std::vector<Move> first_moves = position.inCheckAllMoves();
-        for (Move move : first_moves)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(move);
-            }
-            position.makeMove(move, state_info);
-
-            unsigned long long subCount = runFirstMovesPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeMove(move);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-        }
-    }
-    else // Not in check first moves
-    {
-        // All moves
-        std::vector<Move> first_moves = position.allMoves();
-        for (Move move : first_moves)
-        {
-            if (currentDepth == 0)
-            {
-                printMove(move);
-            }
-            position.makeMove(move, state_info);
-
-            unsigned long long subCount = runFirstMovesPerftTest(position, depth - 1, currentDepth + 1);
-
-            position.unmakeMove(move);
-
-            if (currentDepth == 0)
-            {
-                std::cout << subCount << std::endl; // Print the number of moves leading from this move
-            }
-
-            moveCount += subCount;
-        }
-    }
-    return moveCount;
-}
 
 unsigned long long runQSPerftTest(BitPosition &position, int depth, int currentDepth = 0)
 // Function to test the captures and non captures move generators, it outputs the number of
@@ -94,11 +32,10 @@ unsigned long long runQSPerftTest(BitPosition &position, int depth, int currentD
         Move refutation = Move(0);
         if (currentDepth)
             refutation = position.getBestRefutation();
-
+        position.setBlockersAndPinsInQS();
         // Refutations not in check
         if (refutation.getData() != 0)
         {
-            position.setBlockersAndPinsInQS();
             if (position.isRefutationLegal(refutation))
             {
                 if (currentDepth == 0)

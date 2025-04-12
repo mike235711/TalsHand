@@ -1,61 +1,39 @@
 #ifndef BITPOSITION_H
 #define BITPOSITION_H
 #include <array>
-#include <cstdint> // For fixed sized integers
+#include <cstdint>     // For fixed sized integers
 #include "bit_utils.h" // Bit utility functions
 #include "move.h"
 #include "simd.h" // NNUEU updates
+#include "position_eval.h"
 #include <iostream>
-#include <sstream> 
+#include <sstream>
 #include <vector>
 #include <unordered_set>
 #include <cstring>
 #include <algorithm>
+#include <cassert>
 
 extern bool ENGINEISWHITE;
 
-extern int16_t firstLayerWeights2Indices[640][640][8];
-extern int16_t firstLayerInvertedWeights2Indices[640][640][8];
-
-extern int16_t firstLayerWeights[640][8];
-extern int16_t firstLayerInvertedWeights[640][8];
-
-extern int8_t secondLayer1Weights[64][8 * 4];
-extern int8_t secondLayer2Weights[64][8 * 4];
-
-extern int8_t secondLayer1WeightsBlockWhiteTurn[8 * 4];
-extern int8_t secondLayer2WeightsBlockWhiteTurn[8 * 4];
-extern int8_t secondLayer1WeightsBlockBlackTurn[8 * 4];
-extern int8_t secondLayer2WeightsBlockBlackTurn[8 * 4];
-
-extern int8_t thirdLayerWeights[8 * 4];
-extern int8_t finalLayerWeights[8];
-
-extern int16_t firstLayerBiases[8];
-extern int16_t secondLayerBiases[8];
-extern int16_t thirdLayerBiases[4];
-extern int16_t finalLayerBias;
-
 enum CastlingRights : uint8_t
 {
-    WHITE_KS = 1 << 0,  // 0x01 (bit 0)
-    WHITE_QS = 1 << 1,  // 0x02 (bit 1)
-    BLACK_KS = 1 << 2,  // 0x04 (bit 2)
-    BLACK_QS = 1 << 3   // 0x08 (bit 3)
+    WHITE_KS = 1 << 0, // 0x01 (bit 0)
+    WHITE_QS = 1 << 1, // 0x02 (bit 1)
+    BLACK_KS = 1 << 2, // 0x04 (bit 2)
+    BLACK_QS = 1 << 3  // 0x08 (bit 3)
 };
 
 struct StateInfo
 {
-    // Copied when making a move
-    int8_t castlingRights;  // Bits: 0=WhiteKS, 1=WhiteQS, 2=BlackKS, 3=BlackQS
-    int16_t inputWhiteTurn[8]; // NUUEU Input
-    int16_t inputBlackTurn[8]; // NNUEU Input
+    // Copied when making a move or capture
+    int8_t castlingRights;   // Bits: 0=WhiteKS, 1=WhiteQS, 2=BlackKS, 3=BlackQS
     int reversibleMovesMade; // Used for three-fold checks
+    // Bellow this. Not copied when making a capture (will be recomputed anyhow)
     int pSquare; // Used to update zobrist key
-    // Bellow this. Not copied when making a capture (will be recomputed anyhow), used for unmaking captures
     uint64_t zobristKey;
 
-    // Bellow this. Not copied when making a move (will be recomputed anyhow), used for unmaking moves
+    // Bellow this. Not copied when making a move (will be recomputed anyhow)
     uint64_t straightPinnedPieces;
     uint64_t diagonalPinnedPieces;
     uint64_t pinnedPieces;
@@ -78,12 +56,11 @@ private:
     int m_white_board[64];
     int m_black_board[64];
 
-    // 64-bit to represent pieces on board
+    // 64-bit to represent pieces on board for each piece type and color
     uint64_t m_pieces[2][6];
 
     // Bits to represent all pieces of each player
     uint64_t m_pieces_bit[2];
-
     uint64_t m_all_pieces_bit{};
 
     // True white's turn, False black's
@@ -107,13 +84,13 @@ private:
 
     // Ply number
     int m_ply{0};
-    
+
     // Ply info arrays
     std::array<uint64_t, 128> m_zobrist_keys_array{};
 
     StateInfo *state_info;
-    int last_nnueu_king_position[2];
-    uint64_t m_last_nnue_bits[2][6];
+    // int last_nnueu_king_position[2];
+    // uint64_t m_last_nnue_bits[2][6];
 
     // std::array<std::string, 64> m_fen_array{}; // For debugging purposes
 
@@ -221,7 +198,7 @@ public:
         state_info->castlingRights = cr;
 
         state_info->pSquare = 0;
-        
+
         setAllPiecesBits();
         setKingPosition();
         setIsCheckOnInitialization();
@@ -229,12 +206,15 @@ public:
             setCheckInfoOnInitialization();
         setBlockersAndPinsInAB();
         initializeZobristKey();
+        NNUEU::globalAccumulatorStack.reset(*this);
     }
 
     void setIsCheckOnInitialization();
     bool getIsCheckOnInitialization();
+    bool isKingInCheck(bool side) const;
     void setCheckInfoOnInitialization();
 
+    uint64_t computeFullZobristKey() const;
     void initializeZobristKey();
     void updateZobristKeyPiecePartAfterMove(int origin_square, int destination_square);
 
@@ -251,7 +231,7 @@ public:
 
     bool ttMoveIsOk(Move move) const;
 
-    // These set the checks bits, m_is_check and m_num_checks    
+    // These set the checks bits, m_is_check and m_num_checks
 
     void setCheckInfo();
     void setCheckBits();
@@ -305,7 +285,7 @@ public:
     Move *inCheckOrderedCapturesAndKingMoves(Move *&move_list) const;
     Move *inCheckOrderedCaptures(Move *&move_list) const;
 
-    std::vector<Move> orderAllMovesOnFirstIterationFirstTime(std::vector<Move> &moves, Move ttMove) const;
+    std::vector<Move> orderAllMovesOnFirstIterationFirstTime(std::vector<Move> &moves) const;
     std::pair<std::vector<Move>, std::vector<int16_t>> orderAllMovesOnFirstIteration(std::vector<Move> &moves, std::vector<int16_t> &scores) const;
     std::vector<Move> inCheckMoves() const;
     std::vector<Move> nonCaptureMoves() const;
@@ -316,12 +296,12 @@ public:
     void resetPlyInfo();
 
     template <typename T>
-    void makeMove(T move, StateInfo& new_state_info);
+    void makeMove(T move, StateInfo &new_state_info);
     template <typename T>
     void unmakeMove(T move);
 
     template <typename T>
-    void makeCapture(T move, StateInfo& new_state_info);
+    void makeCapture(T move, StateInfo &new_state_info);
     template <typename T>
     void unmakeCapture(T move);
 
@@ -410,192 +390,6 @@ public:
 
     inline StateInfo *get_state_info() const { return state_info; }
 
-    // NNUEU updates
-    // Helper functions to update the input vector
-    // They are used in bitposition.cpp inside makeCapture.
-    void addAndRemoveOnInput(int subIndexAdd, int subIndexRemove)
-    {
-        // White turn (use normal NNUE)
-        add_8_int16(state_info->inputWhiteTurn, firstLayerWeights2Indices[subIndexAdd][subIndexRemove]);
-        // Black turn (use inverted NNUE)
-        add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights2Indices[subIndexAdd][subIndexRemove]);
-    }
-    void addOnInput(int subIndex)
-    {
-        // White turn (use normal NNUE)
-        add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[subIndex]);
-        // Black turn (use inverted NNUE)
-        add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[subIndex]);
-    }
-    void removeOnInput(int subIndex)
-    {
-        // White turn (use normal NNUE)
-        substract_8_int16(state_info->inputWhiteTurn, firstLayerWeights[subIndex]);
-        // Black turn (use inverted NNUE)
-        substract_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[subIndex]);
-    }
-    // Move King functions to update nnueInput vector
-    void moveWhiteKingNNUEInput()
-    {
-        std::memcpy(secondLayer1WeightsBlockWhiteTurn, secondLayer1Weights[m_king_position[0]], 32);
-        std::memcpy(secondLayer2WeightsBlockBlackTurn, secondLayer2Weights[invertIndex(m_king_position[0])], 32);
-    }
-    void moveBlackKingNNUEInput()
-    {
-        std::memcpy(secondLayer2WeightsBlockWhiteTurn, secondLayer2Weights[m_king_position[1]], 32);
-        std::memcpy(secondLayer1WeightsBlockBlackTurn, secondLayer1Weights[invertIndex(m_king_position[1])], 32);
-    }
-
-    void initializeNNUEInput()
-    // Initialize the NNUE accumulators.
-    {
-        std::memcpy(state_info->inputWhiteTurn, firstLayerBiases, sizeof(firstLayerBiases));
-        std::memcpy(state_info->inputBlackTurn, firstLayerBiases, sizeof(firstLayerBiases));
-
-        for (unsigned short index : getBitIndices(m_pieces[0][0]))
-        {
-            add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[index]);
-            add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[index]);
-        }
-
-        for (unsigned short index : getBitIndices(m_pieces[0][1]))
-        {
-            add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 + index]);
-            add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 + index]);
-        }
-
-        for (unsigned short index : getBitIndices(m_pieces[0][2]))
-        {
-            add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 * 2 + index]);
-            add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 * 2 + index]);
-        }
-
-        for (unsigned short index : getBitIndices(m_pieces[0][3]))
-        {
-            add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 * 3 + index]);
-            add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 * 3 + index]);
-        }
-
-        for (unsigned short index : getBitIndices(m_pieces[0][4]))
-        {
-            add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 * 4 + index]);
-            add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 * 4 + index]);
-        }
-
-        for (unsigned short index : getBitIndices(m_pieces[1][0]))
-        {
-            add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 * 5 + index]);
-            add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 * 5 + index]);
-        }
-
-        for (unsigned short index : getBitIndices(m_pieces[1][1]))
-        {
-            add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 * 6 + index]);
-            add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 * 6 + index]);
-        }
-
-        for (unsigned short index : getBitIndices(m_pieces[1][2]))
-        {
-            add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 * 7 + index]);
-            add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 * 7 + index]);
-        }
-
-        for (unsigned short index : getBitIndices(m_pieces[1][3]))
-        {
-            add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 * 8 + index]);
-            add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 * 8 + index]);
-        }
-
-        for (unsigned short index : getBitIndices(m_pieces[1][4]))
-        {
-            add_8_int16(state_info->inputWhiteTurn, firstLayerWeights[64 * 9 + index]);
-            add_8_int16(state_info->inputBlackTurn, firstLayerInvertedWeights[64 * 9 + index]);
-        }
-
-        std::memcpy(secondLayer1WeightsBlockWhiteTurn, secondLayer1Weights[m_king_position[0]], sizeof(secondLayer1Weights[m_king_position[0]]));
-        std::memcpy(secondLayer1WeightsBlockBlackTurn, secondLayer1Weights[invertIndex(m_king_position[1])], sizeof(secondLayer1Weights[invertIndex(m_king_position[1])]));
-        std::memcpy(secondLayer2WeightsBlockWhiteTurn, secondLayer2Weights[m_king_position[1]], sizeof(secondLayer2Weights[m_king_position[1]]));
-        std::memcpy(secondLayer2WeightsBlockBlackTurn, secondLayer2Weights[invertIndex(m_king_position[0])], sizeof(secondLayer2Weights[invertIndex(m_king_position[0])]));
-
-        setLastNNUEBits();
-    }
-
-    // This function is called ONLY when we enter quiscence search, NOT when we make a capture
-    // We call it in initializeNNUEInput and updateAccumulator
-    void setLastNNUEBits()
-    {
-        std::memcpy(m_last_nnue_bits, m_pieces, 8 * 6 * 2);
-    }
-
-    void updateAccumulator()
-    {
-        // ADD PIECES
-        for (int i = 0; i < 5; ++i)
-        {
-            uint64_t piecesAdd = m_pieces[0][i] & ~m_last_nnue_bits[0][i];
-            while (piecesAdd)
-            {
-                addOnInput(64 * i + popLeastSignificantBit(piecesAdd));
-            }
-            piecesAdd = m_pieces[1][i] & ~m_last_nnue_bits[1][i];
-            while (piecesAdd)
-            {
-                addOnInput(64 * (i + 5) + popLeastSignificantBit(piecesAdd));
-            }
-        }
-
-        // REMOVE PIECES
-        for (int i = 0; i < 5; ++i)
-        {
-            uint64_t piecesAdd = ~m_pieces[0][i] & m_last_nnue_bits[0][i];
-            while (piecesAdd)
-            {
-                removeOnInput(64 * i + popLeastSignificantBit(piecesAdd));
-            }
-            piecesAdd = ~m_pieces[1][i] & m_last_nnue_bits[1][i];
-            while (piecesAdd)
-            {
-                removeOnInput(64 * (i + 5) + popLeastSignificantBit(piecesAdd));
-            }
-        }
-        setLastNNUEBits();
-    }
-
-    // The engine is built to get an evaluation of the position with high values being good for the engine.
-    // The NNUE is built to give an evaluation of the position with high values being good for whose turn it is.
-    // This function gives an evaluation with high values being good for engine.
-    int16_t evaluationFunction(bool ourTurn)
-    {
-        int16_t out;
-        if (last_nnueu_king_position[0]!=m_king_position[0])
-        {
-            moveWhiteKingNNUEInput();
-            last_nnueu_king_position[0] = m_king_position[0];
-        }
-        if (last_nnueu_king_position[1] != m_king_position[1])
-        {
-            moveBlackKingNNUEInput();
-            last_nnueu_king_position[1] = m_king_position[1];
-        }
-
-        // If its our turn in white, or if its not our turn in black then it is white's turn
-        if (ourTurn == ENGINEISWHITE)
-        {
-            out = fullNnueuPass(state_info->inputWhiteTurn, secondLayer1WeightsBlockWhiteTurn, secondLayer2WeightsBlockWhiteTurn, secondLayerBiases,
-                                thirdLayerWeights, thirdLayerBiases, finalLayerWeights, &finalLayerBias);
-        }
-        else
-        {
-            out = fullNnueuPass(state_info->inputBlackTurn, secondLayer1WeightsBlockBlackTurn, secondLayer2WeightsBlockBlackTurn, secondLayerBiases,
-                                thirdLayerWeights, thirdLayerBiases, finalLayerWeights, &finalLayerBias);
-        }
-        // Change evaluation from player to move perspective to white perspective
-        if (ourTurn)
-            return out;
-
-        return 64 * 64 - out;
-    }
-
     // Functions for tests
     Move *inCheckPawnBlocksNonQueenProms(Move *&move_list) const;
     Move *inCheckPawnCapturesNonQueenProms(Move *&move_list) const;
@@ -627,9 +421,18 @@ public:
 
     bool getTurn() const { return m_turn; }
 
-    bool hasBlockersUnset() const { return not m_blockers_set;  }
+    int getKingPosition(bool white) const
+    {
+        return m_king_position[white ? 0 : 1];
+    }
+    uint64_t getPieces(int color, int pieceType) const
+    {
+        return m_pieces[color][pieceType];
+    }
 
-    inline bool getIsCheck() const 
+    bool hasBlockersUnset() const { return not m_blockers_set; }
+
+    inline bool getIsCheck() const
     {
         return state_info->isCheck;
     }
@@ -672,7 +475,6 @@ public:
     uint64_t getBlackRooksBits() const { return m_pieces[1][3]; }
     uint64_t getBlackQueensBits() const { return m_pieces[1][4]; }
     uint64_t getBlackKingBits() const { return m_pieces[1][5]; }
-
 
     int getMovedPiece() const { return m_moved_piece; }
     int getCapturedPiece() const { return state_info->capturedPiece; }
@@ -836,8 +638,116 @@ public:
 
         return fen;
     }
+    bool posIsFine() const
+    {
+        uint64_t recalculated_pieces[2][6] = {};
+        uint64_t recalculated_pieces_bit[2] = {};
+        uint64_t recalculated_all_pieces = 0;
 
+        // Check white board
+        for (int sq = 0; sq < 64; ++sq)
+        {
+            int piece = m_white_board[sq];
+            if (piece < 6)
+            { // valid piece
+                recalculated_pieces[0][piece] |= (1ULL << sq);
+                recalculated_pieces_bit[0] |= (1ULL << sq);
+                recalculated_all_pieces |= (1ULL << sq);
+            }
+            else if (piece != 7)
+            {
+                std::cerr << "[posIsFine] Invalid white piece index at " << sq << ": " << piece << "\n";
+                return false;
+            }
+        }
 
+        // Check black board
+        for (int sq = 0; sq < 64; ++sq)
+        {
+            int piece = m_black_board[sq];
+            if (piece < 6)
+            {
+                recalculated_pieces[1][piece] |= (1ULL << sq);
+                recalculated_pieces_bit[1] |= (1ULL << sq);
+                recalculated_all_pieces |= (1ULL << sq);
+            }
+            else if (piece != 7)
+            {
+                std::cerr << "[posIsFine] Invalid black piece index at " << sq << ": " << piece << "\n";
+                return false;
+            }
+        }
+
+        // Compare bitboards
+        for (int color = 0; color < 2; ++color)
+        {
+            for (int pt = 0; pt < 6; ++pt)
+            {
+                if (recalculated_pieces[color][pt] != m_pieces[color][pt])
+                {
+                    std::cerr << "[posIsFine] m_pieces mismatch at color " << color << ", pt " << pt << "\n";
+                    return false;
+                }
+            }
+            if (recalculated_pieces_bit[color] != m_pieces_bit[color])
+            {
+                std::cerr << "[posIsFine] m_pieces_bit mismatch at color " << color << "\n";
+                return false;
+            }
+        }
+
+        if (recalculated_all_pieces != m_all_pieces_bit)
+        {
+            std::cerr << "[posIsFine] m_all_pieces_bit mismatch\n";
+            return false;
+        }
+
+        if (m_king_position[0] != getLeastSignificantBitIndex(m_pieces[0][5]))
+        {
+            std::cerr << "[posIsFine] m_king_position[0] mismatch\n";
+            return false;
+        }
+        if (m_king_position[1] != getLeastSignificantBitIndex(m_pieces[1][5]))
+        {
+            std::cerr << "[posIsFine] m_king_position[1] mismatch\n";
+            return false;
+        }
+
+        return true; // Everything checks out
+    }
+    template <typename T>
+    bool moveIsFine(const T &move) const
+    {
+        int origin = move.getOriginSquare();
+        int destination = move.getDestinationSquare();
+
+        // Determine which board to check
+        const int *our_board = m_turn ? m_white_board : m_black_board;
+        const int *their_board = m_turn ? m_black_board : m_white_board;
+
+        // Check that the origin square has a piece of the current player
+        if (our_board[origin] == 7)
+        {
+            std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << "\n";
+            return false;
+        }
+
+        // Check that the destination square does NOT contain a piece of the current player
+        if (our_board[destination] != 7)
+        {
+            std::cerr << "[moveIsFine] Destination square " << destination << " already occupied by same side\n";
+            return false;
+        }
+
+        // Optional: Make sure opponent piece (if any) is in bounds
+        if (their_board[destination] != 7 && (their_board[destination] < 0 || their_board[destination] > 5))
+        {
+            std::cerr << "[moveIsFine] Invalid opponent piece index at destination: " << their_board[destination] << "\n";
+            return false;
+        }
+
+        return true;
+    }
 };
 
 #endif // BITPOSITION_H

@@ -1,0 +1,5 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     main_nnueu_test
+relocations:     []
+...
