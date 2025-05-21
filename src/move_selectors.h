@@ -36,7 +36,7 @@ class QSMoveSelectorNotCheck
 public:
     QSMoveSelectorNotCheck(const QSMoveSelectorNotCheck &) = delete;
     QSMoveSelectorNotCheck &operator=(const QSMoveSelectorNotCheck &) = delete;
-    QSMoveSelectorNotCheck(BitPosition & p, Move m) : pos(p), ttMove(m) {};
+    QSMoveSelectorNotCheck(BitPosition & p) : pos(p) {};
     // Qscence Search
     void init();
     Move select_legal();
@@ -47,7 +47,6 @@ private:
     ScoredMove *end() { return endMoves; }
 
     BitPosition &pos;
-    Move ttMove;
     ScoredMove *cur, *endMoves;
     ScoredMove moves[128];
 };

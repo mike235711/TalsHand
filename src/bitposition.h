@@ -30,7 +30,6 @@ struct StateInfo
     int8_t castlingRights;   // Bits: 0=WhiteKS, 1=WhiteQS, 2=BlackKS, 3=BlackQS
     int reversibleMovesMade; // Used for three-fold checks
     // Bellow this. Not copied when making a capture (will be recomputed anyhow)
-    int pSquare; // Used to update zobrist key
     uint64_t zobristKey;
 
     // Bellow this. Not copied when making a move (will be recomputed anyhow)
@@ -38,11 +37,12 @@ struct StateInfo
     uint64_t diagonalPinnedPieces;
     uint64_t pinnedPieces;
     uint64_t blockersForKing;
-    uint64_t lastDestinationBit; // For refutation moves after unmaking a Ttmove
+    int lastDestinationSquare; // For refutation moves after unmaking a Ttmove
     int capturedPiece;
     int lastOriginSquare; // For when calling setCheckInfo()
     bool isCheck;
     uint64_t checkBits[5];
+    int pSquare; // Used to update zobrist key
 
     // Pointers to previous and next state
     StateInfo *previous;
@@ -85,12 +85,7 @@ private:
     // Ply number
     int m_ply{0};
 
-    // Ply info arrays
-    std::array<uint64_t, 128> m_zobrist_keys_array{};
-
     StateInfo *state_info;
-    // int last_nnueu_king_position[2];
-    // uint64_t m_last_nnue_bits[2][6];
 
     // std::array<std::string, 64> m_fen_array{}; // For debugging purposes
 
@@ -196,7 +191,7 @@ public:
             cr |= BLACK_QS;
 
         state_info->castlingRights = cr;
-
+        state_info->reversibleMovesMade = 0;
         state_info->pSquare = 0;
 
         setAllPiecesBits();
@@ -216,10 +211,9 @@ public:
 
     uint64_t computeFullZobristKey() const;
     void initializeZobristKey();
-    void updateZobristKeyPiecePartAfterMove(int origin_square, int destination_square);
 
     void setBlockersAndPinsInAB();
-    void setBlockersAndPinsInQS();
+    void setBlockersPinsAndCheckBitsInQS();
 
     template <typename T>
     bool isLegal(const T *move) const;
@@ -285,7 +279,6 @@ public:
     Move *inCheckOrderedCapturesAndKingMoves(Move *&move_list) const;
     Move *inCheckOrderedCaptures(Move *&move_list) const;
 
-    std::vector<Move> orderAllMovesOnFirstIterationFirstTime(std::vector<Move> &moves) const;
     std::pair<std::vector<Move>, std::vector<int16_t>> orderAllMovesOnFirstIteration(std::vector<Move> &moves, std::vector<int16_t> &scores) const;
     std::vector<Move> inCheckMoves() const;
     std::vector<Move> nonCaptureMoves() const;
@@ -293,7 +286,6 @@ public:
     bool isMate() const;
 
     bool moveIsReseter(Move move);
-    void resetPlyInfo();
 
     template <typename T>
     void makeMove(T move, StateInfo &new_state_info);
@@ -308,12 +300,33 @@ public:
     template <typename T>
     void makeCaptureTest(T move, StateInfo &new_state_info);
 
-    std::vector<Move> inCheckAllMoves();
-    std::vector<Move> allMoves();
-
     bool isDraw() const;
 
+    inline int qsScore(int dst) const
+    {
+        return m_turn ? m_black_board[dst] 
+                      : m_white_board[dst];
+    }
+
+    int qSMoveValue(Move move) const
+    {
+        // Promotions and castling
+        if (move.getData() & 0b0100000000000000)
+        {
+            return 30;
+        }
+        // Non promotions
+        if (m_turn)
+        {
+            return m_black_board[move.getDestinationSquare()];
+        }
+        else
+        {
+            return m_white_board[move.getDestinationSquare()];
+        }
+    }
     int aBMoveValue(Move move) const
+    // Captures and queen promotions
     {
         // Promotions and castling
         if (move.getData() & 0b0100000000000000)
@@ -321,40 +334,10 @@ public:
             // Promotions
             if (m_turn && m_white_board[move.getOriginSquare()] == 0)
                 return 30;
+            else if (not m_turn && m_black_board[move.getOriginSquare()] == 0)
+                return 30;
             // Castling
             return 2;
-        }
-        // Non promotions
-        int score = 0;
-        if (m_turn)
-        {
-            int piece_at = m_black_board[move.getDestinationSquare()];
-            if (piece_at != 7)
-                score += piece_at + 2;
-
-            piece_at = m_white_board[move.getOriginSquare()];
-            if (piece_at != 7 && piece_at != 5)
-                score -= piece_at;
-        }
-        else
-        {
-            int piece_at = m_white_board[move.getDestinationSquare()];
-            if (piece_at != 7)
-                score += piece_at + 2;
-
-            piece_at = m_black_board[move.getOriginSquare()];
-            if (piece_at != 7 && piece_at != 5)
-                score -= piece_at;
-        }
-        return score;
-    }
-    int qSMoveValue(Move move) const
-    // Captures and queen promotions
-    {
-        // Promotions
-        if (move.getData() & 0b0100000000000000)
-        {
-            return 30;
         }
         // Non promotions
         int score = 0;
@@ -419,41 +402,43 @@ public:
         m_all_pieces_bit = (m_pieces_bit[0] | m_pieces_bit[1]);
     }
 
-    bool getTurn() const { return m_turn; }
+    inline bool getTurn() const { return m_turn; }
 
-    int getKingPosition(bool white) const
+    inline int getKingPosition(bool turn) const
     {
-        return m_king_position[white ? 0 : 1];
+        return m_king_position[turn];
     }
     uint64_t getPieces(int color, int pieceType) const
     {
         return m_pieces[color][pieceType];
     }
 
-    bool hasBlockersUnset() const { return not m_blockers_set; }
+    inline bool hasBlockersUnset() const { return not m_blockers_set; }
 
     inline bool getIsCheck() const
     {
         return state_info->isCheck;
     }
-    int getNumChecks() const
+    inline int getNumChecks() const
     {
         return m_num_checks;
     }
-    bool sliderChecking() const { return m_check_rays != 0; }
+    inline bool sliderChecking() const { return m_check_rays != 0; }
 
-    uint64_t getZobristKey() const
+    inline uint64_t getZobristKey() const
     {
         return state_info->zobristKey;
     }
-    std::array<uint64_t, 128> getZobristKeysArray() const { return m_zobrist_keys_array; }
     void printZobristKeys() const
     {
-        std::array<uint64_t, 128> keys = getZobristKeysArray();
-        for (size_t i = 0; i < keys.size(); ++i)
+        const StateInfo *stp = state_info; // start at the current node
+        std::size_t idx = 0;
+
+        while (stp && idx < m_ply) // stop after 128 plies or at the root
         {
-            if (keys[i] != 0)
-                std::cout << "Key[" << i << "] = " << keys[i] << "\n";
+            std::cout << "Key[" << idx << "] = " << stp->zobristKey << '\n';
+            stp = stp->previous; // walk back one ply
+            ++idx;
         }
     }
     void print50MoveCount()
@@ -721,31 +706,36 @@ public:
         int origin = move.getOriginSquare();
         int destination = move.getDestinationSquare();
 
-        // Determine which board to check
-        const int *our_board = m_turn ? m_white_board : m_black_board;
-        const int *their_board = m_turn ? m_black_board : m_white_board;
-
-        // Check that the origin square has a piece of the current player
-        if (our_board[origin] == 7)
+        if (m_turn)
         {
-            std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << "\n";
-            return false;
+            // Check that the origin square has a piece of the current player
+            if (m_white_board[origin] == 7)
+            {
+                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << "\n";
+                return false;
+            }
+            // Check that the destination square does NOT contain a piece of the current player
+            if (m_white_board[destination] != 7)
+            {
+                std::cerr << "[moveIsFine] Destination square " << destination << " already occupied by same side\n";
+                return false;
+            }
         }
-
-        // Check that the destination square does NOT contain a piece of the current player
-        if (our_board[destination] != 7)
+        else
         {
-            std::cerr << "[moveIsFine] Destination square " << destination << " already occupied by same side\n";
-            return false;
+            // Check that the origin square has a piece of the current player
+            if (m_black_board[origin] == 7)
+            {
+                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << "\n";
+                return false;
+            }
+            // Check that the destination square does NOT contain a piece of the current player
+            if (m_black_board[destination] != 7)
+            {
+                std::cerr << "[moveIsFine] Destination square " << destination << " already occupied by same side\n";
+                return false;
+            }
         }
-
-        // Optional: Make sure opponent piece (if any) is in bounds
-        if (their_board[destination] != 7 && (their_board[destination] < 0 || their_board[destination] > 5))
-        {
-            std::cerr << "[moveIsFine] Invalid opponent piece index at destination: " << their_board[destination] << "\n";
-            return false;
-        }
-
         return true;
     }
 };

@@ -4,8 +4,7 @@
 #include "bitposition.h"
 
 
-// Sort moves in descending order up to and including a given limit.
-// The order of moves smaller than the limit is left unspecified.
+// Sort moves in descending order.
 void sort_moves(ScoredMove *begin, ScoredMove *end)
 {
     for (ScoredMove *sortedEnd = begin, *p = begin + 1; p < end; ++p)
@@ -22,12 +21,12 @@ void sort_moves(ScoredMove *begin, ScoredMove *end)
 void ABMoveSelectorNotCheck::score()
 {
     for (auto &move : *this)
-        move.score = pos.qSMoveValue(move);
+        move.score = pos.aBMoveValue(move);
 }
 void QSMoveSelectorNotCheck::score()
 {
     for (auto &move : *this)
-        move.score = pos.aBMoveValue(move);
+        move.score = pos.qSMoveValue(move);
 }
 
 // This never returns the TT move, as it was emitted before.
@@ -37,7 +36,7 @@ Move QSMoveSelectorCheck::select_legal()
     {
         // We only set blockers once if there is a legal move
         if (pos.hasBlockersUnset())
-            pos.setBlockersAndPinsInQS();
+            pos.setBlockersPinsAndCheckBitsInQS();
         // If move is not legal we skip it
         if (pos.isCaptureLegal(cur))
         {
@@ -49,19 +48,29 @@ Move QSMoveSelectorCheck::select_legal()
 }
 Move QSMoveSelectorNotCheck::select_legal()
 {
-    for (; cur < endMoves; ++cur)
-        if (*cur != ttMove)
-        {
-            // We only set blockers once if there is a legal move
-            if (pos.hasBlockersUnset())
-                pos.setBlockersAndPinsInQS();
-            // If move is not legal we skip it
-            if (pos.isCaptureLegal(cur))
-            {
-                return *cur++;
-            }
-        }
-    return Move(0);
+    while (cur < endMoves)
+    {
+        // --- find best remaining move in [cur, endMoves) -------------------
+        ScoredMove *best = cur;
+        for (ScoredMove *p = cur + 1; p < endMoves; ++p)
+            if (p->score > best->score)
+                best = p;
+
+        // move it to the front (stable O(1) for already-best case)
+        if (best != cur)
+            std::swap(*best, *cur);
+
+        // --- legality test -------------------------------------------------
+        if (pos.hasBlockersUnset())
+            pos.setBlockersPinsAndCheckBitsInQS();
+
+        if (pos.isCaptureLegal(cur))
+            return *cur++; // success → advance and return
+
+        ++cur; // illegal → drop & try next best
+    }
+
+    return Move(0); // no legal capture left
 }
 Move QSMoveSelectorCheckNonCaptures::select_legal()
 {
@@ -116,14 +125,18 @@ Move ABMoveSelectorNotCheck::select_legal()
 void QSMoveSelectorNotCheck::init()
 {
     cur = endMoves = moves;
+
+    // generate every capture
     endMoves = pos.pawnCapturesAndQueenProms(endMoves);
     endMoves = pos.knightCaptures(endMoves);
     endMoves = pos.bishopCaptures(endMoves);
     endMoves = pos.rookCaptures(endMoves);
     endMoves = pos.queenCaptures(endMoves);
     endMoves = pos.kingCaptures(endMoves);
-    score();
-    sort_moves(cur, endMoves);
+
+    // write scores but DON’T sort – we’ll pick lazily
+    // for (ScoredMove *p = moves; p < endMoves; ++p)
+    //     p->score = pos.qSMoveValue(*p);
 }
 void QSMoveSelectorCheck::init()
 {

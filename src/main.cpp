@@ -19,15 +19,15 @@
 #include "memory.h"
 #include "move_selectors.h"
 
-
 TranspositionTable globalTT;
 TranspositionTableNNUE nnueTT; // For position generator
 
-bool ENGINEISWHITE; 
-int OURTIME{1200}; // Time left
-int OURINC{1200}; // Increment per move
+bool ENGINEISWHITE;
+int OURTIME{1200};                                                     // Time left
+int OURINC{1200};                                                      // Increment per move
 std::chrono::time_point<std::chrono::high_resolution_clock> STARTTIME; // Starting thinking time point
-int TTSIZE{23};
+int TTSIZE{22};
+std::array<StateInfo, 256> state_info_array;
 
 void printArray(const char *name, const int16_t *array, size_t size)
 {
@@ -44,7 +44,7 @@ Move findNormalMoveFromString(std::string moveString, BitPosition position)
     if (position.getIsCheck())
     {
         position.setCheckInfo();
-        position.setBlockersAndPinsInQS();
+        position.setBlockersPinsAndCheckBitsInQS();
         // Captures
         Move move;
         QSMoveSelectorCheck move_selector_1(position);
@@ -65,10 +65,10 @@ Move findNormalMoveFromString(std::string moveString, BitPosition position)
     }
     else
     {
-        position.setBlockersAndPinsInQS();
+        position.setBlockersPinsAndCheckBitsInQS();
         // Captures
         Move move;
-        QSMoveSelectorNotCheck move_selector_1(position, Move(0));
+        QSMoveSelectorNotCheck move_selector_1(position);
         move_selector_1.init();
         while ((move = move_selector_1.select_legal()) != Move(0))
         {
@@ -92,7 +92,7 @@ Move findCaptureMoveFromString(std::string moveString, BitPosition position)
     if (position.getIsCheck())
     {
         position.setCheckInfo();
-        position.setBlockersAndPinsInQS();
+        position.setBlockersPinsAndCheckBitsInQS();
         // Captures
         Move move;
         QSMoveSelectorCheck move_selector_1(position);
@@ -113,10 +113,10 @@ Move findCaptureMoveFromString(std::string moveString, BitPosition position)
     }
     else
     {
-        position.setBlockersAndPinsInQS();
+        position.setBlockersPinsAndCheckBitsInQS();
         // Captures
         Move move;
-        QSMoveSelectorNotCheck move_selector_1(position, Move(0));
+        QSMoveSelectorNotCheck move_selector_1(position);
         move_selector_1.init();
         while ((move = move_selector_1.select_legal()) != Move(0))
         {
@@ -141,7 +141,7 @@ int main()
 
     // Initialize std::vectors of NNUEInput layers as global variables
     NNUEU::initNNUEParameters();
-    precomputed_moves::init_precomputed_moves();
+    // precomputed_moves::init_precomputed_moves();
 
     // precomputed_moves::pretty_print_all();
 
@@ -155,13 +155,13 @@ int main()
     std::string inputLine;
     std::string lastFen; // Variable to store the last FEN string
     BitPosition position{BitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")};
-    StateInfo state_info;
 
     globalTT.resize(1 << TTSIZE);
 
     bool fromStart;
     int movesMade = 0;
     Move lastMove;
+
     // Simple loop to read commands from the Python GUI following UCI communication protocol
     while (std::getline(std::cin, inputLine))
     {
@@ -171,9 +171,12 @@ int main()
         iss >> command;
         if (command == "uci")
         {
-            std::cout << "id name La_Mano_de_Tahl\n" << std::flush;
-            std::cout << "id author Miguel_Cordoba\n" << std::flush;
-            std::cout << "uciok\n" << std::flush;
+            std::cout << "id name La_Mano_de_Tahl\n"
+                      << std::flush;
+            std::cout << "id author Miguel_Cordoba\n"
+                      << std::flush;
+            std::cout << "uciok\n"
+                      << std::flush;
         }
         else if (command == "isready")
         {
@@ -187,6 +190,7 @@ int main()
         // Setting up position
         else if (command == "position")
         {
+            state_info_array = std::array<StateInfo, 256>{};
             iss >> command;
             std::string fen;
             std::string line;
@@ -233,33 +237,34 @@ int main()
             }
 
             position = BitPosition(fen);
-
+            movesMade = 0;
             Move move;
+            bool reseterMove{false};
             while (iss >> command)
             {
                 // Apply each move in the moves list
                 std::string moveUci{command};
                 move = findNormalMoveFromString(moveUci, position);
-                if (move.getData() != 0)
-                    lastMove = move;
-                bool reseterMove{false};
 
                 if (move.getData() != 0)
                 {
+                    lastMove = move;
                     if (position.moveIsReseter(move))
+                    {
+                        NNUEU::globalAccumulatorStack.reset(position);
                         reseterMove = true;
+                    }
+                    else
+                        reseterMove = false;
+
                     position.setBlockersAndPinsInAB();
                     position.setCheckBits(); // For direct checks
-                    position.makeMove(move, state_info);
-                    movesMade++;
+                    position.makeMove(move, state_info_array[movesMade++]);
                 }
-
-                // If we make a capture we cant go back to previous positions so we empty
-                // the plyInfo (for threefold checking) in position
-                if (reseterMove)
-                    position.resetPlyInfo();
-                globalTT.resize(1 << TTSIZE);
             }
+            // If the last move made was a reseter we reset the ttable
+            if (reseterMove)
+                globalTT.resize(1 << TTSIZE);
         }
         // Thinking after opponent made move
         else if (inputLine.substr(0, 2) == "go")
@@ -268,13 +273,13 @@ int main()
             // Get our time left and increment
             while (iss >> command)
             {
-                if (command == "wtime" && ENGINEISWHITE) 
+                if (command == "wtime" && ENGINEISWHITE)
                     iss >> OURTIME;
                 else if (command == "btime" && (ENGINEISWHITE == false))
                     iss >> OURTIME;
                 else if (command == "winc" && ENGINEISWHITE)
                     iss >> OURINC;
-                else if (command == "binc" && (ENGINEISWHITE==false))
+                else if (command == "binc" && (ENGINEISWHITE == false))
                     iss >> OURINC;
             }
             if (fromStart && movesMade == 0)
@@ -322,10 +327,9 @@ int main()
                 auto [bestMove, bestValue]{iterativeSearch(position, startDepth)};
 
                 // Send our best move through a UCI command
-                // std::cout << "Eval: " << bestValue << "\n";
-                std::cout << "bestmove " << bestMove.toString() << "\n" << std::flush;
-
-                position.makeMove(bestMove, state_info);
+                std::cout << "Eval: " << bestValue << "\n";
+                std::cout << "bestmove " << bestMove.toString() << "\n"
+                          << std::flush;
 
                 // Check transposition table memory
                 // globalTT.printTableMemory();
@@ -593,57 +597,57 @@ int main()
             std::cout << "Position 1 \n";
             // Initialize NNUE input std::vec
             auto start = std::chrono::high_resolution_clock::now(); // Start timing
-            // for (int8_t depth = 1; depth <= maxDepth; ++depth)
-            // {
-            //     position_1 = BitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"); // This is because we are searching moves from start again
-            //     // position_1.makeMove(findNormalMoveFromString("c2c3", position_1));
-            //     std::cout << runQSPerftTest(position_1, depth) << " moves\n";
-            // }
+            for (int8_t depth = 1; depth <= maxDepth; ++depth)
+            {
+                position_1 = BitPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"); // This is because we are searching moves from start again
+                // position_1.makeMove(findNormalMoveFromString("c2c3", position_1));
+                std::cout << runQSPerftTest(position_1, depth) << " moves\n";
+            }
             auto end = std::chrono::high_resolution_clock::now(); // End timing
             duration = end - start;                               // Calculate duration
 
-            // // Position 2
-            // std::cout << "Position 2 \n";
-            // // Initialize NNUE input std::vec
-            // start = std::chrono::high_resolution_clock::now(); // Start timing
-            // for (int8_t depth = 1; depth <= maxDepth; ++depth)
-            // {
-            //     position_2 = BitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"); // This is because we are searching moves from start again
-            //     // position_2.makeMove(findNormalMoveFromString("e5g6", position_2), state_info);
-            //     // position_2.makeMove(findNormalMoveFromString("b4c3", position_2), state_info);
-            //     // position_2.makeMove(findNormalMoveFromString("g6h8", position_2), state_info);
-            //     std::cout << runQSPerftTest(position_2, depth) << " moves\n";
-            // }
-            // end = std::chrono::high_resolution_clock::now(); // End timing
-            // duration += end - start;                               // Calculate duration
+            // Position 2
+            std::cout << "Position 2 \n";
+            // Initialize NNUE input std::vec
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= maxDepth; ++depth)
+            {
+                position_2 = BitPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"); // This is because we are searching moves from start again
+                // position_2.makeMove(findNormalMoveFromString("e5g6", position_2), state_info);
+                // position_2.makeMove(findNormalMoveFromString("b4c3", position_2), state_info);
+                // position_2.makeMove(findNormalMoveFromString("g6h8", position_2), state_info);
+                std::cout << runQSPerftTest(position_2, depth) << " moves\n";
+            }
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += end - start;                         // Calculate duration
 
-            // // Position 3
-            // std::cout << "Position 3 \n";
-            // // Initialize NNUE input std::vec
-            // start = std::chrono::high_resolution_clock::now(); // Start timing
-            // for (int8_t depth = 1; depth <= maxDepth; ++depth)
-            // {
-            //     position_3 = BitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"); // This is because we are searching moves from start again
-            //     // position_3.makeMove(findCaptureMoveFromString("b4b1", position_3));
-            //     std::cout << runQSPerftTest(position_3, depth) << " moves\n";
-            // }
-            // end = std::chrono::high_resolution_clock::now(); // End timing
-            // duration += end - start;                               // Calculate duration
+            // Position 3
+            std::cout << "Position 3 \n";
+            // Initialize NNUE input std::vec
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= maxDepth; ++depth)
+            {
+                position_3 = BitPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"); // This is because we are searching moves from start again
+                // position_3.makeMove(findCaptureMoveFromString("b4b1", position_3));
+                std::cout << runQSPerftTest(position_3, depth) << " moves\n";
+            }
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += end - start;                         // Calculate duration
 
-            // // Position 4
-            // std::cout << "Position 4 \n";
-            // // Initialize NNUE input std::vec
-            // start = std::chrono::high_resolution_clock::now(); // Start timing
-            // for (int8_t depth = 1; depth <= maxDepth; ++depth)
-            // {
-            //     StateInfo state_info;
-            //     position_4 = BitPosition("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1"); // This is because we are searching moves from start again
-            //     // position_4.makeMove(findNormalMoveFromString("f3d4", position_4), state_info);
-            //     // position_4.makeMove(findNormalMoveFromString("a5b3", position_4), state_info);
-            //     std::cout << runQSPerftTest(position_4, depth) << " moves\n";
-            // }
-            // end = std::chrono::high_resolution_clock::now(); // End timing
-            // duration += end - start;                               // Calculate duration
+            // Position 4
+            std::cout << "Position 4 \n";
+            // Initialize NNUE input std::vec
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= maxDepth; ++depth)
+            {
+                StateInfo state_info;
+                position_4 = BitPosition("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1"); // This is because we are searching moves from start again
+                // position_4.makeMove(findNormalMoveFromString("f3d4", position_4), state_info);
+                // position_4.makeMove(findNormalMoveFromString("a5b3", position_4), state_info);
+                std::cout << runQSPerftTest(position_4, depth) << " moves\n";
+            }
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += end - start;                         // Calculate duration
 
             // Position 5
             std::cout << "Position 5 \n";
@@ -658,21 +662,21 @@ int main()
                 std::cout << runQSPerftTest(position_5, depth) << " moves\n";
             }
             end = std::chrono::high_resolution_clock::now(); // End timing
-            duration += end - start;                               // Calculate duration
+            duration += end - start;                         // Calculate duration
 
-            // // Position 6
-            // std::cout << "Position 6 \n";
-            // // Initialize NNUE input std::vec
-            // start = std::chrono::high_resolution_clock::now(); // Start timing
-            // for (int8_t depth = 1; depth <= maxDepth; ++depth)
-            // {
-            //     StateInfo state_info;
-            //     position_6 = BitPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 "); // This is because we are searching moves from start again
-            //     // position_6.makeMove(findNormalMoveFromString("c4f7", position_6), state_info);
-            //     std::cout << runQSPerftTest(position_6, depth) << " moves\n";
-            // }
-            // end = std::chrono::high_resolution_clock::now(); // End timing
-            // duration += end - start;                               // Calculate duration
+            // Position 6
+            std::cout << "Position 6 \n";
+            // Initialize NNUE input std::vec
+            start = std::chrono::high_resolution_clock::now(); // Start timing
+            for (int8_t depth = 1; depth <= maxDepth; ++depth)
+            {
+                StateInfo state_info;
+                position_6 = BitPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 "); // This is because we are searching moves from start again
+                // position_6.makeMove(findNormalMoveFromString("c4f7", position_6), state_info);
+                std::cout << runQSPerftTest(position_6, depth) << " moves\n";
+            }
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += end - start;                         // Calculate duration
 
             std::cout << "Time taken: " << duration.count() << " seconds\n";
         }
@@ -718,7 +722,7 @@ int main()
                 std::cout << iterativeSearch(position_1, 1, depth).first.toString() << "\n";
             }
             auto end = std::chrono::high_resolution_clock::now(); // End timing
-            duration += (end - start); // Calculate duration
+            duration += (end - start);                            // Calculate duration
 
             // Position 2
             globalTT.resize(1 << 20);
@@ -731,8 +735,8 @@ int main()
                 position_2 = BitPosition("rR6/p7/KnPk4/P7/8/8/8/8 w - - 0 1"); // This is because we are searching moves from start again
                 std::cout << iterativeSearch(position_2, 1, depth).first.toString() << "\n";
             }
-            end = std::chrono::high_resolution_clock::now();    // End timing
-            duration += (end - start); // Calculate duration
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += (end - start);                       // Calculate duration
 
             // Position 3
             globalTT.resize(1 << 20);
@@ -745,8 +749,8 @@ int main()
                 position_3 = BitPosition("1b1q4/8/P2p4/1N1Pp2p/5P1k/7P/1B1P3K/8 w - - 0 1"); // This is because we are searching moves from start again
                 std::cout << iterativeSearch(position_3, 1, depth).first.toString() << "\n";
             }
-            end = std::chrono::high_resolution_clock::now();    // End timing
-            duration += (end - start); // Calculate duration
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += (end - start);                       // Calculate duration
 
             // Position 4
             globalTT.resize(1 << 20);
@@ -759,8 +763,8 @@ int main()
                 position_4 = BitPosition("2r2rk1/1b3ppp/p1qpp3/1P6/1Pn1P2b/2NB1P1P/1BP1R1P1/R2Q2K1 b - - 0 19"); // This is because we are searching moves from start again
                 std::cout << iterativeSearch(position_4, 1, depth).first.toString() << "\n";
             }
-            end = std::chrono::high_resolution_clock::now();    // End timing
-            duration += (end - start); // Calculate duration
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += (end - start);                       // Calculate duration
 
             // Position 5
             globalTT.resize(1 << 20);
@@ -773,8 +777,8 @@ int main()
                 position_5 = BitPosition("rn2kb1r/1bq2pp1/pp3n1p/4p3/2PQ1B1P/2N3P1/PP2PPB1/2KR3R w kq - 0 12"); // This is because we are searching moves from start again
                 std::cout << iterativeSearch(position_5, 1, depth).first.toString() << "\n";
             }
-            end = std::chrono::high_resolution_clock::now();    // End timing
-            duration += (end - start); // Calculate duration
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += (end - start);                       // Calculate duration
 
             // Position 6
             globalTT.resize(1 << 20);
@@ -787,8 +791,8 @@ int main()
                 position_6 = BitPosition("3k2rr/4b3/p3Qpq1/P2pn3/1p1Nb3/6B1/1PP1B2P/3R1RK1 b - - 0 25"); // This is because we are searching moves from start again
                 std::cout << iterativeSearch(position_6, 1, depth).first.toString() << "\n";
             }
-            end = std::chrono::high_resolution_clock::now();    // End timing
-            duration += (end - start); // Calculate duration
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += (end - start);                       // Calculate duration
 
             // Position 7
             globalTT.resize(1 << 20);
@@ -801,12 +805,12 @@ int main()
                 position_7 = BitPosition("4k3/Q6n/8/8/8/8/PR5P/4K1NR w K - 0 1"); // This is because we are searching moves from start again
                 std::cout << iterativeSearch(position_7, 1, depth).first.toString() << "\n";
             }
-            end = std::chrono::high_resolution_clock::now();    // End timing
-            duration += (end - start); // Calculate duration
+            end = std::chrono::high_resolution_clock::now(); // End timing
+            duration += (end - start);                       // Calculate duration
 
             std::cout << "Time taken: " << duration.count() << " seconds\n";
         }
-        
+
         else if (inputLine == "nNTests")
         {
             StateInfo state_info;
@@ -829,7 +833,7 @@ int main()
             // position_2 = BitPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10");
             // position_2.makeCapture(findNormalMoveFromString("g5f6", position_2), state_info);
             // std::cout << "Eval not our turn: " << NNUEU::evaluationFunction(position_2, false) << "\n";
-            
+
             // // Test 2 (really bad normal move)
             // std::cout << "\n Test 2 (Bad Normal move) \n";
             // // Position2 at initialization
@@ -870,7 +874,7 @@ int main()
             // position_4.makeMove(findNormalMoveFromString("g1h1", position_4), state_info);
             // std::cout << "Eval not our turn: " << NNUEU::evaluationFunction(position_4, false) << "\n";
 
-            // Test 4 
+            // Test 4
             std::cout << "\n Test 4 (Normal move) \n";
             // Position4 at initialization
             BitPosition positionBad{BitPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P2N/P1NP2Pb/1PP2P1P/R6K w - - 2 13")};
@@ -882,16 +886,16 @@ int main()
         else if (inputLine == "threefoldTest")
         {
             BitPosition position_1{"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"};
-            StateInfo state_info;
 
             auto checkAndMakeMove = [&](const std::string &moveStr)
             {
+                StateInfo state_info;
                 Move move = findNormalMoveFromString(moveStr, position_1);
+                position_1.makeMove(move, state_info);
                 if (position_1.isDraw())
                     std::cout << "Draw\n";
                 else
                     std::cout << "Not Draw\n";
-                position_1.makeMove(move, state_info);
             };
 
             checkAndMakeMove("b1a3"); // Not draw
@@ -914,9 +918,9 @@ int main()
             checkAndMakeMove("a3b1");
             checkAndMakeMove("a6b8");
 
-            position_1.printZobristKeys();
+            // position_1.printZobristKeys();
         }
-        
+
         // Generate data for NNUE further training
         else if (inputLine == "generateData")
         {

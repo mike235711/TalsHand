@@ -35,12 +35,13 @@ namespace NNUEU
     struct AccumulatorState
     {
         int16_t inputTurn[2][8]; // [0] white, [1] black NNUEU input arrays.
-        bool computed;           // True if the state is fully updated.
+        bool computed[2];           // True if the state is fully updated for whites/blacks perspective.
         NNUEUChange changes;     // The incremental change that led to this state.
         void newAcc(const NNUEUChange &chngs)
         {
             changes = chngs;
-            computed = false;
+            computed[0] = false;
+            computed[1] = false;
         }
     };
 
@@ -49,15 +50,13 @@ namespace NNUEU
     {
     private:
         std::vector<AccumulatorState> stack;
-
+        size_t m_current_idx;
         int nnueu_king_positions[2]; // For each color, store the last king positions.
     public:
-        size_t m_current_idx;
         AccumulatorStack() : m_current_idx(0) 
         {
             stack.resize(128);
         }
-        // Reset the stack to a new root position.
         void reset(const BitPosition &rootPos);
         void reset(const BitPosition &rootPos, size_t current_idx);
         // Change the stored king positions.
@@ -71,14 +70,14 @@ namespace NNUEU
         // Return a const reference to the current top state.
         AccumulatorState &top();
         // From the top down, find the last node that is fully computed.
-        int findLastComputedNode() const;
+        int findLastComputedNode(bool turn) const;
         // Forward-update the stack from a given node index to the top.
-        void forward_update_incremental(const std::size_t begin);
+        void forward_update_incremental(const int begin, bool turn);
 
 
     private:
         // Apply incremental changes from a previous state to a current state.
-        void applyIncrementalChanges(AccumulatorState &curr, const AccumulatorState &prev);
+        void applyIncrementalChanges(AccumulatorState &curr, const AccumulatorState &prev, bool turn);
     };
 
     // Declare a global accumulator stack (for single-threaded use)
@@ -87,11 +86,6 @@ namespace NNUEU
     // NNUEU Input and update functions.
     // These functions initialize the NNUE accumulators and update them.
     void initializeNNUEInput(const BitPosition &position, AccumulatorState &accumulatorState);
-    void addAndRemoveOnInput(AccumulatorState &st, int subIndexAdd, int subIndexRemove);
-    void addOnInput(AccumulatorState &st, int subIndex);
-    void removeOnInput(AccumulatorState &st, int subIndex);
-    void moveWhiteKingNNUEInput(int kingPos);
-    void moveBlackKingNNUEInput(int kingPos);
 
     // NNUEU model parameter initialization.
     void initNNUEParameters();

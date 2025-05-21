@@ -21,6 +21,7 @@ extern std::chrono::time_point<std::chrono::high_resolution_clock> STARTTIME;
 int DEPTH;
 Move ourMoveMade;
 bool isEndgame;
+
 std::unordered_map<Move, std::vector<int16_t>> moveDepthValues;
 
 bool stopSearch(const std::vector<int16_t> &values, int streak, int depth, BitPosition &position)
@@ -43,7 +44,7 @@ bool stopSearch(const std::vector<int16_t> &values, int streak, int depth, BitPo
     // If endgame
     else
     {
-        if (streak > 9 && depth > 10)
+        if (streak > 11 && depth > 12)
             return true;
         // Check if the move's score has just increased over time
         for (std::size_t i = 1; i < values.size(); ++i)
@@ -52,7 +53,7 @@ bool stopSearch(const std::vector<int16_t> &values, int streak, int depth, BitPo
                 return false;
         }
 
-        if (streak > 7 && depth > 9)
+        if (streak > 10 && depth > 11)
             return true;
     }
     return false;
@@ -61,95 +62,58 @@ bool stopSearch(const std::vector<int16_t> &values, int streak, int depth, BitPo
 int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool our_turn)
 // This search is done when depth is less than or equal to 0 and considers only captures and promotions
 {
-    assert(alpha <= beta);
-    // If we are in quiescence, we have a baseline eval as if no captures happened
-    int16_t value{NNUEU::evaluationFunction(position, our_turn)};
+    // If we are in quiescence, we have a baseline evaluation as if no captures happened
+    // Stand pat
+    int16_t value = NNUEU::evaluationFunction(position, our_turn);
+
+    if (value >= beta)
+        return value; // beta-cutoff
+
+    alpha = std::max(alpha, value);
+
+    // 
 
     int16_t child_value;
     Move best_move;
     bool no_captures = true;
     StateInfo state_info;
 
-    position.setCheckBits();
     if (not position.getIsCheck()) // Not in check
     {
-        bool cutoff{false};
-        Move refutation = position.getBestRefutation();
-        // Refutation
-        if (refutation.getData() != 0)
+        Move capture;
+        QSMoveSelectorNotCheck move_selector(position);
+        move_selector.init();
+        while ((capture = move_selector.select_legal()) != Move(0))
         {
-            position.setBlockersAndPinsInQS();
-            if (position.isRefutationLegal(refutation))
+            no_captures = false;
+            position.makeCapture(capture, state_info);
+            if (our_turn) // Maximize
             {
-                no_captures = false;
-                position.makeCapture(refutation, state_info);
-                if (our_turn) // Maximize
+                child_value = quiesenceSearch(position, alpha, beta, false);
+                if (child_value > value)
                 {
-                    child_value = quiesenceSearch(position, alpha, beta, false);
-                    if (child_value > value)
-                    {
-                        value = child_value;
-                        best_move = refutation;
-                    }
-                    position.unmakeCapture(refutation);
-                    if (value >= beta)
-                        cutoff = true;
-
-                    alpha = std::max(alpha, value);
+                    value = child_value;
+                    best_move = capture;
                 }
-                else // Minimize
-                {
-                    child_value = quiesenceSearch(position, alpha, beta, true);
-                    if (child_value < value)
-                    {
-                        value = child_value;
-                        best_move = refutation;
-                    }
-                    position.unmakeCapture(refutation);
-                    if (value <= alpha)
-                        cutoff = true;
+                position.unmakeCapture(capture);
+                if (value >= beta)
+                    break;
 
-                    beta = std::min(beta, value);
-                }
+                alpha = std::max(alpha, value);
             }
-        }
-        if (not cutoff)
-        {
-            Move capture;
-            QSMoveSelectorNotCheck move_selector(position, refutation);
-            move_selector.init();
-            while ((capture = move_selector.select_legal()) != Move(0))
+            else // Minimize
             {
-                no_captures = false;
-                position.makeCapture(capture, state_info);
-                if (our_turn) // Maximize
+                child_value = quiesenceSearch(position, alpha, beta, true);
+                if (child_value < value)
                 {
-                    child_value = quiesenceSearch(position, alpha, beta, false);
-                    if (child_value > value)
-                    {
-                        value = child_value;
-                        best_move = capture;
-                    }
-                    position.unmakeCapture(capture);
-                    if (value >= beta)
-                        break;
-
-                    alpha = std::max(alpha, value);
+                    value = child_value;
+                    best_move = capture;
                 }
-                else // Minimize
-                {
-                    child_value = quiesenceSearch(position, alpha, beta, true);
-                    if (child_value < value)
-                    {
-                        value = child_value;
-                        best_move = capture;
-                    }
-                    position.unmakeCapture(capture);
-                    if (value <= alpha)
-                        break;
+                position.unmakeCapture(capture);
+                if (value <= alpha)
+                    break;
 
-                    beta = std::min(beta, value);
-                }
+                beta = std::min(beta, value);
             }
         }
     }
@@ -198,26 +162,29 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
     {
         if (our_turn)
         {
-            globalTT.save(position.getZobristKey(), 0, 0, Move(0), false);
+            // globalTT.save(position.getZobristKey(), 0, 0, Move(0), false);
             return 0;
         }
         else
         {
-            globalTT.save(position.getZobristKey(), 30000, 0, Move(0), false);
+            // globalTT.save(position.getZobristKey(), 30000, 0, Move(0), false);
             return 30000;
         }
     }
     // Saving a tt value
-    globalTT.save(position.getZobristKey(), value, 0, best_move, false);
+    // globalTT.save(position.getZobristKey(), value, 0, best_move, false);
     return value;
 }
 
 int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int16_t beta, bool our_turn)
 // This search is done when depth is more than 0 and considers all moves and stores positions in the transposition table
 {
-    assert(alpha <= beta);
     if (position.isDraw())
         return 2048;
+
+    // At depths <= 0 we enter quiesence search
+    if (depth <= 0)
+        return quiesenceSearch(position, alpha, beta, our_turn);
 
     bool no_moves{true};
     bool cutoff{false};
@@ -227,10 +194,6 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
     int16_t value{our_turn ? static_cast<int16_t>(-31000) : static_cast<int16_t>(31000)};
     Move best_move;
     StateInfo state_info;
-
-    // At depths <= 0 we enter quiesence search
-    if (depth <= 0)
-        return quiesenceSearch(position, alpha, beta, our_turn);
 
     position.setBlockersAndPinsInAB(); // For discovered checks and move generators
     position.setCheckBits();           // For direct checks
@@ -250,25 +213,26 @@ int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int1
 
             is_pv_node = true;
             tt_move = ttEntry->getMove();
+            assert(tt_move.getData() == 0 || position.ttMoveIsOk(tt_move));
         }
         // We are not in a PV-Node
         else
         {
             tt_move = ttEntry->getMove();
-            if (ttEntry->getDepth() >= depth)
-            {
-                // Lower bound at deeper depth
-                // if (our_turn)
-                //     alpha = ttEntry->getValue();
-                // // Upper bound at deeper depth
-                // else
-                //     beta = ttEntry->getValue();
-            }
+            // if (ttEntry->getDepth() >= depth)
+            // {
+            //     // Lower bound at deeper depth
+            //     if (our_turn)
+            //         alpha = ttEntry->getValue();
+            //     // Upper bound at deeper depth
+            //     else
+            //         beta = ttEntry->getValue();
+            // }
         }
     }
 
     // Transposition table move search
-    if (tt_move.getData() != 0 && position.ttMoveIsOk(tt_move))
+    if (tt_move.getData() != 0)
     {
         no_moves = false;
 
@@ -430,7 +394,6 @@ std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &pos
     // Reorder the first moves by last-known scores or first-time ordering
     if (first_moves_scores.empty())
     {
-        first_moves = position.orderAllMovesOnFirstIterationFirstTime(first_moves);
         first_moves_scores.resize(first_moves.size(), -30001);
     }
     else
@@ -462,26 +425,17 @@ std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &pos
         StateInfo state_info;
         position.makeMove(currentMove, state_info);
 
-        // ----------------------------
         // Decide on “reduction” based on previous iteration’s score
         int reduction = 0;
         if (depth > 1 && !first_moves_scores.empty())
         {
-            constexpr int16_t margin = 1200;
-
             int16_t prevScore = first_moves_scores[i];
-            // If the previous iteration’s score is significantly below
-            // the best previous iteration’s score, reduce by 1 ply.
-            if (prevScore + margin < bestScoreFromPreviousIteration)
-            {
+            if (prevScore + 1000 < bestScoreFromPreviousIteration)
                 reduction = 1;
-            }
         }
 
         // Do the “reduced” (or normal) alpha-beta search:
-        int8_t searchDepth = (depth - 1 - reduction);
-        if (searchDepth < 0) // never go below 0
-            searchDepth = 0;
+        int8_t searchDepth = std::max(0, depth - 1 - reduction);
 
         int16_t child_value = alphaBetaSearch(position, searchDepth, alpha, beta, false);
 
@@ -502,13 +456,9 @@ std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &pos
             best_move = currentMove;
         }
 
-        // Undo the move
         position.unmakeMove(currentMove);
-
-        // Update alpha
         alpha = std::max(alpha, value);
 
-        // Store the move’s score in your debugging structure
         moveDepthValues[currentMove].emplace_back(value);
 
         // Check time
@@ -521,8 +471,7 @@ std::tuple<Move, int16_t, std::vector<int16_t>> firstMoveSearch(BitPosition &pos
     lastFirstMoveTimeTakenMS = static_cast<int>(
                                    std::chrono::duration_cast<std::chrono::milliseconds>(
                                        std::chrono::high_resolution_clock::now() - first_move_start_time)
-                                       .count()) +
-                               1;
+                                       .count()) + 1;
 
     // Save in TT as “exact”
     globalTT.save(position.getZobristKey(), value, depth, best_move, true);
@@ -535,15 +484,29 @@ std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t start_dept
     // position.initializeNNUEInput();
     isEndgame = position.isEndgame();
     moveDepthValues = {};
+    int lastFirstMoveTimeTakenMS {1};
+    std::chrono::milliseconds timeForMoveMS{OURTIME / 4};
+    position.setBlockersAndPinsInAB(); // For discovered checks and move generators
+    position.setCheckBits();           // For direct checks
+
     std::vector<Move> first_moves;
-    int lastFirstMoveTimeTakenMS{1};
-    std::chrono::milliseconds timeForMoveMS{OURTIME / 5};
-
     if (position.getIsCheck())
-        first_moves = position.inCheckAllMoves();
+    {
+        position.setCheckInfo();
+        ABMoveSelectorCheck msel(position, Move(0));
+        msel.init();
+        Move candidate;
+        while ((candidate = msel.select_legal()) != Move(0))
+            first_moves.push_back(candidate);
+    }
     else
-        first_moves = position.allMoves();
-
+    {
+        ABMoveSelectorNotCheck msel(position, Move(0));
+        msel.init_all();
+        Move candidate;
+        while ((candidate = msel.select_legal()) != Move(0))
+            first_moves.push_back(candidate);
+    }
     // If there is only one move in the position, we make it
     if (first_moves.size() == 1)
         return std::pair<Move, int16_t>(first_moves[0], 0);
@@ -602,6 +565,6 @@ std::pair<Move, int16_t> iterativeSearch(BitPosition position, int8_t start_dept
         }
     }
 
-    // std::cout << "Depth: " << DEPTH << "\n";
+    std::cout << "Depth: " << DEPTH << "\n";
     return std::pair<Move, int16_t>(bestMove, bestValue);
 }

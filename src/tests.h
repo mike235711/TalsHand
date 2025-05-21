@@ -28,37 +28,11 @@ unsigned long long runQSPerftTest(BitPosition &position, int depth, int currentD
 
     if (not position.getIsCheck()) // Non first move search not in check
     {
-        // Generate refutation moves if not first move
-        Move refutation = Move(0);
-        if (currentDepth)
-            refutation = position.getBestRefutation();
-        position.setBlockersAndPinsInQS();
-        // Refutations not in check
-        if (refutation.getData() != 0)
-        {
-            if (position.isRefutationLegal(refutation))
-            {
-                if (currentDepth == 0)
-                {
-                    printMove(refutation);
-                }
-                position.makeCaptureTest(refutation, state_info);
-
-                unsigned long long subCount = runQSPerftTest(position, depth - 1, currentDepth + 1);
-
-                position.unmakeCapture(refutation);
-
-                if (currentDepth == 0)
-                {
-                    std::cout << subCount << std::endl; // Print the number of moves leading from this move
-                }
-                moveCount += subCount;
-            }
-        }
+        position.setBlockersPinsAndCheckBitsInQS();
 
         // Captures not in check
         Move move;
-        QSMoveSelectorNotCheck move_selector(position, refutation);
+        QSMoveSelectorNotCheck move_selector(position);
         move_selector.init();
         while ((move = move_selector.select_legal()) != Move(0))
         {
@@ -81,7 +55,7 @@ unsigned long long runQSPerftTest(BitPosition &position, int depth, int currentD
         }
         // Non captures not in check
         position.setBlockersAndPinsInAB();
-        QSMoveSelectorNotCheckNonCaptures move_selector_non_capture(position, refutation);
+        QSMoveSelectorNotCheckNonCaptures move_selector_non_capture(position, Move(0));
         move_selector_non_capture.init();
         while ((move = move_selector_non_capture.select_legal()) != Move(0))
         {
