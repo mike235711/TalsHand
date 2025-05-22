@@ -6,12 +6,6 @@
 #include <cassert>
 #include "simd.h"
 
-#if defined(__ARM_FEATURE_DOTPROD) // Apple M-series, Cortex X3, …
-#define HAS_SDOT
-#elif defined(__AVX2__)
-#include <immintrin.h>
-#define HAS_AVX2
-#endif
 
 #ifdef __ARM_NEON
 #include <arm_neon.h>
@@ -79,8 +73,8 @@ void substract_8_int16(int16_t *a, const int16_t *b) // For NNUE accumulation
 
 
 int16_t fullNnueuPass(int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12)
-// This function should pass using simd instructions an array of 16 int16's through a neural network.
-// There are two first layers of 8 by 4 each taking the same input, after concatenating the outputs of both first layers,
+// This function should pass using simd instructions an array pInput of 16 int16's through a neural network.
+// There are two first layers of 8 by 4 each taking the same pInput, after concatenating the outputs of both first layers,
 // the second layer is 8 by 4, the third layer is 4 by 1.
 //
 // The input is int16, and the weights are int8. So before multiplying we reduce int16 to int8

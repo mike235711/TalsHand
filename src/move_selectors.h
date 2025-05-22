@@ -12,7 +12,6 @@ class BitPosition;
 
 class QSMoveSelectorCheck
 {
-
 public:
     QSMoveSelectorCheck(const QSMoveSelectorCheck &) = delete;
     QSMoveSelectorCheck &operator=(const QSMoveSelectorCheck &) = delete;
@@ -122,11 +121,6 @@ public:
     ABMoveSelectorNotCheck(BitPosition & p, Move m) : pos(p), ttMove(m) {};
     // AB Search (PV nodes)
     void init_all();
-    // AB Search (Non PV nodes)
-    void init_refutations();
-    void init_good_captures();
-    void init_rest();
-
     Move select_legal();
 
 private:

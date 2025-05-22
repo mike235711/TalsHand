@@ -71,8 +71,6 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
 
     alpha = std::max(alpha, value);
 
-    // 
-
     int16_t child_value;
     Move best_move;
     bool no_captures = true;
@@ -86,6 +84,10 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
         while ((capture = move_selector.select_legal()) != Move(0))
         {
             no_captures = false;
+            // Do not search moves with bad enough SEE values
+            if (!position.see_ge(capture, -120))
+                continue;
+
             position.makeCapture(capture, state_info);
             if (our_turn) // Maximize
             {
@@ -114,9 +116,9 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
                     break;
 
                 beta = std::min(beta, value);
+                }
             }
         }
-    }
     else // In check
     {
         Move capture;

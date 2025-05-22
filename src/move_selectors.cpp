@@ -50,7 +50,7 @@ Move QSMoveSelectorNotCheck::select_legal()
 {
     while (cur < endMoves)
     {
-        // --- find best remaining move in [cur, endMoves) -------------------
+        // Find best remaining move in [cur, endMoves) 
         ScoredMove *best = cur;
         for (ScoredMove *p = cur + 1; p < endMoves; ++p)
             if (p->score > best->score)
@@ -60,7 +60,7 @@ Move QSMoveSelectorNotCheck::select_legal()
         if (best != cur)
             std::swap(*best, *cur);
 
-        // --- legality test -------------------------------------------------
+        // Set blockers and pins if not already set
         if (pos.hasBlockersUnset())
             pos.setBlockersPinsAndCheckBitsInQS();
 
@@ -69,7 +69,6 @@ Move QSMoveSelectorNotCheck::select_legal()
 
         ++cur; // illegal → drop & try next best
     }
-
     return Move(0); // no legal capture left
 }
 Move QSMoveSelectorCheckNonCaptures::select_legal()
@@ -79,11 +78,8 @@ Move QSMoveSelectorCheckNonCaptures::select_legal()
         // If move is not legal we skip it
         if (pos.isLegal(cur))
         {
-            // std::cout << cur->toString() << "\n";
             return *cur++;
         }
-        // else
-        //     std::cout << cur->toString() << "\n";
     }
     return Move(0);
 }
@@ -194,26 +190,7 @@ void ABMoveSelectorNotCheck::init_all()
     score();
     sort_moves(cur, endMoves);
 }
-// AB Search (Non PV nodes)
-void ABMoveSelectorNotCheck::init_refutations()
-{
-    cur = endMoves = moves;
-    endMoves = pos.setRefutationMovesOrdered(endMoves);
-}
-void ABMoveSelectorNotCheck::init_good_captures()
-{
-    cur = endMoves = moves;
-    endMoves = pos.setGoodCapturesOrdered(endMoves);
-}
-void ABMoveSelectorNotCheck::init_rest()
-{
-    endMoves = pos.pawnRestMoves(endMoves);
-    endMoves = pos.knightRestMoves(endMoves);
-    endMoves = pos.bishopRestMoves(endMoves);
-    endMoves = pos.rookRestMoves(endMoves);
-    endMoves = pos.queenRestMoves(endMoves);
-    endMoves = pos.kingNonCapturesAndPawnCaptures(endMoves);
-}
+
 // AB Search in check
 void ABMoveSelectorCheck::init()
 {

@@ -246,8 +246,6 @@ public:
 
     Move *kingAllMovesInCheck(Move *&move_list) const;
 
-    Move getBestRefutation();
-
     ScoredMove *pawnCapturesAndQueenProms(ScoredMove *&move_list) const;
     ScoredMove *knightCaptures(ScoredMove *&move_list) const;
     ScoredMove *bishopCaptures(ScoredMove *&move_list) const;
@@ -256,14 +254,6 @@ public:
     ScoredMove *kingCaptures(ScoredMove *&move_list) const;
     Move *kingCaptures(Move *&move_list) const;
 
-    ScoredMove *setRefutationMovesOrdered(ScoredMove *&move_list);
-    ScoredMove *setGoodCapturesOrdered(ScoredMove *&move_list);
-
-    ScoredMove *pawnRestMoves(ScoredMove *&move_list) const;
-    ScoredMove *knightRestMoves(ScoredMove *&move_list) const;
-    ScoredMove *bishopRestMoves(ScoredMove *&move_list) const;
-    ScoredMove *rookRestMoves(ScoredMove *&move_list) const;
-    ScoredMove *queenRestMoves(ScoredMove *&move_list) const;
     ScoredMove *kingNonCapturesAndPawnCaptures(ScoredMove *&move_list) const;
 
     Move *inCheckPawnBlocks(Move *&move_list) const;
@@ -423,12 +413,15 @@ public:
     {
         return m_num_checks;
     }
+
     inline bool sliderChecking() const { return m_check_rays != 0; }
+    
 
     inline uint64_t getZobristKey() const
     {
         return state_info->zobristKey;
     }
+    bool see_ge(Move m, int threshold) const;
     void printZobristKeys() const
     {
         const StateInfo *stp = state_info; // start at the current node
