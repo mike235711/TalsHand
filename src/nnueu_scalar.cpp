@@ -31,9 +31,7 @@ static inline int16_t relu_shift6_int16(int32_t x)
     return static_cast<int16_t>(x);
 }
 
-// -------------------------------------------------------------------------------------------------
-// Plain scalar forward pass (no SIMD, no fancy intrinsics) ----------------------------------------
-// -------------------------------------------------------------------------------------------------
+// Plain scalar forward pass (no SIMD)
 int16_t fullNnueuPassScalar(const int16_t *pInput,
                             const int8_t *pWeights11,
                             const int8_t *pWeights12)
@@ -111,9 +109,6 @@ int16_t fullNnueuPassScalar(const int16_t *pInput,
     return static_cast<int16_t>(acc);
 }
 
-// -------------------------------------------------------------------------------------------------
-// Convenience helper that *asserts* equality with the SIMD path -----------------------------------
-// -------------------------------------------------------------------------------------------------
 int16_t fullNnueuPassDebug(const int16_t *pInput,
                            const int8_t *pWeights11,
                            const int8_t *pWeights12)
@@ -122,7 +117,7 @@ int16_t fullNnueuPassDebug(const int16_t *pInput,
                                  pWeights11,
                                  pWeights12);
     int16_t slow = fullNnueuPassScalar(pInput, pWeights11, pWeights12);
-    assert(fast == slow && "NNUEU SIMD/scalar mismatch – weights or code divergence detected!");
+    assert(fast == slow && "NNUEU SIMD/scalar mismatch evaluation detected!");
     return fast; // propagate the fast‑path result so callers remain unchanged.
 }
 

@@ -205,7 +205,7 @@ public:
     }
 
     void setIsCheckOnInitialization();
-    bool getIsCheckOnInitialization();
+    bool getIsCheckOnInitialization(bool turn);
     bool isKingInCheck(bool side) const;
     void setCheckInfoOnInitialization();
 
@@ -698,11 +698,19 @@ public:
     {
         int origin = move.getOriginSquare();
         int destination = move.getDestinationSquare();
+        uint64_t origin_bit = 1ULL << origin;
+        uint64_t destination_bit = 1ULL << destination;
 
         if (m_turn)
         {
             // Check that the origin square has a piece of the current player
-            if (m_white_board[origin] == 7)
+            int moving_piece = m_white_board[origin];
+            if (!(m_pieces[0][moving_piece] & origin_bit))
+            {
+                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << "\n";
+                return false;
+            }
+            if (moving_piece == 7)
             {
                 std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << "\n";
                 return false;
@@ -717,6 +725,12 @@ public:
         else
         {
             // Check that the origin square has a piece of the current player
+            int moving_piece = m_black_board[origin];
+            if (!(m_pieces[1][moving_piece] & origin_bit))
+            {
+                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << "\n";
+                return false;
+            }
             if (m_black_board[origin] == 7)
             {
                 std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << "\n";

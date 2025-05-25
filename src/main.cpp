@@ -250,10 +250,7 @@ int main()
                 {
                     lastMove = move;
                     if (position.moveIsReseter(move))
-                    {
-                        NNUEU::globalAccumulatorStack.reset(position);
                         reseterMove = true;
-                    }
                     else
                         reseterMove = false;
 
@@ -321,6 +318,7 @@ int main()
             else
             {
                 NNUEU::globalAccumulatorStack.reset(position);
+                std::cout << position.toFenString() << "\n";
                 // Call the engine
                 STARTTIME = std::chrono::high_resolution_clock::now();
                 startDepth = 2;

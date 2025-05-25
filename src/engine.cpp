@@ -181,6 +181,7 @@ int16_t quiesenceSearch(BitPosition &position, int16_t alpha, int16_t beta, bool
 int16_t alphaBetaSearch(BitPosition &position, int8_t depth, int16_t alpha, int16_t beta, bool our_turn)
 // This search is done when depth is more than 0 and considers all moves and stores positions in the transposition table
 {
+    assert(alpha <= beta);
     if (position.isDraw())
         return 2048;
 

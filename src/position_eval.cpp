@@ -428,6 +428,7 @@ namespace NNUEU
     void moveBlackKingNNUEInput(int kingPos)
     {
         assert(kingPos >= 0 && kingPos < 64);
+
         secondLayer2WeightsBlockWhiteTurn = secondLayer2Weights[kingPos];
         secondLayer1WeightsBlockBlackTurn = secondLayer1Weights[invertIndex(kingPos)];
         globalAccumulatorStack.changeBlackKingPosition(kingPos);
@@ -461,15 +462,30 @@ namespace NNUEU
         is_capture = true; // It's a capture
         indices[2] = idx2;
     }
-    bool NNUEUChange::isEmpty() const
+    inline bool NNUEUChange::isKingMove() const
     {
-        return !is_capture && (indices[0] == indices[1]);
+        return indices[0] == indices[1];
     }
-    bool NNUEUChange::isKingCaptureOnly() const
+    inline bool NNUEUChange::isCapture() const
     {
         // King captured something, but didn't affect NNUE input for the king
-        return is_capture && (indices[0] == indices[1]);
+        return is_capture;
     }
+#ifndef NDEBUG
+    void AccumulatorStack::verifyTopAgainstFresh(const BitPosition &pos, bool turn)
+    {
+        // 1. Build a *fresh* accumulator for reference
+        AccumulatorState fresh;
+        initializeNNUEInput(pos, fresh);
+    
+        // 2. Compare with the incrementally-updated top of the stack
+        const AccumulatorState &inc = top();
+
+        for (int i = 0; i < 8; ++i)
+            assert(fresh.inputTurn[turn][i] == inc.inputTurn[turn][i] &&
+                    "NNUEU incremental accumulation mismatch");
+    }
+#endif // NDEBUG
 
     // Reset to a new root position
     void AccumulatorStack::reset(const BitPosition &rootPos)
@@ -542,28 +558,11 @@ namespace NNUEU
         std::memcpy(curr.inputTurn[turn], prev.inputTurn[turn], 16);
 
         const NNUEUChange &c = curr.changes;
-        // For king moves
-        if (c.isEmpty())
-        {
-            curr.computed[turn] = true;
-            return;
-        }
-        // For captures with king
-        if (c.isKingCaptureOnly())
-        {
+
+        if (c.isCapture())
             removeOnInput(curr, c.indices[2], turn);
-            curr.computed[turn] = true;
-            return;
-        }
-        if (!c.is_capture)
-        {
+        if (!c.isKingMove())
             addAndRemoveOnInput(curr, c.indices[0], c.indices[1], turn);
-        }
-        else
-        {
-            addAndRemoveOnInput(curr, c.indices[0], c.indices[1], turn);
-            removeOnInput(curr, c.indices[2], turn);
-        }
         curr.computed[turn] = true;
     }
 
@@ -574,7 +573,11 @@ namespace NNUEU
     {
         // Update incrementally from the last computed node
         globalAccumulatorStack.forward_update_incremental(globalAccumulatorStack.findLastComputedNode(position.getTurn()), position.getTurn());
-        
+
+#ifndef NDEBUG
+        globalAccumulatorStack.verifyTopAgainstFresh(position, not position.getTurn());
+#endif
+
         // Change the NNUEU king positions if needed
         if (globalAccumulatorStack.getNNUEUKingPosition(0) != position.getKingPosition(0))
             moveWhiteKingNNUEInput(position.getKingPosition(0));
@@ -589,10 +592,22 @@ namespace NNUEU
         AccumulatorState &updatedAcc = globalAccumulatorStack.top();
 
         if (position.getTurn())
+        {
+            #ifndef NDEBUG
+            out = fullNnueuPassDebug(updatedAcc.inputTurn[0], secondLayer1WeightsBlockWhiteTurn, secondLayer2WeightsBlockWhiteTurn);
+            #else
             out = fullNnueuPass(updatedAcc.inputTurn[0], secondLayer1WeightsBlockWhiteTurn, secondLayer2WeightsBlockWhiteTurn);
+            #endif
+        }
 
         else
+        {
+            #ifndef NDEBUG
+            out = fullNnueuPassDebug(updatedAcc.inputTurn[1], secondLayer1WeightsBlockBlackTurn, secondLayer2WeightsBlockBlackTurn);
+            #else
             out = fullNnueuPass(updatedAcc.inputTurn[1], secondLayer1WeightsBlockBlackTurn, secondLayer2WeightsBlockBlackTurn);
+            #endif
+        }
 
         // Change evaluation from player to move perspective to our perspective
         if (ourTurn)

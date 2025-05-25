@@ -3,10 +3,14 @@
 
 #include <cstdint>
 #include <vector>
+#include <cassert>
 
 class BitPosition;
 namespace NNUEU
 {
+    struct AccumulatorState;
+    void initializeNNUEInput(const BitPosition &position,
+                             AccumulatorState &accumulatorState);
 
     // NNUEUChange structure: holds the incremental change info
     struct NNUEUChange
@@ -27,8 +31,8 @@ namespace NNUEU
         void add(int idx0, int idx1, int idx2);
         // For adding the last index in a multi-step update.
         void addlast(int idx2);
-        bool isEmpty() const;
-        bool isKingCaptureOnly() const;
+        bool isKingMove() const;
+        bool isCapture() const;
     };
 
     // AccumulatorState structure: holds the NNUEU accumulators for one node.
@@ -74,6 +78,11 @@ namespace NNUEU
         // Forward-update the stack from a given node index to the top.
         void forward_update_incremental(const int begin, bool turn);
 
+#ifndef NDEBUG
+        /** Re-compute the accumulator from scratch and compare with the
+            incrementally-updated one.  Implemented in accumulator_debug.cpp. */
+        void verifyTopAgainstFresh(const BitPosition &pos, bool turn);
+#endif
 
     private:
         // Apply incremental changes from a previous state to a current state.
@@ -82,10 +91,6 @@ namespace NNUEU
 
     // Declare a global accumulator stack (for single-threaded use)
     extern AccumulatorStack globalAccumulatorStack;
-
-    // NNUEU Input and update functions.
-    // These functions initialize the NNUE accumulators and update them.
-    void initializeNNUEInput(const BitPosition &position, AccumulatorState &accumulatorState);
 
     // NNUEU model parameter initialization.
     void initNNUEParameters();
