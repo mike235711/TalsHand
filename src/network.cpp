@@ -248,6 +248,11 @@ namespace NNUEU
         return output3;
 
 #elif defined(__AVX2__) || defined(__AVX__) || defined(__SSSE3__) || defined(__SSE4_1__)
+        const int16_t *pBias1 = weights.secondBias;
+        const int8_t *pWeights2 = weights.thirdW;
+        const int16_t *pBias2 = weights.thirdBias;
+        const int8_t *pWeights3 = weights.finalW;
+        const int16_t *pBias3 = &weights.finalBias;
         //
         // Layer 0:
         //  - Load 8 x int16

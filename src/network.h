@@ -22,6 +22,10 @@ namespace NNUEU
 
         int16_t fullNnueuPass(int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const;
 
+#ifndef NDEBUG
+        int16_t fullNnueuPassDebug(const int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const;
+#endif
+
     private:
         Transformer transformer;
 
@@ -34,6 +38,10 @@ namespace NNUEU
             int16_t finalBias{};
         };
         Weights weights;
+
+#ifndef NDEBUG
+        int16_t fullNnueuPassScalar(const int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const;
+#endif
     };
 } // Namespace NNUEU
 
