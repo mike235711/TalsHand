@@ -269,7 +269,7 @@ void THEngine::waitToFinishSearch()
 void THEngine::resizeThreads()
 {
     threadpool.waitToFinishSearch();
-    threadpool.set(numThreads);
+    threadpool.set(numThreads, tt, network, *transformer);
 }
 
 void THEngine::setTTSize()
@@ -292,6 +292,7 @@ void THEngine::setTimeLimit(int ourTime, int ourInc)
 
 void THEngine::goSearch()
 {
+    resizeThreads();
     threadpool.startThinking(pos, stateInfos, timeLimit, ponder);
 }
 

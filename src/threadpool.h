@@ -14,7 +14,8 @@
 #include "bitposition.h"
 #include "worker.h"
 #include "thread_win32_osx.h"
-
+#include "ttable.h"
+#include "network.h"
 
 // Abstraction of a thread. It contains a pointer to the worker and a native thread.
 // After construction, the native thread is started with idle_loop()
@@ -74,7 +75,7 @@ public:
     void startThinking(BitPosition &pos, std::unique_ptr<std::deque<StateInfo>> & stateInfos, int timeLimit, bool pondering);
     void waitToFinishSearch();
     void clear();
-    void set(int numThreads);
+    void set(int numThreads, TranspositionTable &tt, NNUEU::Network &network, const NNUEU::Transformer &transformer);
 
     Thread *main_thread() const { return threads.front().get(); }
 
@@ -86,6 +87,7 @@ public:
     auto empty() const noexcept { return threads.empty(); }
 
 private:
+    int time_left;
     std::unique_ptr<std::deque<StateInfo>> setupStates;
     std::vector<std::unique_ptr<Thread>> threads;
 };

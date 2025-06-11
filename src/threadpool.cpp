@@ -17,14 +17,15 @@ Thread::Thread()
 }
 
 void runCustomJob(std::function<void()> f)
-{}
+{
+    if (f)
+        f();
+}
 
 // Destructor wakes up the thread in idle_loop() and waits
 // for its termination. Thread should be already waiting.
 Thread::~Thread()
 {
-    assert(!searching);
-
     exit = true;
     startSearching();
     stdThread.join();
@@ -47,11 +48,19 @@ void Thread::waitToFinishSearch()
             { return !searching; });
 }
 
-
-void ThreadPool::set(int numThreads)
+void ThreadPool::set(int numThreads, TranspositionTable &tt, NNUEU::Network &network, const NNUEU::Transformer &transformer)
 {
-    // Destroys existing threads and creates the requested number of threads
-    // We dont implement multiple threads yet so this is left empty
+    threads.clear();
+    if (numThreads < 1)
+        numThreads = 1;
+
+    threads.reserve(numThreads);
+    for (int i = 0; i < numThreads; ++i)
+    {
+        auto t = std::make_unique<Thread>();
+        t->worker = std::make_unique<Worker>(tt, *this, network, transformer, static_cast<size_t>(i), time_left);
+        threads.emplace_back(std::move(t));
+    }
 }
 
 void ThreadPool::clear()
@@ -69,6 +78,8 @@ void ThreadPool::startThinking(BitPosition &pos, std::unique_ptr<std::deque<Stat
 
     main_thread()->waitToFinishSearch();
     main_thread()->worker->ponder = pondering;
+
+    time_left = timeLimit;
 
     // After ownership transfer 'states' becomes empty, so if we stop the search
     // and call 'go' again without setting a new position states.get() == nullptr.
