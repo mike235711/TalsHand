@@ -10,6 +10,11 @@
 #include "network.h"
 #include "ttable.h"
 
+namespace NNUEU
+{
+    class Transformer;
+}
+
 class THEngine
 {
 public:
@@ -64,6 +69,8 @@ private:
     TranspositionTable tt;
     // second, third and fourth layers of the NNUEU
     NNUEU::Network network;
+    // Used to transform the accumulator, it is heavy so we use a pointer
+    std::unique_ptr<NNUEU::Transformer> transformer;
 
     // Stuff to read from the configuration at initialization
     int numThreads; // Number of threads to use, for the moment we use 1 to keep it simple

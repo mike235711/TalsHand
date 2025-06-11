@@ -43,7 +43,7 @@ struct Stack
 class Worker
 {
 public:
-    Worker(TranspositionTable &ttable, ThreadPool &threadpool, NNUEU::Network network, size_t);
+    Worker(TranspositionTable &ttable, ThreadPool &threadpool, NNUEU::Network network, const NNUEU::Transformer &transformer, size_t);
 
     // Called at instantiation to initialize reductions tables.
     // Reset histories, usually before a new game.
@@ -101,6 +101,7 @@ private:
     // Used by NNUE
     NNUEU::AccumulatorStack accumulatorStack;
     NNUEU::Network network;
+    const NNUEU::Transformer *transformer;
 
     friend class ThreadPool;
 };

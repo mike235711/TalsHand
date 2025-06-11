@@ -126,13 +126,13 @@ namespace NNUEU
             return false;
         }
 
-        return transformer.load(modelDir);
+        return true;
     }
 
     // The engine is built to get an evaluation of the position with high values being good for the engine.
     // The NNUE is built to give an evaluation of the position with high values being good for whose turn it is.
     // This function gives an evaluation with high values being good for engine.
-    int16_t Network::evaluate(const BitPosition &position, bool ourTurn, NNUEU::AccumulatorStack &accumulatorStack) const
+    int16_t Network::evaluate(const BitPosition &position, bool ourTurn, NNUEU::AccumulatorStack &accumulatorStack, const Transformer &transformer) const
     {
         // Update incrementally from the last computed node
         accumulatorStack.forward_update_incremental(accumulatorStack.findLastComputedNode(position.getTurn()), position.getTurn(), transformer);

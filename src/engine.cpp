@@ -6,6 +6,7 @@
 #include "engine.h"
 #include "bitposition.h"
 #include "move_selectors.h"
+#include "accumulation.h"
 
 namespace
 {
@@ -91,8 +92,8 @@ constexpr std::size_t DefaultHashMB = 16; // Stockfish defaults to 16 MB
 THEngine::THEngine(std::optional<std::string> path)
     : pos(), stateInfos(std::make_unique<std::deque<StateInfo>>(1)) // A one-element deque whose first node becomes the “previous” link for the root position
       ,
-      timeLimit(0), threadpool(), tt(), network(), 
-      numThreads(std::clamp<int>(int(HardwareCores), 1, MaxThreads)), 
+      timeLimit(0), threadpool(), tt(), network(), transformer(std::make_unique<NNUEU::Transformer>()),
+      numThreads(std::clamp<int>(int(HardwareCores), 1, MaxThreads)),
       ttSize(std::min<std::size_t>(DefaultHashMB, MaxHashMB)), ponder(false), NNUEUFile(DefaultNNUEFile)
 {
     // Put a legal start position on the board so evaluators see something valid
@@ -279,6 +280,7 @@ void THEngine::setTTSize()
 
 void THEngine::loadNNUEU()
 {
+    transformer->load(NNUEUFile);
     network.load(NNUEUFile);
     threadpool.clear();
 }

@@ -55,7 +55,7 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta, bool our_turn)
 {
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
     // Stand pat
-    int16_t value = network.evaluate(currentPos, our_turn, accumulatorStack);
+    int16_t value = network.evaluate(currentPos, our_turn, accumulatorStack, *transformer);
 
     if (value >= beta)
         return value; // beta-cutoff
