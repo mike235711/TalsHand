@@ -32,7 +32,7 @@ struct TTEntry
     Move getMove() const { return Move(move); }
     int16_t getValue() const { return value; }
     uint8_t getDepth() const { return depth; }
-    int16_t getIsExact() const { return isExact; }
+    bool getIsExact() const { return isExact; }
     // Implementation of TTEntry::save
     void save(uint64_t z_k, int16_t v, uint8_t d, Move m, bool type)
     {

@@ -7,11 +7,6 @@
 
 namespace precomputed_moves
 {
-
-    /*------------------------------------------------------------*/
-    /* helpers – all constexpr                                     */
-    /*------------------------------------------------------------*/
-
     constexpr bool is_valid_square(int f, int r) { return unsigned(f) < 8 && unsigned(r) < 8; }
 
     constexpr int cabs(int x) { return x < 0 ? -x : x; }
@@ -239,11 +234,6 @@ namespace precomputed_moves
     /* 8-square “on-line” ---------------------------------------*/
 
     inline constexpr auto OnLineBitboards = make64x64(full_line);
-
-    /* debug helpers (in .cpp) ----------------------------------*/
-
-    void pretty_print_bitboard(uint64_t bb);
-    void pretty_print_all();
 
 } // namespace precomputed_moves
 #endif

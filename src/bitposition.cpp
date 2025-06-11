@@ -1,14 +1,15 @@
 #include <iostream>
 #include <vector>
 #include <cstdint>             // For fixed sized integers
+#include <cassert>
+
 #include "precomputed_moves.h" // Include the precomputed move constants
 #include "bitposition.h"       // Where the BitPosition class is defined
 #include "bit_utils.h"         // Bit utility functions
 #include "move.h"
 #include "magicmoves.h"
 #include "zobrist_keys.h"
-#include "position_eval.h" // Utility functions to update NNUE Input
-#include <cassert>
+#include "accumulation.h" // Utility functions to update NNUE Input
 
 //  SEE support: piece values and fast attack generation
 bool BitPosition::see_ge(Move m, int threshold) const
@@ -1500,62 +1501,25 @@ bool BitPosition::moveIsReseter(Move move)
     return false;
 }
 
-// bool BitPosition::isDraw() const
-// {
-//     // Threefold repetitions can only happen if there where at least 8 reversible moves made
-//     if (state_info->reversibleMovesMade < 8)
-//         return false;
-//     // 50 move rule
-//     if (state_info->reversibleMovesMade > 99)
-//         return true;
-
-//     // Find how many keys are equal to this zobrist key
-//     int repetitions = 0;
-
-//     // We start from 4 plies back since making two moves cant repeat the position (at least 4 are needed)
-//     // This is safe since we know that the position is at least 8 moves old
-//     const StateInfo *stp = state_info->previous->previous->previous->previous;
-//     int pliesBack = 4;
-
-//     // We just need to check all the reversible moves made, whose number is stored in state_info->reversibleMovesMade
-//     while (stp && pliesBack <= state_info->reversibleMovesMade)
-//     {
-//         if (stp->zobristKey == state_info->zobristKey)
-//         {
-//             if (++repetitions == 2)
-//                 return true;
-//         }
-//         // We must only check positions spaced by 2 moves since repetitions are from player's perspective
-//         stp = stp->previous->previous;
-//         pliesBack += 2;
-//     }
-
-//     return false;
-// }
 bool BitPosition::isDraw() const
 {
-    /*  (0)  Basic structural guarantees  */
     assert(state_info);                           // current node must exist
     assert(state_info->reversibleMovesMade >= 0); // no negative counters
 
-    /*  50-move rule short-cuts  */
+    // Threefold repetitions can only happen if there where at least 8 reversible moves made
     if (state_info->reversibleMovesMade < 8)
         return false;
+    // 50 move rule
     if (state_info->reversibleMovesMade > 99)
         return true;
 
-    /*  (1)  We claim we can look 4 plies back – check it  */
-    const StateInfo *stp = state_info;
-    for (int i = 0; i < 4; ++i)
-    {
-        stp = stp->previous;
-        assert(stp && "StateInfo chain shorter than 4 plies");
-    }
-
-    /*  (2)  Now perform the usual repetition scan  */
-    int repetitions = 0;
+    // We start from 4 plies back since making two moves cant repeat the position (at least 4 are needed)
+    // This is safe since we know that the position is at least 8 moves old
+    const StateInfo *stp = state_info->previous->previous->previous->previous;
     int pliesBack = 4;
 
+    // Now perform the usual repetition scan 
+    int repetitions = 0;
     while (stp && pliesBack <= state_info->reversibleMovesMade)
     {
         if (stp->zobristKey == state_info->zobristKey)

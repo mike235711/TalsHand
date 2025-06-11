@@ -5,7 +5,7 @@
 #include "bit_utils.h" // Bit utility functions
 #include "move.h"
 #include "simd.h" // NNUEU updates
-#include "position_eval.h"
+#include "accumulation.h"
 #include <iostream>
 #include <sstream>
 #include <vector>
@@ -87,112 +87,106 @@ private:
 
     StateInfo *state_info;
 
-    // std::array<std::string, 64> m_fen_array{}; // For debugging purposes
-
-public:
-    // Function to convert a FEN string to a BitPosition object
-    BitPosition(const std::string &fen)
+    void clear()
     {
-        std::istringstream fenStream(fen);
-        std::string board, turn, castling, enPassant;
-        fenStream >> board >> turn >> castling >> enPassant;
-
-        // Initialize all bitboards to 0
-        m_pieces[0][0] = 0, m_pieces[0][1] = 0, m_pieces[0][2] = 0, m_pieces[0][3] = 0, m_pieces[0][4] = 0, m_pieces[0][5] = 0;
-        m_pieces[1][0] = 0, m_pieces[1][1] = 0, m_pieces[1][2] = 0, m_pieces[1][3] = 0, m_pieces[1][4] = 0, m_pieces[1][5] = 0;
-
         std::fill(std::begin(m_white_board), std::end(m_white_board), 7);
         std::fill(std::begin(m_black_board), std::end(m_black_board), 7);
-        int square = 56; // Start from the top-left corner of the chess board
+        std::fill(&m_pieces[0][0], &m_pieces[0][0] + 12, 0ULL);
+        m_pieces_bit[0] = m_pieces_bit[1] = m_all_pieces_bit = 0ULL;
+        m_turn = false;
+        m_moved_piece = m_promoted_piece = 7;
+        m_last_destination_square = m_check_square = 65;
+        m_check_rays = m_num_checks = 0;
+        m_king_position[0] = m_king_position[1] = 64;
+        m_blockers_set = false;
+        m_ply = 0;
+    }
+
+public:
+    BitPosition& BitPosition::fromFen(const std::string& fen, StateInfo* sinfo)
+    {
+        clear();
+        std::memset(sinfo, 0, sizeof(StateInfo));
+        state_info = sinfo;
+
+        std::istringstream ss(fen);
+        std::string board, turn, castling, enPassant;
+
+        int sq = 56; // a8
         for (char c : board)
         {
             if (c == '/')
             {
-                square -= 16; // Move to the next row
+                sq -= 16;
+                continue;
             }
-            else if (isdigit(c))
+            if (std::isdigit(c))
             {
-                square += c - '0'; // Skip empty squares
+                sq += c - '0';
+                continue;
             }
-            else
+
+            const uint64_t bit = 1ULL << sq;
+            auto push = [&](int side, int piece)
             {
-                uint64_t bit = 1ULL << square;
-                switch (c)
-                {
-                case 'P':
-                    m_pieces[0][0] |= bit;
-                    m_white_board[square] = 0;
-                    break;
-                case 'N':
-                    m_pieces[0][1] |= bit;
-                    m_white_board[square] = 1;
-                    break;
-                case 'B':
-                    m_pieces[0][2] |= bit;
-                    m_white_board[square] = 2;
-                    break;
-                case 'R':
-                    m_pieces[0][3] |= bit;
-                    m_white_board[square] = 3;
-                    break;
-                case 'Q':
-                    m_pieces[0][4] |= bit;
-                    m_white_board[square] = 4;
-                    break;
-                case 'K':
-                    m_pieces[0][5] |= bit;
-                    m_white_board[square] = 5;
-                    break;
-                case 'p':
-                    m_pieces[1][0] |= bit;
-                    m_black_board[square] = 0;
-                    break;
-                case 'n':
-                    m_pieces[1][1] |= bit;
-                    m_black_board[square] = 1;
-                    break;
-                case 'b':
-                    m_pieces[1][2] |= bit;
-                    m_black_board[square] = 2;
-                    break;
-                case 'r':
-                    m_pieces[1][3] |= bit;
-                    m_black_board[square] = 3;
-                    break;
-                case 'q':
-                    m_pieces[1][4] |= bit;
-                    m_black_board[square] = 4;
-                    break;
-                case 'k':
-                    m_pieces[1][5] |= bit;
-                    m_black_board[square] = 5;
-                    break;
-                }
-                square++;
+                m_pieces[side][piece] |= bit;
+                (side ? m_black_board : m_white_board)[sq] = piece;
+            };
+
+            switch (c)
+            { // single pass, no fall-through
+            case 'P':
+                push(0, 0);
+                break;
+            case 'N':
+                push(0, 1);
+                break;
+            case 'B':
+                push(0, 2);
+                break;
+            case 'R':
+                push(0, 3);
+                break;
+            case 'Q':
+                push(0, 4);
+                break;
+            case 'K':
+                push(0, 5);
+                break;
+            case 'p':
+                push(1, 0);
+                break;
+            case 'n':
+                push(1, 1);
+                break;
+            case 'b':
+                push(1, 2);
+                break;
+            case 'r':
+                push(1, 3);
+                break;
+            case 'q':
+                push(1, 4);
+                break;
+            case 'k':
+                push(1, 5);
+                break;
             }
+            ++sq;
         }
 
-        // Determine which side is to move
         m_turn = (turn == "w");
-        state_info = new StateInfo(); // Allocate memory for state_info
-                                      // Initialize no castling rights
-        uint8_t cr = 0;
 
+        uint8_t cr = 0;
         if (castling.find('K') != std::string::npos)
             cr |= WHITE_KS;
-
         if (castling.find('Q') != std::string::npos)
             cr |= WHITE_QS;
-
         if (castling.find('k') != std::string::npos)
             cr |= BLACK_KS;
-
         if (castling.find('q') != std::string::npos)
             cr |= BLACK_QS;
-
         state_info->castlingRights = cr;
-        state_info->reversibleMovesMade = 0;
-        state_info->pSquare = 0;
 
         setAllPiecesBits();
         setKingPosition();
@@ -201,7 +195,8 @@ public:
             setCheckInfoOnInitialization();
         setBlockersAndPinsInAB();
         initializeZobristKey();
-        NNUEU::globalAccumulatorStack.reset(*this);
+
+        return *this;
     }
 
     void setIsCheckOnInitialization();
@@ -254,8 +249,6 @@ public:
     ScoredMove *kingCaptures(ScoredMove *&move_list) const;
     Move *kingCaptures(Move *&move_list) const;
 
-    ScoredMove *kingNonCapturesAndPawnCaptures(ScoredMove *&move_list) const;
-
     Move *inCheckPawnBlocks(Move *&move_list) const;
     Move *inCheckKnightBlocks(Move *&move_list) const;
     Move *inCheckBishopBlocks(Move *&move_list) const;
@@ -270,8 +263,6 @@ public:
     Move *inCheckOrderedCaptures(Move *&move_list) const;
 
     std::pair<std::vector<Move>, std::vector<int16_t>> orderAllMovesOnFirstIteration(std::vector<Move> &moves, std::vector<int16_t> &scores) const;
-    std::vector<Move> inCheckMoves() const;
-    std::vector<Move> nonCaptureMoves() const;
 
     bool isMate() const;
 
@@ -422,22 +413,7 @@ public:
         return state_info->zobristKey;
     }
     bool see_ge(Move m, int threshold) const;
-    void printZobristKeys() const
-    {
-        const StateInfo *stp = state_info; // start at the current node
-        std::size_t idx = 0;
-
-        while (stp && idx < m_ply) // stop after 128 plies or at the root
-        {
-            std::cout << "Key[" << idx << "] = " << stp->zobristKey << '\n';
-            stp = stp->previous; // walk back one ply
-            ++idx;
-        }
-    }
-    void print50MoveCount()
-    {
-        std::cout << state_info->reversibleMovesMade << "\n";
-    }
+    
     bool moreThanOneCheck() const { return m_num_checks > 1; }
 
     uint64_t getWhitePawnsBits() const { return m_pieces[0][0]; }
@@ -459,6 +435,23 @@ public:
     int getPromotedPiece() const { return m_promoted_piece; }
     int getWhiteKingPosition() const { return m_king_position[0]; }
     int getBlackKingPosition() const { return m_king_position[1]; }
+
+
+    // Debugging helper functions
+    void printZobristKeys() const
+    {
+        const StateInfo *stp = state_info; // start at the current node
+        std::size_t idx = 0;
+
+        while (stp && idx < m_ply) // stop after 128 plies or at the root
+        {
+            std::cout << "Key[" << idx << "] = " << stp->zobristKey << '\n';
+            stp = stp->previous; // walk back one ply
+            ++idx;
+        }
+    }
+
+    void print50MoveCount() { std::cout << state_info->reversibleMovesMade << "\n"; }
 
     void printBoard(const int board[64], const std::string &label)
     {

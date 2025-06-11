@@ -4,6 +4,10 @@
 #include <iostream> // For std::cerr, std::endl
 #include <cstdlib>  // For exit()
 #include <cassert>
+#include <algorithm> // for std::clamp if you like
+#include <cstdint>
+#include <limits>
+
 #include "simd.h"
 
 
@@ -14,11 +18,6 @@
 #ifdef __SSE4_1__
 #include <smmintrin.h> // SSE4.1
 #endif
-
-#include <algorithm> // for std::clamp if you like
-#include <cstdint>
-#include <limits>
-#include <iostream>
 
 // These externs refer to your globally declared arrays
 extern int8_t thirdLayerWeights[8 * 4];
@@ -31,7 +30,7 @@ extern int16_t finalLayerBias;
 // NNUE
 ////////////////
 
-void add_8_int16(int16_t *a, const int16_t *b)
+inline void add_8_int16(int16_t *a, const int16_t *b)
 {
 #if defined(__ARM_NEON)
     int16x8_t v1 = vld1q_s16(a); // Load 8 int16_t values from array a
@@ -50,7 +49,7 @@ void add_8_int16(int16_t *a, const int16_t *b)
 #endif
 }
 
-void substract_8_int16(int16_t *a, const int16_t *b) // For NNUE accumulation
+inline void substract_8_int16(int16_t *a, const int16_t *b) // For NNUE accumulation
 {
 #if defined(__ARM_NEON)
     int16x8_t v1 = vld1q_s16(a); // Load 8 int16_t values from array a
