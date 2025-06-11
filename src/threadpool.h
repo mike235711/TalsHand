@@ -28,7 +28,7 @@ public:
     Thread();
     virtual ~Thread();
 
-    void startSearching();
+    void startSearching(BitPosition &pos, std::unique_ptr<std::deque<StateInfo>> &stateInfos);
     void run_custom_job(std::function<void()> f);
 
     void waitToFinishSearch();
@@ -72,7 +72,7 @@ public:
 
     bool stop;
 
-    void startThinking(BitPosition &pos, std::unique_ptr<std::deque<StateInfo>> & stateInfos, int timeLimit, bool pondering);
+    void startThinking(BitPosition &pos, std::unique_ptr<std::deque<StateInfo>> &stateInfos, int timeLimit, bool pondering);
     void waitToFinishSearch();
     void clear();
     void set(int numThreads, TranspositionTable &tt, NNUEU::Network &network, const NNUEU::Transformer &transformer);

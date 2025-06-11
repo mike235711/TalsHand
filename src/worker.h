@@ -43,19 +43,27 @@ struct Stack
 class Worker
 {
 public:
-    Worker(TranspositionTable &ttable, ThreadPool &threadpool, NNUEU::Network network, const NNUEU::Transformer &transformer, size_t, int time_left);
+    Worker(TranspositionTable &ttable, ThreadPool &threadpool, NNUEU::Network network, const NNUEU::Transformer &transformer, size_t, int time_left, BitPosition &position, StateInfo &stateInfo);
 
     // Called at instantiation to initialize reductions tables.
     // Reset histories, usually before a new game.
     void clear();
 
     // This calls iterativeSearch, in a future version it will handle threads
-    std::pair<Move, int16_t> startSearching(int8_t start_depth, int8_t fixed_max_depth) { return iterativeSearch(start_depth, fixed_max_depth); };
+    std::pair<Move, int16_t> startSearching(BitPosition &pos, std::unique_ptr<std::deque<StateInfo>> &stateInfos, int8_t start_depth, int8_t fixed_max_depth)
+    {
+        rootPos = pos;
+        rootState = stateInfos;
+        return iterativeSearch(start_depth, fixed_max_depth);
+    };
 
     bool isMainThread() const { return threadIdx == 0; }
 
 private:
+    // Calls firstMovesearch in increasing depths until a limit is reached (time, streaks or depth)
     std::pair<Move, int16_t> iterativeSearch(int8_t start_depth, int8_t fixed_max_depth);
+
+    // Performs the root moves search calling alphaBetaSearch for each root move ordered
     std::pair<Move, int16_t> firstMoveSearch(int8_t depth, int16_t alpha, int16_t beta, std::chrono::milliseconds predictedTimeTakenMs);
 
     // This is the main search function, for both PV and non-PV nodes
@@ -84,11 +92,11 @@ private:
     // To find streaks of moves for several depths
     std::unordered_map<Move, std::vector<int16_t>> moveDepthValues;
 
-    BitPosition currentPos;
     BitPosition rootPos;
     StateInfo rootState;
     std::vector<Move> rootMoves;
     std::vector<int16_t> rootScores;
+    BitPosition currentPos;
 
     // Deepest depth searched so far on current position
     int completedDepth;
@@ -98,7 +106,7 @@ private:
     ThreadPool &threads;
     TranspositionTable &tt;
 
-    // Used by NNUE
+    // Used by NNUEU
     NNUEU::AccumulatorStack accumulatorStack;
     NNUEU::Network network;
     const NNUEU::Transformer *transformer;

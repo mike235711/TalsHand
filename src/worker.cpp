@@ -15,10 +15,10 @@
 #include "bitposition.h"
 #include "threadpool.h"
 
-Worker::Worker(TranspositionTable &ttable, ThreadPool &threadpool, NNUEU::Network networkIn, const NNUEU::Transformer &transformerIn, size_t idx, int time_left)
+Worker::Worker(TranspositionTable &ttable, ThreadPool &threadpool, NNUEU::Network networkIn, const NNUEU::Transformer &transformerIn, size_t idx, int time_left, BitPosition &position, StateInfo &stateInfo)
     : lastFirstMoveTimeTakenMS(0), timeForMoveMS(0), timeLimit(time_left), ponder(false),
       isEndgame(false), completedDepth(0), threadIdx(idx), threads(threadpool), tt(ttable),
-      network(std::move(networkIn)), transformer(&transformerIn)
+      network(std::move(networkIn)), transformer(&transformerIn), rootPos(position), rootState(stateInfo)
 {
 
 }

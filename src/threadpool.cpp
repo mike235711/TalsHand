@@ -32,11 +32,11 @@ Thread::~Thread()
 }
 
 // Wakes up the thread that will start the search
-void Thread::startSearching()
+void Thread::startSearching(BitPosition &pos, std::unique_ptr<std::deque<StateInfo>> &stateInfos)
 {
     assert(worker != nullptr);
     runCustomJob([this]()
-                    { worker->startSearching(1, 99); });
+                    { worker->startSearching(pos, stateInfos, 1, 99); });
 }
 
 // Blocks on the condition variable until the thread has finished searching
@@ -88,5 +88,5 @@ void ThreadPool::startThinking(BitPosition &pos, std::unique_ptr<std::deque<Stat
     if (stateInfos.get())
         setupStates = std::move(stateInfos); // Ownership transfer, states is now empty
 
-    main_thread()->startSearching();
+    main_thread()->startSearching(pos, stateInfos);
 }
