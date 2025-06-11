@@ -20,6 +20,15 @@
 
 #include "network.h"
 
+// Define static members declared in AccumulatorStack
+namespace NNUEU
+{
+    const int8_t *AccumulatorStack::secondLayer1WeightsBlockWhiteTurn = nullptr;
+    const int8_t *AccumulatorStack::secondLayer2WeightsBlockWhiteTurn = nullptr;
+    const int8_t *AccumulatorStack::secondLayer1WeightsBlockBlackTurn = nullptr;
+    const int8_t *AccumulatorStack::secondLayer2WeightsBlockBlackTurn = nullptr;
+}
+
 /////////////////////////////////
 // Parameter loading utilities
 /////////////////////////////////
