@@ -8,8 +8,7 @@
 class BitPosition;
 namespace NNUEU
 {
-    struct AccumulatorState;
-
+    class Transformer;
     // NNUEUChange structure: holds the incremental change info
     struct NNUEUChange
     {
@@ -46,6 +45,8 @@ namespace NNUEU
             computed[1] = false;
         }
         void initialize(const BitPosition &position, const Transformer &transformer);
+        inline void substract_8_int16(int16_t *a, const int16_t *b);
+        inline void add_8_int16(int16_t *a, const int16_t *b);
         void addOnInput(int subIndex, bool turn, const Transformer &transformer);
         void removeOnInput(int subIndex, bool turn, const Transformer &transformer);
         void addAndRemoveOnInput(int subIndexAdd, int subIndexRemove, bool turn, const Transformer &transformer);
@@ -74,8 +75,8 @@ namespace NNUEU
         // Change the stored king positions.
         void changeWhiteKingPosition(int kingPos, const Transformer &transformer);
         void changeBlackKingPosition(int kingPos, const Transformer &transformer);
-        
-        inline int getStackKingPosition(int color) const;
+
+        inline int getStackKingPosition(int color) const { return nnueu_king_positions[color]; };
         // Push a new AccumulatorState with incremental change info.
         void push(const NNUEUChange &chngs);
         // Pop the top node (when unmaking a move).

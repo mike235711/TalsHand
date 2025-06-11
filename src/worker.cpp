@@ -66,6 +66,7 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta, bool our_turn)
     Move best_move;
     bool no_captures = true;
     StateInfo state_info;
+    NNUEU::NNUEUChange nnueuChange;
 
     if (not currentPos.getIsCheck()) // Not in check
     {
@@ -79,7 +80,8 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta, bool our_turn)
             if (!currentPos.see_ge(capture, -120))
                 continue;
 
-            currentPos.makeCapture(capture, state_info);
+            nnueuChange = currentPos.makeCapture(capture, state_info);
+            accumulatorStack.push(nnueuChange);
             if (our_turn) // Maximize
             {
                 child_value = quiesenceSearch(alpha, beta, false);
@@ -89,6 +91,7 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta, bool our_turn)
                     best_move = capture;
                 }
                 currentPos.unmakeCapture(capture);
+                accumulatorStack.pop();
                 if (value >= beta)
                     break;
 
@@ -103,6 +106,7 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta, bool our_turn)
                     best_move = capture;
                 }
                 currentPos.unmakeCapture(capture);
+                accumulatorStack.pop();
                 if (value <= alpha)
                     break;
 
@@ -119,7 +123,8 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta, bool our_turn)
         while ((capture = move_selector.select_legal()) != Move(0))
         {
             no_captures = false;
-            currentPos.makeCapture(capture, state_info);
+            nnueuChange = currentPos.makeCapture(capture, state_info);
+            accumulatorStack.push(nnueuChange);
             if (our_turn) // Maximize
             {
                 child_value = quiesenceSearch(alpha, beta, false);
@@ -129,6 +134,7 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta, bool our_turn)
                     best_move = capture;
                 }
                 currentPos.unmakeCapture(capture);
+                accumulatorStack.pop();
                 if (value >= beta)
                     break;
 
@@ -143,6 +149,7 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta, bool our_turn)
                     best_move = capture;
                 }
                 currentPos.unmakeCapture(capture);
+                accumulatorStack.pop();
                 if (value <= alpha)
                     break;
 
@@ -224,6 +231,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, bool 
             // }
         }
     }
+    NNUEU::NNUEUChange nnueuChange;
 
     // Transposition table move search
     if (tt_move.getData() != 0)
@@ -232,9 +240,11 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, bool 
 
         if (our_turn) // Maximize
         {
-            currentPos.makeMove(tt_move, state_info);
+            nnueuChange = currentPos.makeMove(tt_move, state_info);
+            accumulatorStack.push(nnueuChange);
             child_value = alphaBetaSearch(depth - 1, alpha, beta, false);
             currentPos.unmakeMove(tt_move);
+            accumulatorStack.pop();
             if (child_value > value)
             {
                 value = child_value;
@@ -246,9 +256,11 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, bool 
         }
         else // Minimize
         {
-            currentPos.makeMove(tt_move, state_info);
+            nnueuChange = currentPos.makeMove(tt_move, state_info);
+            accumulatorStack.push(nnueuChange);
             child_value = alphaBetaSearch(depth - 1, alpha, beta, true);
             currentPos.unmakeMove(tt_move);
+            accumulatorStack.pop();
             if (child_value < value)
             {
                 value = child_value;
@@ -273,9 +285,11 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, bool 
                 no_moves = false;
                 if (our_turn) // Maximize
                 {
-                    currentPos.makeMove(move, state_info);
+                    nnueuChange = currentPos.makeMove(move, state_info);
+                    accumulatorStack.push(nnueuChange);
                     child_value = alphaBetaSearch(depth - 1, alpha, beta, false);
                     currentPos.unmakeMove(move);
+                    accumulatorStack.pop();
                     if (child_value > value)
                     {
                         value = child_value;
@@ -290,9 +304,11 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, bool 
                 }
                 else // Minimize
                 {
-                    currentPos.makeMove(move, state_info);
+                    nnueuChange = currentPos.makeMove(move, state_info);
+                    accumulatorStack.push(nnueuChange);
                     child_value = alphaBetaSearch(depth - 1, alpha, beta, true);
                     currentPos.unmakeMove(move);
+                    accumulatorStack.pop();
                     if (child_value < value)
                     {
                         value = child_value;
@@ -318,9 +334,11 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, bool 
                 no_moves = false;
                 if (our_turn) // Maximize
                 {
-                    currentPos.makeMove(move, state_info);
+                    nnueuChange = currentPos.makeMove(move, state_info);
+                    accumulatorStack.push(nnueuChange);
                     child_value = alphaBetaSearch(depth - 1, alpha, beta, false);
                     currentPos.unmakeMove(move);
+                    accumulatorStack.pop();
                     if (child_value > value)
                     {
                         value = child_value;
@@ -335,9 +353,11 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, bool 
                 }
                 else // Minimize
                 {
-                    currentPos.makeMove(move, state_info);
+                    nnueuChange = currentPos.makeMove(move, state_info);
+                    accumulatorStack.push(nnueuChange);
                     child_value = alphaBetaSearch(depth - 1, alpha, beta, true);
                     currentPos.unmakeMove(move);
+                    accumulatorStack.pop();
                     if (child_value < value)
                     {
                         value = child_value;
@@ -412,6 +432,7 @@ std::pair<Move, int16_t> Worker::firstMoveSearch(int8_t depth, int16_t alpha, in
     auto first_move_start_time = std::chrono::high_resolution_clock::now();
 
     currentPos = rootPos;
+    NNUEU::NNUEUChange nnueuChange;
 
     // Main loop over candidate moves
     for (std::size_t i = 0; i < rootMoves.size(); ++i)
@@ -419,7 +440,8 @@ std::pair<Move, int16_t> Worker::firstMoveSearch(int8_t depth, int16_t alpha, in
         Move currentMove = rootMoves[i];
 
         StateInfo state_info;
-        rootPos.makeMove(currentMove, state_info);
+        nnueuChange = rootPos.makeMove(currentMove, state_info);
+        accumulatorStack.push(nnueuChange);
 
         // Decide on “reduction” based on previous iteration’s score
         int reduction = 0;
@@ -453,6 +475,7 @@ std::pair<Move, int16_t> Worker::firstMoveSearch(int8_t depth, int16_t alpha, in
         }
 
         currentPos.unmakeMove(currentMove);
+        accumulatorStack.pop();
         alpha = std::max(alpha, value);
 
         moveDepthValues[currentMove].emplace_back(value);

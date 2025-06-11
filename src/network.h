@@ -8,10 +8,6 @@
 
 namespace NNUEU
 {
-    // Hard coded sizes – identical to your old globals
-    static constexpr int FIRST_OUT = 8;
-    static constexpr int SECOND_OUT = 8 * 4;
-
     class Network
     {
     public:
@@ -23,6 +19,8 @@ namespace NNUEU
 
         /**  Thread-safe, read-only evaluation.                                */
         int16_t evaluate(const BitPosition &position, bool ourTurn, NNUEU::AccumulatorStack &accumulatorStack) const;
+
+        int16_t fullNnueuPass(int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const;
 
     private:
         Transformer transformer;

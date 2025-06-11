@@ -2,6 +2,8 @@
 #define ENGINE_H
 
 #include <cstdint>
+#include <memory>
+#include <deque>
 
 #include "bitposition.h"
 #include "threadpool.h"

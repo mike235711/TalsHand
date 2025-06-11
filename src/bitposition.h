@@ -4,7 +4,6 @@
 #include <cstdint>     // For fixed sized integers
 #include "bit_utils.h" // Bit utility functions
 #include "move.h"
-#include "simd.h" // NNUEU updates
 #include "accumulation.h"
 #include <iostream>
 #include <sstream>
@@ -103,7 +102,7 @@ private:
     }
 
 public:
-    BitPosition& BitPosition::fromFen(const std::string& fen, StateInfo* sinfo)
+    BitPosition& fromFen(const std::string& fen, StateInfo* sinfo)
     {
         clear();
         std::memset(sinfo, 0, sizeof(StateInfo));
@@ -269,17 +268,17 @@ public:
     bool moveIsReseter(Move move);
 
     template <typename T>
-    void makeMove(T move, StateInfo &new_state_info);
+    NNUEU::NNUEUChange makeMove(T move, StateInfo &new_state_info);
     template <typename T>
     void unmakeMove(T move);
 
     template <typename T>
-    void makeCapture(T move, StateInfo &new_state_info);
+    NNUEU::NNUEUChange makeCapture(T move, StateInfo &new_state_info);
     template <typename T>
     void unmakeCapture(T move);
 
     template <typename T>
-    void makeCaptureTest(T move, StateInfo &new_state_info);
+    NNUEU::NNUEUChange makeCaptureTest(T move, StateInfo &new_state_info);
 
     bool isDraw() const;
 

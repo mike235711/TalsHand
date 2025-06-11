@@ -13,6 +13,8 @@
 #include <string_view>
 #include <vector>
 
+#include "network.h"
+
 class TranspositionTable;
 class ThreadPool;
 

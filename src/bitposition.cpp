@@ -101,14 +101,14 @@ static const uint8_t castlingMask[64] = {
     0, 0, 0, 0, 0, 0, 0, 0,
     0x08, 0, 0, 0, 0, 0, 0, 0x04};
 
-template void BitPosition::makeMove<Move>(Move move, StateInfo &new_stae_info);
-template void BitPosition::makeMove<ScoredMove>(ScoredMove move, StateInfo &new_stae_info);
+template NNUEU::NNUEUChange BitPosition::makeMove<Move>(Move move, StateInfo &new_stae_info);
+template NNUEU::NNUEUChange BitPosition::makeMove<ScoredMove>(ScoredMove move, StateInfo &new_stae_info);
 
-template void BitPosition::makeCapture<Move>(Move move, StateInfo &new_stae_info);
-template void BitPosition::makeCapture<ScoredMove>(ScoredMove move, StateInfo &new_stae_info);
+template NNUEU::NNUEUChange BitPosition::makeCapture<Move>(Move move, StateInfo &new_stae_info);
+template NNUEU::NNUEUChange BitPosition::makeCapture<ScoredMove>(ScoredMove move, StateInfo &new_stae_info);
 
-template void BitPosition::makeCaptureTest<Move>(Move move, StateInfo &new_stae_info);
-template void BitPosition::makeCaptureTest<ScoredMove>(ScoredMove move, StateInfo &new_stae_info);
+template NNUEU::NNUEUChange BitPosition::makeCaptureTest<Move>(Move move, StateInfo &new_stae_info);
+template NNUEU::NNUEUChange BitPosition::makeCaptureTest<ScoredMove>(ScoredMove move, StateInfo &new_stae_info);
 
 template void BitPosition::unmakeMove<Move>(Move move);
 template void BitPosition::unmakeMove<ScoredMove>(ScoredMove move);
@@ -1538,7 +1538,7 @@ bool BitPosition::isDraw() const
 }
 
 template <typename T>
-void BitPosition::makeMove(T move, StateInfo &new_state_info)
+NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 // Move piece and switch white and black roles, without rotating the board.
 // The main difference with makeCapture is that we set blockers and pins here when making a move
 {
@@ -1923,11 +1923,11 @@ void BitPosition::makeMove(T move, StateInfo &new_state_info)
     // So we store it in the m_ply+1 position because the initial position (or position after capture) is the m_ply 0.
     m_ply++;
 
-    NNUEU::globalAccumulatorStack.push(nnueuChanges);
     assert(posIsFine());
     assert(!isKingInCheck(m_turn));
     assert(getIsCheckOnInitialization(m_turn) == state_info->isCheck);
     // assert(computeFullZobristKey() == state_info->zobristKey);
+    return nnueuChanges;
 }
 template <typename T>
 void BitPosition::unmakeMove(T move)
@@ -2186,14 +2186,13 @@ void BitPosition::unmakeMove(T move)
     }
 
     m_turn = not m_turn;
-    NNUEU::globalAccumulatorStack.pop();
     assert(posIsFine());
     assert(!isKingInCheck(m_turn));
     assert(getIsCheckOnInitialization(m_turn) == state_info->isCheck);
 }
 
 template <typename T>
-void BitPosition::makeCapture(T move, StateInfo &new_state_info)
+NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 // Captures and queen promotions
 {
     assert(moveIsFine(move));
@@ -2353,11 +2352,11 @@ void BitPosition::makeCapture(T move, StateInfo &new_state_info)
     m_turn = not m_turn;
     state_info->capturedPiece = captured_piece;
     m_ply++;
-    NNUEU::globalAccumulatorStack.push(nnueuChanges);
 
     assert(posIsFine());
     assert(!isKingInCheck(m_turn));
     assert(getIsCheckOnInitialization(m_turn) == state_info->isCheck);
+    return nnueuChanges;
 }
 template <typename T>
 void BitPosition::unmakeCapture(T move)
@@ -2467,7 +2466,6 @@ void BitPosition::unmakeCapture(T move)
     }
     // BitPosition::setAllPiecesBits();
     m_turn = not m_turn;
-    NNUEU::globalAccumulatorStack.pop();
     assert(posIsFine());
     assert(!isKingInCheck(m_turn));
     assert(getIsCheckOnInitialization(m_turn) == state_info->isCheck);
@@ -3050,7 +3048,7 @@ Move *BitPosition::kingNonCapturesInCheck(Move *&move_list) const
 }
 
 template <typename T>
-void BitPosition::makeCaptureTest(T move, StateInfo &new_state_info)
+NNUEU::NNUEUChange BitPosition::makeCaptureTest(T move, StateInfo &new_state_info)
 // Compared to moveCapture this function updates castling rights too, for perft tests.
 {
     assert(moveIsFine(move) && "Move is not legal");
@@ -3322,9 +3320,10 @@ void BitPosition::makeCaptureTest(T move, StateInfo &new_state_info)
     m_turn = not m_turn;
     state_info->capturedPiece = captured_piece;
     m_ply++;
-    NNUEU::globalAccumulatorStack.push(nnueuChanges);
+
     assert(posIsFine());
     assert(!isKingInCheck(m_turn)); // After making a move we are not in check
     assert(getIsCheckOnInitialization(m_turn) == state_info->isCheck);
     // assert(computeFullZobristKey() == state_info->zobristKey);
+    return nnueuChanges;
 }
