@@ -1,26 +1,50 @@
-#include <vector>
-#include <utility> // For std::pair
-#include <limits>  // For numeric limits
-#include <array>
-#include <cstdint>
-#include <chrono>
-#include <algorithm> // For std::max
-#include <memory>
-#include <unordered_map> 
+#include "worker.h"
+
+#include <algorithm>
+#include <cassert>
+#include <limits>
+#include <utility>
 
 #include "accumulation.h"
 #include "engine.h"
 #include "move_selectors.h"
 #include "ttable.h"
-#include "bitposition.h"
-#include "threadpool.h"
 
-Worker::Worker(TranspositionTable &ttable, ThreadPool &threadpool, NNUEU::Network networkIn, const NNUEU::Transformer &transformerIn, size_t idx, int time_left, BitPosition &position, StateInfo &stateInfo)
-    : lastFirstMoveTimeTakenMS(0), timeForMoveMS(0), timeLimit(time_left), ponder(false),
-      isEndgame(false), completedDepth(0), threadIdx(idx), threads(threadpool), tt(ttable),
-      network(std::move(networkIn)), transformer(&transformerIn), rootPos(position), rootState(stateInfo)
+//  Constructor (only *definition* lives here; prototype in header)
+Worker::Worker(TranspositionTable &ttable,
+               ThreadPool &threadpool,
+               NNUEU::Network networkIn,
+               const NNUEU::Transformer &transformerIn,
+               size_t idx)
+    : lastFirstMoveTimeTakenMS(0),
+      timeForMoveMS(0),
+      timeLimit(0),
+      ponder(false),
+      isEndgame(false),
+      completedDepth(0),
+      threadIdx(idx),
+      threads(threadpool),
+      tt(ttable),
+      network(std::move(networkIn)),
+      transformer(&transformerIn)
 {
+    // rootPos / rootState are filled just before the search starts
+}
 
+//  startSearching – wrapper around iterative deepening
+std::pair<Move, int16_t> Worker::startSearching()
+{
+    auto result = iterativeSearch(); // result = {bestMove, score}
+
+    // only thread-0 is the “main” UCI thread → tell the GUI our move
+    if (isMainThread())
+    {
+        std::cout << "bestmove "
+                  << result.first.toString() // e.g. e2e4, e7e8q …
+                  << '\n'                    // newline required by protocol
+                  << std::flush;             // be sure it reaches the GUI
+    }
+    return result;
 }
 
 bool Worker::stopSearch(const std::vector<int16_t> &values, int streak, int depth, BitPosition &position)

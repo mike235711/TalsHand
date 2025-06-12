@@ -28,7 +28,7 @@ public:
     Thread();
     virtual ~Thread();
 
-    void startSearching(BitPosition &pos, std::unique_ptr<std::deque<StateInfo>> &stateInfos);
+    void startSearching();
     void run_custom_job(std::function<void()> f);
 
     void waitToFinishSearch();
@@ -87,7 +87,6 @@ public:
     auto empty() const noexcept { return threads.empty(); }
 
 private:
-    int time_left;
     std::unique_ptr<std::deque<StateInfo>> setupStates;
     std::vector<std::unique_ptr<Thread>> threads;
 };

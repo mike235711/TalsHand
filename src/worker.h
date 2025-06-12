@@ -3,110 +3,74 @@
 
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <cassert>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
-#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "network.h"
+#include "bitposition.h" // Move, BitPosition, StateInfo
 
 class TranspositionTable;
 class ThreadPool;
 
-
-// Stack struct keeps track of the information we need to remember from nodes
-// shallower and deeper in the tree during the search. Each search thread has
-// its own array of Stack objects, indexed by the current ply.
-// This is not implemented yet, but could be useful later
-struct Stack
-{
-    Move *pv;
-    int ply;
-    Move currentMove;
-    int staticEval;
-    int statScore;
-    int moveCount;
-    bool inCheck;
-    bool ttPv;
-    bool ttHit;
-    int cutoffCnt;
-    int reduction;
-    bool isPvNode;
-};
-
-// Worker is the class that performs the search. In a future version I will implement a threaded version
+//  Worker — performs the search (one per thread)
 class Worker
 {
 public:
-    Worker(TranspositionTable &ttable, ThreadPool &threadpool, NNUEU::Network network, const NNUEU::Transformer &transformer, size_t, int time_left, BitPosition &position, StateInfo &stateInfo);
+    Worker(TranspositionTable &ttable,
+           ThreadPool &threadpool,
+           NNUEU::Network networkIn,
+           const NNUEU::Transformer &transformerIn,
+           size_t idx);
 
-    // Called at instantiation to initialize reductions tables.
-    // Reset histories, usually before a new game.
-    void clear();
-
-    // This calls iterativeSearch, in a future version it will handle threads
-    std::pair<Move, int16_t> startSearching(BitPosition &pos, std::unique_ptr<std::deque<StateInfo>> &stateInfos, int8_t start_depth, int8_t fixed_max_depth)
-    {
-        rootPos = pos;
-        rootState = stateInfos;
-        return iterativeSearch(start_depth, fixed_max_depth);
-    };
+    // Entry point called by Thread::startSearching()
+    std::pair<Move, int16_t> startSearching();
 
     bool isMainThread() const { return threadIdx == 0; }
 
 private:
-    // Calls firstMovesearch in increasing depths until a limit is reached (time, streaks or depth)
-    std::pair<Move, int16_t> iterativeSearch(int8_t start_depth, int8_t fixed_max_depth);
-
-    // Performs the root moves search calling alphaBetaSearch for each root move ordered
-    std::pair<Move, int16_t> firstMoveSearch(int8_t depth, int16_t alpha, int16_t beta, std::chrono::milliseconds predictedTimeTakenMs);
-
-    // This is the main search function, for both PV and non-PV nodes
+    // —— core search routines ——
+    std::pair<Move, int16_t> iterativeSearch(int8_t start_depth = 1,
+                                             int8_t fixed_max_depth = 99);
+    std::pair<Move, int16_t> firstMoveSearch(int8_t depth,
+                                             int16_t alpha,
+                                             int16_t beta,
+                                             std::chrono::milliseconds predictedTimeTakenMs);
     int16_t alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, bool our_turn);
-
-    // Quiescence search function, which is called by the main search
     int16_t quiesenceSearch(int16_t alpha, int16_t beta, bool our_turn);
+    bool stopSearch(const std::vector<int16_t> &values,
+                    int streak,
+                    int depth,
+                    BitPosition &position);
 
-    // Stop search based on some criteria
-    bool stopSearch(const std::vector<int16_t> &values, int streak, int depth, BitPosition &position);
-
-    // Time point at which we start searching
+    // —— time / limits ——
     std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
     int lastFirstMoveTimeTakenMS;
     std::chrono::milliseconds timeForMoveMS;
-
-    // Time limit
     std::chrono::milliseconds timeLimit;
 
-    // If pondering or not (not implemented pondering yet)
+    // —— root‑level bookkeeping ——
     bool ponder;
-
-    // If we are in endgame or not a root position
     bool isEndgame;
-
-    // To find streaks of moves for several depths
+    int completedDepth;
     std::unordered_map<Move, std::vector<int16_t>> moveDepthValues;
 
-    BitPosition rootPos;
-    StateInfo rootState;
+    BitPosition rootPos; // cloned before each search
+    StateInfo rootState; // thread‑local mutable root
     std::vector<Move> rootMoves;
     std::vector<int16_t> rootScores;
     BitPosition currentPos;
 
-    // Deepest depth searched so far on current position
-    int completedDepth;
-
-    size_t threadIdx; // Indicates which thread is using the worker (However only main thread is implemented yet)
-
+    // —— thread / TT / NNUEU context ——
+    size_t threadIdx;
     ThreadPool &threads;
     TranspositionTable &tt;
-
-    // Used by NNUEU
     NNUEU::AccumulatorStack accumulatorStack;
     NNUEU::Network network;
     const NNUEU::Transformer *transformer;
@@ -114,4 +78,4 @@ private:
     friend class ThreadPool;
 };
 
-#endif // #ifndef WORKER_H
+#endif // WORKER_H

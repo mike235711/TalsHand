@@ -7,8 +7,8 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
-
-
+#include <cstring>     // std::memcpy
+#include <type_traits> // std::is_trivially_copyable_v
 
 // Constructor (To finish)
 Thread::Thread()
@@ -16,27 +16,26 @@ Thread::Thread()
     // IDontKnow
 }
 
-void runCustomJob(std::function<void()> f)
-{
-    if (f)
-        f();
-}
-
 // Destructor wakes up the thread in idle_loop() and waits
 // for its termination. Thread should be already waiting.
 Thread::~Thread()
 {
     exit = true;
-    startSearching();
     stdThread.join();
 }
 
 // Wakes up the thread that will start the search
-void Thread::startSearching(BitPosition &pos, std::unique_ptr<std::deque<StateInfo>> &stateInfos)
+void Thread::run_custom_job(std::function<void()> f)
 {
-    assert(worker != nullptr);
-    runCustomJob([this]()
-                    { worker->startSearching(pos, stateInfos, 1, 99); });
+    if (f)
+        f(); // for now we run it synchronously
+}
+
+void Thread::startSearching()
+{
+    assert(worker);
+    run_custom_job([this]
+                   { worker->startSearching(); });
 }
 
 // Blocks on the condition variable until the thread has finished searching
@@ -58,7 +57,9 @@ void ThreadPool::set(int numThreads, TranspositionTable &tt, NNUEU::Network &net
     for (int i = 0; i < numThreads; ++i)
     {
         auto t = std::make_unique<Thread>();
-        t->worker = std::make_unique<Worker>(tt, *this, network, transformer, static_cast<size_t>(i), time_left);
+        t->worker = std::make_unique<Worker>(tt, *this,
+                                             network, transformer,
+                                             static_cast<size_t>(i));
         threads.emplace_back(std::move(t));
     }
 }
@@ -71,22 +72,52 @@ void ThreadPool::waitToFinishSearch()
 {
 }
 
-// Wakes up main thread waiting in idle_loop() and returns immediately.
-// Main thread will wake up other threads and start the search.
-void ThreadPool::startThinking(BitPosition &pos, std::unique_ptr<std::deque<StateInfo>> &stateInfos, int timeLimit, bool pondering)
+/// Fast, thread‑safe clone: raw‑copy BitPosition + deep copy of root StateInfo
+inline void clonePositionPerThread(const BitPosition &src,
+                                   BitPosition &dst,
+                                   StateInfo &dstRoot,
+                                   StateInfo *sharedTail)
 {
+    static_assert(std::is_trivially_copyable_v<BitPosition>,
+                  "BitPosition stopped being trivially-copyable – update this clone!");
 
+    std::memcpy(&dst, &src, sizeof(BitPosition)); // raw copy of ~450 B
+    dst.setState(&dstRoot);                       // re-wire root pointer
+
+    dstRoot = *src.getState();     // deep copy the root
+    dstRoot.previous = sharedTail; // share older history
+    dstRoot.next = nullptr;
+}
+
+void ThreadPool::startThinking(BitPosition &pos,
+                               std::unique_ptr<std::deque<StateInfo>> &stateInfos,
+                               int timeLimit,
+                               bool pondering)
+{
     main_thread()->waitToFinishSearch();
     main_thread()->worker->ponder = pondering;
 
-    time_left = timeLimit;
+    // If we received a fresh move list, take ownership of its history
+    assert(stateInfos || setupStates);
+    if (stateInfos)
+        setupStates = std::move(stateInfos); // stateInfos becomes nullptr
 
-    // After ownership transfer 'states' becomes empty, so if we stop the search
-    // and call 'go' again without setting a new position states.get() == nullptr.
-    assert(stateInfos.get() || setupStates.get());
+    for (auto &thPtr : threads)
+    {
+        StateInfo *const sharedTail = &setupStates->back(); // immutable tail
 
-    if (stateInfos.get())
-        setupStates = std::move(stateInfos); // Ownership transfer, states is now empty
+        thPtr->run_custom_job([&, sharedTail, timeLimit]
+                              {
+            BitPosition &localPos  = thPtr->worker->rootPos;
+            StateInfo   &localRoot = thPtr->worker->rootState;
 
-    main_thread()->startSearching(pos, stateInfos);
+            clonePositionPerThread(pos, localPos, localRoot, sharedTail);
+
+            thPtr->worker->timeLimit = std::chrono::milliseconds(timeLimit); });
+    }
+
+    for (auto &thPtr : threads)
+        thPtr->waitToFinishSearch();
+
+    main_thread()->startSearching();
 }

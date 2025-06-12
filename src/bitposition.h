@@ -382,6 +382,10 @@ public:
         m_all_pieces_bit = (m_pieces_bit[0] | m_pieces_bit[1]);
     }
 
+    StateInfo *getState() { return state_info; }
+    const StateInfo *getState() const { return state_info; }
+    void setState(StateInfo *s) { state_info = s; }
+
     inline bool getTurn() const { return m_turn; }
 
     inline int getKingPosition(bool turn) const
