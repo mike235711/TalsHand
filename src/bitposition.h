@@ -110,6 +110,10 @@ public:
 
         std::istringstream ss(fen);
         std::string board, turn, castling, enPassant;
+        int halfMoveClock = 0, fullMoveNumber = 1; 
+
+        ss >> board >> turn >> castling >> enPassant >> halfMoveClock >> fullMoveNumber;
+
 
         int sq = 56; // a8
         for (char c : board)

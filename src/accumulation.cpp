@@ -271,8 +271,7 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
         const AccumulatorState &inc = top();
 
         for (int i = 0; i < 8; ++i)
-            assert(fresh.inputTurn[turn][i] == inc.inputTurn[turn][i] &&
-                    "NNUEU incremental accumulation mismatch");
+            assert(fresh.inputTurn[turn][i] == inc.inputTurn[turn][i] && "NNUEU incremental accumulation mismatch");
     }
 #endif // NDEBUG
 

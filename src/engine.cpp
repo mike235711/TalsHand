@@ -92,7 +92,7 @@ constexpr std::size_t DefaultHashMB = 16; // Stockfish defaults to 16 MB
 THEngine::THEngine(std::optional<std::string> path)
     : pos(), stateInfos(std::make_unique<std::deque<StateInfo>>(1)) // A one-element deque whose first node becomes the “previous” link for the root position
       ,
-      timeLimit(0), threadpool(), tt(), network(), transformer(std::make_unique<NNUEU::Transformer>()),
+      timeLeft(0), threadpool(), tt(), network(), transformer(std::make_unique<NNUEU::Transformer>()),
       numThreads(std::clamp<int>(int(HardwareCores), 1, MaxThreads)),
       ttSize(std::min<std::size_t>(DefaultHashMB, MaxHashMB)), ponder(false), NNUEUFile(DefaultNNUEFile)
 {
@@ -112,9 +112,9 @@ void THEngine::readUci()
     {
         if (token == "uci")
         {
-            std::cout << "id name TalsHand\n";
-            std::cout << "id author Miguel Córdoba\n";
-            std::cout << "uciok\n"
+            std::cout << "id name TalsHand\n"
+                      << "id author Miguel Córdoba\n"
+                      << "uciok\n"
                       << std::flush;
         }
         else if (token == "isready")
@@ -214,7 +214,7 @@ void THEngine::readUci()
                     iss >> ourInc;
                 }
             }
-            setTimeLimit(ourTime, ourInc);
+            settimeLeft(ourTime, ourInc);
             goSearch();
         }
         else if (token == "stop")
@@ -285,15 +285,15 @@ void THEngine::loadNNUEU()
     threadpool.clear();
 }
 
-void THEngine::setTimeLimit(int ourTime, int ourInc)
+void THEngine::settimeLeft(int ourTime, int ourInc)
 {
-    timeLimit = ourTime + ourInc;
+    timeLeft = ourTime + ourInc;
 }
 
 void THEngine::goSearch()
 {
     resizeThreads();
-    threadpool.startThinking(pos, stateInfos, timeLimit, ponder);
+    threadpool.startThinking(pos, stateInfos, timeLeft, ponder);
 }
 
 void THEngine::stopSearch()

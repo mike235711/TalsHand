@@ -116,17 +116,17 @@ namespace NNUEU
         struct Weights
         {
             // For initializing accumulators
-            int16_t firstBias[FIRST_OUT]{};
+            int16_t firstBias[FIRST_OUT] = {0};
 
             // For accumulating non-king moves
-            alignas(64) int16_t firstW[F_MAP][FIRST_OUT]{}; // removeOnInput()
-            alignas(64) int16_t firstWInv[F_MAP][FIRST_OUT]{}; // removeOnInput()
-            alignas(64) int16_t firstW2Indices[F_MAP][F_MAP][FIRST_OUT]{}; // addAndRemoveOnInput()
-            alignas(64) int16_t firstW2IndicesInv[F_MAP][F_MAP][FIRST_OUT]{}; // addAndRemoveOnInput()
+            alignas(64) int16_t firstW[F_MAP][FIRST_OUT] = {0}; // removeOnInput()
+            alignas(64) int16_t firstWInv[F_MAP][FIRST_OUT] = {0}; // removeOnInput()
+            alignas(64) int16_t firstW2Indices[F_MAP][F_MAP][FIRST_OUT] = {0}; // addAndRemoveOnInput()
+            alignas(64) int16_t firstW2IndicesInv[F_MAP][F_MAP][FIRST_OUT] = {0}; // addAndRemoveOnInput()
 
             // For king moves
-            alignas(64) int8_t second1[64][SECOND_OUT]{};
-            alignas(64) int8_t second2[64][SECOND_OUT]{};
+            alignas(64) int8_t second1[64][SECOND_OUT] = {0};
+            alignas(64) int8_t second2[64][SECOND_OUT] = {0};
         };
         Weights weights;
     };

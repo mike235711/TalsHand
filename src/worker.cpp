@@ -34,6 +34,7 @@ Worker::Worker(TranspositionTable &ttable,
 //  startSearching – wrapper around iterative deepening
 std::pair<Move, int16_t> Worker::startSearching()
 {
+    accumulatorStack.reset(rootPos, *transformer);
     auto result = iterativeSearch(); // result = {bestMove, score}
 
     // only thread-0 is the “main” UCI thread → tell the GUI our move
@@ -47,7 +48,7 @@ std::pair<Move, int16_t> Worker::startSearching()
     return result;
 }
 
-bool Worker::stopSearch(const std::vector<int16_t> &values, int streak, int depth, BitPosition &position)
+bool Worker::stopSearch(const std::vector<int16_t> &values, int streak, int depth)
 {
     // If not endgame
     if (not isEndgame)
@@ -89,8 +90,9 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta, bool our_turn)
     // Stand pat
     int16_t value = network.evaluate(currentPos, our_turn, accumulatorStack, *transformer);
 
+    // Beta cutoff
     if (value >= beta)
-        return value; // beta-cutoff
+        return value;
 
     alpha = std::max(alpha, value);
 
@@ -564,6 +566,7 @@ std::pair<Move, int16_t> Worker::iterativeSearch(int8_t start_depth, int8_t fixe
     if (rootMoves.size() == 1)
         return std::pair<Move, int16_t>(rootMoves[0], 0);
 
+    startTime = std::chrono::high_resolution_clock::now();
     Move bestMove{};
     Move bestMovePreviousDepth{};
     int16_t bestValue;
@@ -577,7 +580,6 @@ std::pair<Move, int16_t> Worker::iterativeSearch(int8_t start_depth, int8_t fixe
         // N is first_moves.size() and T is lastFirstMoveTimeTakenMS
         // Hence we can predict the time taken of this new search to be N * T
         std::chrono::milliseconds predictedTimeTakenMs{17 * lastFirstMoveTimeTakenMS};
-
         if (predictedTimeTakenMs >= timeForMoveMS)
         {
             break;
@@ -593,7 +595,8 @@ std::pair<Move, int16_t> Worker::iterativeSearch(int8_t start_depth, int8_t fixe
         bestValue = tuple.second;
 
         completedDepth = static_cast<int>(depth);
-
+        
+        // Check if the best move at this depth is still the same, and adjust its streak
         if (bestMove.getData() == bestMovePreviousDepth.getData())
             streak++;
         else
@@ -601,16 +604,10 @@ std::pair<Move, int16_t> Worker::iterativeSearch(int8_t start_depth, int8_t fixe
             bestMovePreviousDepth = bestMove;
             streak = 1;
         }
-        // Check stop condition based on streak and improvement pattern
-        if (stopSearch(moveDepthValues[bestMove], streak, depth, rootPos))
-        {
-            break;
-        }
 
-        // Calculate the elapsed time in milliseconds
+        // Check stop condition based on streak and improvement pattern or time duration
         std::chrono::duration<double, std::milli> duration = std::chrono::high_resolution_clock::now() - startTime;
-        // Check if the duration has been exceeded
-        if (duration >= timeForMoveMS)
+        if (stopSearch(moveDepthValues[bestMove], streak, depth) || duration >= timeForMoveMS)
         {
             break;
         }

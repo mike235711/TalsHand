@@ -33,7 +33,7 @@ static inline int16_t relu_shift6_int16(int32_t x)
 // Plain scalar forward pass (no SIMD)
 namespace NNUEU
 {
-    int16_t Network::fullNnueuPassScalar(const int16_t *pInput,
+    int16_t Network::forwardPassScalar(const int16_t *pInput,
                                          const int8_t *pWeights11,
                                          const int8_t *pWeights12) const
 
@@ -111,14 +111,14 @@ namespace NNUEU
         return static_cast<int16_t>(acc);
     }
 
-    int16_t Network::fullNnueuPassDebug(const int16_t *pInput,
+    int16_t Network::forwardPassDebug(const int16_t *pInput,
                                         const int8_t *pWeights11,
                                         const int8_t *pWeights12) const
     {
-        int16_t fast = fullNnueuPass(const_cast<int16_t *>(pInput), // existing SIMD routine takes non‑const
+        int16_t fast = forwardPass(const_cast<int16_t *>(pInput), // existing SIMD routine takes non‑const
                                     pWeights11,
                                     pWeights12);
-        int16_t slow = fullNnueuPassScalar(pInput, pWeights11, pWeights12);
+        int16_t slow = forwardPassScalar(pInput, pWeights11, pWeights12);
         assert(fast == slow && "NNUEU SIMD/scalar mismatch evaluation detected!");
         return fast; // propagate the fast‑path result so callers remain unchanged.
     }

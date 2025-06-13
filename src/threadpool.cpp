@@ -41,10 +41,9 @@ void Thread::startSearching()
 // Blocks on the condition variable until the thread has finished searching
 void Thread::waitToFinishSearch()
 {
-
-    std::unique_lock<std::mutex> lk(mutex);
-    cv.wait(lk, [&]
-            { return !searching; });
+    // std::unique_lock<std::mutex> lk(mutex);
+    // cv.wait(lk, [&]
+    //         { return !searching; });
 }
 
 void ThreadPool::set(int numThreads, TranspositionTable &tt, NNUEU::Network &network, const NNUEU::Transformer &transformer)
@@ -108,10 +107,8 @@ void ThreadPool::startThinking(BitPosition &pos,
 
         thPtr->run_custom_job([&, sharedTail, timeLimit]
                               {
-            BitPosition &localPos  = thPtr->worker->rootPos;
-            StateInfo   &localRoot = thPtr->worker->rootState;
-
-            clonePositionPerThread(pos, localPos, localRoot, sharedTail);
+            thPtr->worker->rootPos.fromFen(pos.toFenString(), &thPtr->worker->rootState);
+            thPtr->worker->rootState = setupStates->back();
 
             thPtr->worker->timeLimit = std::chrono::milliseconds(timeLimit); });
     }

@@ -44,7 +44,7 @@ public:
     void waitToFinishSearch();
 
     // modifiers
-    void setTimeLimit(const int ourTime, const int ourInc);
+    void settimeLeft(const int ourTime, const int ourInc);
     void setTTSize();
     void resizeThreads();
     void setPonderHit(bool);
@@ -60,8 +60,8 @@ private:
     // elements. With a std::deque, pointers to the elements remain stable, which is essential 
     // for safely using the previous pointer within the StateInfo struct.
     std::unique_ptr<std::deque<StateInfo>> stateInfos;
-    // timeLimit is ourInc + ourTime, the Worker will then manage the time based on improving strikes
-    int timeLimit;
+    // timeLeft is ourInc + ourTime, the Worker will then manage the time based on improving strikes
+    int timeLeft;
 
     // Manages threads but for the moment we will keep it simple only with the main_thread()
     ThreadPool threadpool;

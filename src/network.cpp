@@ -157,16 +157,16 @@ namespace NNUEU
         if (position.getTurn())
         {
 #ifndef NDEBUG
-            out = fullNnueuPassDebug(updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn);
+            out = forwardPassDebug(updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn);
 #else
-            out = fullNnueuPass(updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn);
+            out = forwardPass(updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn);
 #endif
         }
 
         else
         {
 #ifndef NDEBUG
-            out = fullNnueuPassDebug(updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn);
+            out = forwardPassDebug(updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn);
 #else
             out = fullNnueuPass(updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn);
 #endif
@@ -179,7 +179,7 @@ namespace NNUEU
         return 4096 - out;
     }
 
-    int16_t Network::fullNnueuPass(int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const
+    int16_t Network::forwardPass(int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const
     // This function should pass using simd instructions an array pInput of 16 int16's through a neural network.
     // There are two first layers of 8 by 4 each taking the same pInput, after concatenating the outputs of both first layers,
     // the second layer is 8 by 4, the third layer is 4 by 1.

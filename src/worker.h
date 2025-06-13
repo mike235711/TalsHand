@@ -35,21 +35,28 @@ public:
     bool isMainThread() const { return threadIdx == 0; }
 
 private:
-    // —— core search routines ——
+    // Calls first move search iteratively
     std::pair<Move, int16_t> iterativeSearch(int8_t start_depth = 1,
                                              int8_t fixed_max_depth = 99);
+
+    // Calls alphaBetaSearch after each root move
     std::pair<Move, int16_t> firstMoveSearch(int8_t depth,
                                              int16_t alpha,
                                              int16_t beta,
                                              std::chrono::milliseconds predictedTimeTakenMs);
+
+    // Calls quisence when depth 0 is reached
     int16_t alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, bool our_turn);
+
+    // Only captures are searched making sure there is no mate in the end
     int16_t quiesenceSearch(int16_t alpha, int16_t beta, bool our_turn);
+
+    // Stop search if certain criteria is met
     bool stopSearch(const std::vector<int16_t> &values,
                     int streak,
-                    int depth,
-                    BitPosition &position);
+                    int depth);
 
-    // —— time / limits ——
+    // Time control
     std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
     int lastFirstMoveTimeTakenMS;
     std::chrono::milliseconds timeForMoveMS;
@@ -57,20 +64,27 @@ private:
 
     // —— root‑level bookkeeping ——
     bool ponder;
-    bool isEndgame;
     int completedDepth;
+
+    // Stopiing condition utilities
+    bool isEndgame;
     std::unordered_map<Move, std::vector<int16_t>> moveDepthValues;
 
     BitPosition rootPos; // cloned before each search
     StateInfo rootState; // thread‑local mutable root
     std::vector<Move> rootMoves;
     std::vector<int16_t> rootScores;
+    // BitPosition object within search
     BitPosition currentPos;
 
-    // —— thread / TT / NNUEU context ——
+    // Threading (to implement)
     size_t threadIdx;
     ThreadPool &threads;
+
+    // Transposition table
     TranspositionTable &tt;
+
+    // NNUEU
     NNUEU::AccumulatorStack accumulatorStack;
     NNUEU::Network network;
     const NNUEU::Transformer *transformer;

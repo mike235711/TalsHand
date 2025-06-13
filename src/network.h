@@ -20,25 +20,25 @@ namespace NNUEU
         /**  Thread-safe, read-only evaluation.                                */
         int16_t evaluate(const BitPosition &position, bool ourTurn, NNUEU::AccumulatorStack &accumulatorStack, const Transformer &transformer) const;
 
-        int16_t fullNnueuPass(int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const;
+        int16_t forwardPass(int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const;
 
 #ifndef NDEBUG
-        int16_t fullNnueuPassDebug(const int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const;
+        int16_t forwardPassDebug(const int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const;
 #endif
 
     private:
-        struct Weights
+        struct Weight
         {
-            alignas(64) int8_t thirdW[SECOND_OUT]{};
-            alignas(64) int8_t finalW[4]{};
-            int16_t secondBias[FIRST_OUT]{};
-            int16_t thirdBias[4]{};
-            int16_t finalBias{};
+            alignas(64) int8_t thirdW[SECOND_OUT] = {0};
+            alignas(64) int8_t finalW[8] = {0}; // For this one only the first 4 elements are weights, the rest are left as zero so that the forward pass works fine
+            int16_t secondBias[FIRST_OUT] = {0};
+            int16_t thirdBias[4] = {0};
+            int16_t finalBias = {0};
         };
-        Weights weights;
+        Weight weights;
 
 #ifndef NDEBUG
-        int16_t fullNnueuPassScalar(const int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const;
+        int16_t forwardPassScalar(const int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const;
 #endif
     };
 } // Namespace NNUEU
