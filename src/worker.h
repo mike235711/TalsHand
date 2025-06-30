@@ -35,6 +35,28 @@ public:
     bool isMainThread() const { return threadIdx == 0; }
 
 private:
+    // Makes move and pushes on the accumulator
+    inline void makeMove(Move move, StateInfo st)
+    {
+        accumulatorStack.push(currentPos.makeMove(move, st));
+    }
+    // Makes capture and pushes on the accumulator
+    inline void makeCapture(Move move, StateInfo st)
+    {
+        accumulatorStack.push(currentPos.makeCapture(move, st));
+    }
+    // Unmakes move and pops on the accumulator
+    inline void unmakeMove(Move move)
+    {
+        currentPos.unmakeMove(move);
+        accumulatorStack.pop();
+    }
+    // Unmakes move and pops on the accumulator
+    inline void unmakeCapture(Move move)
+    {
+        currentPos.unmakeCapture(move);
+        accumulatorStack.pop();
+    }
     // Calls first move search iteratively
     std::pair<Move, int16_t> iterativeSearch(int8_t start_depth = 1,
                                              int8_t fixed_max_depth = 99);

@@ -151,8 +151,10 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
     {
         add_8_int16(inputTurn[0], transformer.weights.firstW[64 * 9 + index]);
         add_8_int16(inputTurn[1], transformer.weights.firstWInv[64 * 9 + index]);
-    }     
     }
+    computed[0] = true;
+    computed[1] = true;
+}
 
     // Functions to add/remove features from the accumulators
     inline void NNUEU::AccumulatorState::addAndRemoveOnInput(int subIndexAdd, int subIndexRemove, bool turn, const Transformer &transformer)
@@ -256,22 +258,49 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
     }
     inline bool NNUEU::NNUEUChange::isCapture() const
     {
-        // King captured something, but didn't affect NNUE input for the king
+        // King captured something, but didn't affect NNUEU input for the king
         return is_capture;
     }
 
 #ifndef NDEBUG
     void NNUEU::AccumulatorStack::verifyTopAgainstFresh(const BitPosition &pos, bool turn, const Transformer &transformer)
     {
-        // 1. Build a *fresh* accumulator for reference
+        // Build a *fresh* accumulator for reference
         AccumulatorState fresh;
         fresh.initialize(pos, transformer);
-    
-        // 2. Compare with the incrementally-updated top of the stack
+
+        // Compare with the incrementally-updated top of the stack
         const AccumulatorState &inc = top();
 
+        bool mismatch_found = false;
         for (int i = 0; i < 8; ++i)
-            assert(fresh.inputTurn[turn][i] == inc.inputTurn[turn][i] && "NNUEU incremental accumulation mismatch");
+        {
+            if (fresh.inputTurn[turn][i] != inc.inputTurn[turn][i])
+            {
+                mismatch_found = true;
+                break; // Exit the loop as soon as a mismatch is found
+            }
+        }
+
+        if (mismatch_found)
+        {
+            std::cerr << "NNUEU incremental accumulation mismatch detected!" << std::endl;
+
+            std::cerr << "Fresh array: [";
+            for (int i = 0; i < 8; ++i)
+            {
+                std::cerr << fresh.inputTurn[turn][i] << (i == 7 ? "" : ", ");
+            }
+            std::cerr << "]" << std::endl;
+
+            std::cerr << "Inc (top) array: [";
+            for (int i = 0; i < 8; ++i)
+            {
+                std::cerr << inc.inputTurn[turn][i] << (i == 7 ? "" : ", ");
+            }
+            std::cerr << "]" << std::endl;
+            std::abort(); // Abort program
+        }
     }
 #endif // NDEBUG
 
@@ -291,10 +320,8 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
         assert(blackKing >= 0 && blackKing < 64);
 
         // Set the king positions
-        nnueu_king_positions[0] = whiteKing;
-        nnueu_king_positions[1] = blackKing;
-        rootState.computed[0] = true;
-        rootState.computed[1] = true;
+        nnueu_king_positions[0] = rootPos.getKingPosition(0);
+        nnueu_king_positions[1] = rootPos.getKingPosition(1);
 
         secondLayer1WeightsBlockWhiteTurn = transformer.weights.second1[whiteKing];
         secondLayer2WeightsBlockBlackTurn = transformer.weights.second2[invertIndex(whiteKing)];
