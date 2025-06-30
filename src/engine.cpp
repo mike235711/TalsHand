@@ -161,7 +161,14 @@ void THEngine::readUci()
             iss >> sub;
             if (sub == "startpos")
             {
-                setPosition(STARTFEN, {});
+                std::vector<std::string> moves;
+                std::string movesTok;
+                if (iss >> movesTok && movesTok == "moves")
+                {
+                    while (iss >> movesTok)
+                        moves.push_back(movesTok);
+                }
+                setPosition(STARTFEN, moves);
             }
             else if (sub == "fen")
             {

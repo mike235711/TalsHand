@@ -590,5 +590,6 @@ std::pair<Move, int16_t> Worker::iterativeSearch(int8_t start_depth, int8_t fixe
             break;
         }
     }
+    std::cout << "Depth: " << completedDepth << "\n";
     return std::pair<Move, int16_t>(bestMove, bestValue);
 }

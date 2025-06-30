@@ -1543,6 +1543,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 // The main difference with makeCapture is that we set blockers and pins here when making a move
 {
     assert(moveIsFine(move));
+    assert(move.getData() != 0);
     assert(not getIsCheckOnInitialization(not m_turn));
     NNUEU::NNUEUChange nnueuChanges;
     // Save irreversible aspects of position and create a new state
@@ -2196,6 +2197,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 // Captures and queen promotions
 {
     assert(moveIsFine(move));
+    assert(move.getData() != 0);
     assert(not getIsCheckOnInitialization(not m_turn));
     NNUEU::NNUEUChange nnueuChanges;
     // Save irreversible aspects of position and create a new state
