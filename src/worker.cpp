@@ -13,7 +13,7 @@
 //  Constructor (only *definition* lives here; prototype in header)
 Worker::Worker(TranspositionTable &ttable,
                ThreadPool &threadpool,
-               NNUEU::Network networkIn,
+               NNUEU::Network &networkIn,
                const NNUEU::Transformer &transformerIn,
                size_t idx)
     : lastFirstMoveTimeTakenMS(0),
@@ -25,7 +25,7 @@ Worker::Worker(TranspositionTable &ttable,
       threadIdx(idx),
       threads(threadpool),
       tt(ttable),
-      network(std::move(networkIn)),
+      network(networkIn),
       transformer(&transformerIn)
 {
     // rootPos / rootState are filled just before the search starts

@@ -168,7 +168,7 @@ namespace NNUEU
 #ifndef NDEBUG
             out = forwardPassDebug(updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn);
 #else
-            out = fullNnueuPass(updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn);
+            out = forwardPass(updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn);
 #endif
         }
 

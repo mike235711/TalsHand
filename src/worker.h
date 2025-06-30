@@ -25,7 +25,7 @@ class Worker
 public:
     Worker(TranspositionTable &ttable,
            ThreadPool &threadpool,
-           NNUEU::Network networkIn,
+           NNUEU::Network &networkIn,
            const NNUEU::Transformer &transformerIn,
            size_t idx);
 
@@ -86,7 +86,7 @@ private:
 
     // NNUEU
     NNUEU::AccumulatorStack accumulatorStack;
-    NNUEU::Network network;
+    NNUEU::Network &network;
     const NNUEU::Transformer *transformer;
 
     friend class ThreadPool;
