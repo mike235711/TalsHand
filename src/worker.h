@@ -36,12 +36,12 @@ public:
 
 private:
     // Makes move and pushes on the accumulator
-    inline void makeMove(Move move, StateInfo st)
+    inline void makeMove(Move move, StateInfo &st)
     {
         accumulatorStack.push(currentPos.makeMove(move, st));
     }
     // Makes capture and pushes on the accumulator
-    inline void makeCapture(Move move, StateInfo st)
+    inline void makeCapture(Move move, StateInfo &st)
     {
         accumulatorStack.push(currentPos.makeCapture(move, st));
     }
