@@ -68,10 +68,10 @@ private:
                                              std::chrono::milliseconds predictedTimeTakenMs);
 
     // Calls quisence when depth 0 is reached
-    int16_t alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, bool our_turn);
+    int16_t alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta);
 
     // Only captures are searched making sure there is no mate in the end
-    int16_t quiesenceSearch(int16_t alpha, int16_t beta, bool our_turn);
+    int16_t quiesenceSearch(int16_t alpha, int16_t beta);
 
     // Stop search if certain criteria is met
     bool stopSearch(const std::vector<int16_t> &values,

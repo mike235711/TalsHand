@@ -83,12 +83,12 @@ bool Worker::stopSearch(const std::vector<int16_t> &values, int streak, int dept
     return false;
 }
 
-int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta, bool our_turn)
+int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta)
 // This search is done when depth is less than or equal to 0 and considers only captures and promotions
 {
     // If we are in quiescence, we have a baseline evaluation as if no captures happened
     // Stand pat
-    int16_t value = network.evaluate(currentPos, our_turn, accumulatorStack, *transformer);
+    int16_t value = network.evaluate(currentPos, accumulatorStack, *transformer);
 
     // Beta cutoff
     if (value >= beta)
@@ -97,7 +97,6 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta, bool our_turn)
     alpha = std::max(alpha, value);
 
     int16_t child_value;
-    Move best_move;
     bool no_captures = true;
     StateInfo state_info;
 
@@ -114,33 +113,19 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta, bool our_turn)
                 continue;
 
             makeCapture(capture, state_info);
-            if (our_turn) // Maximize
-            {
-                child_value = quiesenceSearch(alpha, beta, false);
-                if (child_value > value)
-                {
-                    value = child_value;
-                    best_move = capture;
-                }
-                unmakeCapture(capture);
-                if (value >= beta)
-                    break;
+            child_value = -quiesenceSearch(-beta, -alpha);
+            unmakeCapture(capture);
 
-                alpha = std::max(alpha, value);
-            }
-            else // Minimize
+            if (child_value > value)
             {
-                child_value = quiesenceSearch(alpha, beta, true);
-                if (child_value < value)
+                value = child_value;
+                if (child_value > alpha)
                 {
-                    value = child_value;
-                    best_move = capture;
+                    if (child_value < beta)
+                        alpha = child_value;
+                    else
+                        break; // Fail high
                 }
-                unmakeCapture(capture);
-                if (value <= alpha)
-                    break;
-
-                beta = std::min(beta, value);
             }
         }
     }
@@ -154,72 +139,50 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta, bool our_turn)
         {
             no_captures = false;
             makeCapture(capture, state_info);
-            if (our_turn) // Maximize
-            {
-                child_value = quiesenceSearch(alpha, beta, false);
-                if (child_value > value)
-                {
-                    value = child_value;
-                    best_move = capture;
-                }
-                unmakeCapture(capture);
-                if (value >= beta)
-                    break;
+            child_value = -quiesenceSearch(-beta, -alpha);
+            unmakeCapture(capture);
+            if (value >= beta)
+                break;
 
-                alpha = std::max(alpha, value);
-            }
-            else // Minimize
+            if (child_value > value)
             {
-                child_value = quiesenceSearch(alpha, beta, true);
-                if (child_value < value)
+                value = child_value;
+                if (child_value > alpha)
                 {
-                    value = child_value;
-                    best_move = capture;
+                    if (child_value < beta)
+                        alpha = child_value;
+                    else
+                        break; // Fail high
                 }
-                unmakeCapture(capture);
-                if (value <= alpha)
-                    break;
-
-                beta = std::min(beta, value);
             }
         }
     }
     // If there are no captures we return a game ending eval
     if (no_captures && currentPos.getIsCheck() && currentPos.isMate())
-    {
-        if (our_turn)
-        {
-            // globalTT.save(position.getZobristKey(), 0, 0, Move(0), false);
-            return 0;
-        }
-        else
-        {
-            // globalTT.save(position.getZobristKey(), 30000, 0, Move(0), false);
-            return 30000;
-        }
-    }
+        return -30000;
+
     // Saving a tt value
     // globalTT.save(position.getZobristKey(), value, 0, best_move, false);
     return value;
 }
 
-int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, bool our_turn)
+int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
 // This search is done when depth is more than 0 and considers all moves and stores positions in the transposition table
 {
     assert(alpha <= beta);
     if (currentPos.isDraw())
-        return 2048;
+        return 0;
 
     // At depths <= 0 we enter quiesence search
     if (depth <= 0)
-        return quiesenceSearch(alpha, beta, our_turn);
+        return quiesenceSearch(alpha, beta);
 
     bool no_moves{true};
     bool cutoff{false};
 
     // Baseline eval
     int16_t child_value;
-    int16_t value{our_turn ? static_cast<int16_t>(-31000) : static_cast<int16_t>(31000)};
+    int16_t value{static_cast<int16_t>(-31000)};
     Move best_move;
     StateInfo state_info;
 
@@ -263,34 +226,21 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, bool 
     if (tt_move.getData() != 0)
     {
         no_moves = false;
+        makeMove(tt_move, state_info);
+        child_value = -alphaBetaSearch(depth - 1, -beta, -alpha);
+        unmakeMove(tt_move);
+        if (child_value > value)
+        {
+            value = child_value;
+            if (child_value > alpha)
+            {
+                best_move = tt_move;
 
-        if (our_turn) // Maximize
-        {
-            makeMove(tt_move, state_info);
-            child_value = alphaBetaSearch(depth - 1, alpha, beta, false);
-            unmakeMove(tt_move);
-            if (child_value > value)
-            {
-                value = child_value;
-                best_move = tt_move;
-                if (value >= beta)
-                    cutoff = true;
+                if (child_value < beta)
+                    alpha = child_value;
+                else
+                    cutoff = true; // Fail high
             }
-            alpha = std::max(alpha, value);
-        }
-        else // Minimize
-        {
-            makeMove(tt_move, state_info);
-            child_value = alphaBetaSearch(depth - 1, alpha, beta, true);
-            unmakeMove(tt_move);
-            if (child_value < value)
-            {
-                value = child_value;
-                best_move = tt_move;
-                if (value <= alpha)
-                    cutoff = true;
-            }
-            beta = std::min(beta, value);
         }
     }
 
@@ -305,39 +255,21 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, bool 
             while ((move = move_selector.select_legal()) != Move(0))
             {
                 no_moves = false;
-                if (our_turn) // Maximize
+                makeMove(move, state_info);
+                child_value = -alphaBetaSearch(depth - 1, -beta, -alpha);
+                unmakeMove(move);
+                if (child_value > value)
                 {
-                    makeMove(move, state_info);
-                    child_value = alphaBetaSearch(depth - 1, alpha, beta, false);
-                    unmakeMove(move);
-                    if (child_value > value)
+                    value = child_value;
+                    if (child_value > alpha)
                     {
-                        value = child_value;
                         best_move = move;
-                        if (value >= beta)
-                        {
-                            cutoff = true;
-                            break;
-                        }
+
+                        if (child_value < beta)
+                            alpha = child_value;
+                        else
+                            break; // Fail high
                     }
-                    alpha = std::max(alpha, value);
-                }
-                else // Minimize
-                {
-                    makeMove(move, state_info);
-                    child_value = alphaBetaSearch(depth - 1, alpha, beta, true);
-                    unmakeMove(move);
-                    if (child_value < value)
-                    {
-                        value = child_value;
-                        best_move = move;
-                        if (value <= alpha)
-                        {
-                            cutoff = true;
-                            break;
-                        }
-                    }
-                    beta = std::min(beta, value);
                 }
             }
         }
@@ -350,39 +282,21 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, bool 
             while ((move = move_selector.select_legal()) != Move(0))
             {
                 no_moves = false;
-                if (our_turn) // Maximize
+                makeMove(move, state_info);
+                child_value = -alphaBetaSearch(depth - 1, -beta, -alpha);
+                unmakeMove(move);
+                if (child_value > value)
                 {
-                    makeMove(move, state_info);
-                    child_value = alphaBetaSearch(depth - 1, alpha, beta, false);
-                    unmakeMove(move);
-                    if (child_value > value)
+                    value = child_value;
+                    if (child_value > alpha)
                     {
-                        value = child_value;
                         best_move = move;
-                        if (value >= beta)
-                        {
-                            cutoff = true;
-                            break;
-                        }
+
+                        if (child_value < beta)
+                            alpha = child_value;
+                        else
+                            break; // Fail high
                     }
-                    alpha = std::max(alpha, value);
-                }
-                else // Minimize
-                {
-                    makeMove(move, state_info);
-                    child_value = alphaBetaSearch(depth - 1, alpha, beta, true);
-                    unmakeMove(move);
-                    if (child_value < value)
-                    {
-                        value = child_value;
-                        best_move = move;
-                        if (value <= alpha)
-                        {
-                            cutoff = true;
-                            break;
-                        }
-                    }
-                    beta = std::min(beta, value);
                 }
             }
         }
@@ -393,20 +307,14 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, bool 
         // Stalemate
         if (not currentPos.getIsCheck())
         {
-            tt.save(currentPos.getZobristKey(), 2048, depth, best_move, true);
-            return 2048;
+            tt.save(currentPos.getZobristKey(), 0, depth, best_move, true);
+            return 0;
         }
         // Checkmate against us
-        else if (our_turn)
-        {
-            tt.save(currentPos.getZobristKey(), 0, depth, best_move, true);
-            return -depth;
-        }
-        // Checkmate against opponent
         else
         {
-            tt.save(currentPos.getZobristKey(), 30000, depth, best_move, true);
-            return 30000 + depth;
+            tt.save(currentPos.getZobristKey(), -30000, depth, best_move, true);
+            return -30000 - depth;
         }
     }
     // Saving a tt value
@@ -468,14 +376,15 @@ std::pair<Move, int16_t> Worker::firstMoveSearch(int8_t depth, int16_t alpha, in
         // Do the “reduced” (or normal) alpha-beta search:
         int8_t searchDepth = std::max(0, depth - 1 - reduction);
 
-        int16_t child_value = alphaBetaSearch(searchDepth, alpha, beta, false);
+        int16_t child_value = -alphaBetaSearch(searchDepth, -beta, -alpha);
 
         // If a reduced search "fails high" (beats alpha),
         // we re-search at the full depth to avoid missing a good move.
         if (reduction > 0 && child_value > alpha)
         {
-            child_value = alphaBetaSearch(depth - 1, alpha, beta, false);
+            child_value = -alphaBetaSearch(depth - 1, -beta, -alpha);
         }
+        unmakeMove(currentMove);
 
         // Update the move’s new score
         rootScores[i] = child_value;
@@ -486,8 +395,6 @@ std::pair<Move, int16_t> Worker::firstMoveSearch(int8_t depth, int16_t alpha, in
             value = child_value;
             best_move = currentMove;
         }
-
-        unmakeMove(currentMove);
         alpha = std::max(alpha, value);
 
         moveDepthValues[currentMove].emplace_back(value);

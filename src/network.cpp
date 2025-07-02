@@ -132,7 +132,7 @@ namespace NNUEU
     // The engine is built to get an evaluation of the position with high values being good for the engine.
     // The NNUE is built to give an evaluation of the position with high values being good for whose turn it is.
     // This function gives an evaluation with high values being good for engine.
-    int16_t Network::evaluate(const BitPosition &position, bool ourTurn, NNUEU::AccumulatorStack &accumulatorStack, const Transformer &transformer) const
+    int16_t Network::evaluate(const BitPosition &position, NNUEU::AccumulatorStack &accumulatorStack, const Transformer &transformer) const
     {
         // Update incrementally from the last computed node
         accumulatorStack.forward_update_incremental(accumulatorStack.findLastComputedNode(position.getTurn()), position.getTurn(), transformer);
@@ -151,32 +151,25 @@ namespace NNUEU
         assert(position.getKingPosition(0) == accumulatorStack.getStackKingPosition(0));
         assert(position.getKingPosition(1) == accumulatorStack.getStackKingPosition(1));
 
-        int16_t out;
         AccumulatorState &updatedAcc = accumulatorStack.top();
 
         if (position.getTurn())
         {
 #ifndef NDEBUG
-            out = forwardPassDebug(updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn);
+            return forwardPassDebug(updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn) - 2048;
 #else
-            out = forwardPass(updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn);
+            return forwardPass(updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn) - 2048;
 #endif
         }
 
         else
         {
 #ifndef NDEBUG
-            out = forwardPassDebug(updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn);
+            return forwardPassDebug(updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn) - 2048;
 #else
-            out = forwardPass(updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn);
+            return forwardPass(updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn) - 2048;
 #endif
         }
-
-        // Change evaluation from player to move perspective to our perspective
-        if (ourTurn)
-            return out;
-
-        return 4096 - out;
     }
 
     int16_t Network::forwardPass(int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const

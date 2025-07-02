@@ -18,7 +18,7 @@ namespace NNUEU
         bool load(const std::string &dir);
 
         /**  Thread-safe, read-only evaluation.                                */
-        int16_t evaluate(const BitPosition &position, bool ourTurn, NNUEU::AccumulatorStack &accumulatorStack, const Transformer &transformer) const;
+        int16_t evaluate(const BitPosition &position, NNUEU::AccumulatorStack &accumulatorStack, const Transformer &transformer) const;
 
         int16_t forwardPass(int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const;
 
