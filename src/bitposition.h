@@ -27,9 +27,9 @@ struct StateInfo
 {
     // Copied when making a move or capture
     int8_t castlingRights;   // Bits: 0=WhiteKS, 1=WhiteQS, 2=BlackKS, 3=BlackQS
-    int reversibleMovesMade; // Used for three-fold checks
     // Bellow this. Not copied when making a capture (will be recomputed anyhow)
     uint64_t zobristKey;
+    int reversibleMovesMade; // Used for three-fold checks
 
     // Bellow this. Not copied when making a move (will be recomputed anyhow)
     uint64_t straightPinnedPieces;
@@ -191,6 +191,8 @@ public:
             cr |= BLACK_QS;
         state_info->castlingRights = cr;
 
+        state_info->reversibleMovesMade = 0;
+
         setAllPiecesBits();
         setKingPosition();
         setIsCheckOnInitialization();
@@ -198,6 +200,7 @@ public:
             setCheckInfoOnInitialization();
         setBlockersAndPinsInAB();
         initializeZobristKey();
+
 
         return *this;
     }
