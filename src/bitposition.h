@@ -25,10 +25,10 @@ enum CastlingRights : uint8_t
 
 struct StateInfo
 {
-    // Copied when making a move or capture
+    // Copied when making a move and when making a capture
     // None at the moment
     // Bellow this. Not copied when making a capture (will be recomputed anyhow)
-    uint64_t zobristKey;
+    uint64_t zobristKey;     // Used for three-fold checks & transposition table
     int reversibleMovesMade; // Used for three-fold checks
     int8_t castlingRights;   // Bits: 0=WhiteKS, 1=WhiteQS, 2=BlackKS, 3=BlackQS
 
@@ -37,9 +37,9 @@ struct StateInfo
     uint64_t diagonalPinnedPieces;
     uint64_t pinnedPieces;
     uint64_t blockersForKing;
+    int lastOriginSquare;      // For when calling setCheckInfo()
     int lastDestinationSquare; // For refutation moves after unmaking a Ttmove
-    int capturedPiece;
-    int lastOriginSquare; // For when calling setCheckInfo()
+    int capturedPiece; // For unmaking moves and captures
     bool isCheck;
     uint64_t checkBits[5];
     int pSquare; // Used to update zobrist key
