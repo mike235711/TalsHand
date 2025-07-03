@@ -285,9 +285,6 @@ public:
     template <typename T>
     void unmakeCapture(T move);
 
-    template <typename T>
-    NNUEU::NNUEUChange makeCaptureTest(T move, StateInfo &new_state_info);
-
     bool isDraw() const;
 
     inline int qsScore(int dst) const
