@@ -69,7 +69,6 @@ private:
     // For updating stuff in makeMove, makeCapture and makeTTMove
     int m_moved_piece{7};
     int m_promoted_piece{7};
-    int m_last_destination_square;
 
     // int representing kings' positions
     int m_king_position[2];

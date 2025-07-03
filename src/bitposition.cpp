@@ -1554,9 +1554,9 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 
     state_info->lastOriginSquare = move.getOriginSquare();
     uint64_t origin_bit = (1ULL << state_info->lastOriginSquare);
-    m_last_destination_square = move.getDestinationSquare();
-    state_info->lastDestinationSquare = m_last_destination_square;
-    uint64_t destination_bit = (1ULL << m_last_destination_square);
+    int destination_square = move.getDestinationSquare();
+    state_info->lastDestinationSquare = destination_square;
+    uint64_t destination_bit = 1ULL << destination_square;
     int captured_piece;
     m_promoted_piece = 7; // Representing no promotion (Used for updating check info)
     state_info->reversibleMovesMade++;
@@ -1579,12 +1579,12 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     if (m_turn) // White's move
     {
         m_moved_piece = m_white_board[state_info->lastOriginSquare];
-        captured_piece = m_black_board[m_last_destination_square];
+        captured_piece = m_black_board[destination_square];
         assert(m_moved_piece != 7);
 
         m_white_board[state_info->lastOriginSquare] = 7;
-        m_white_board[m_last_destination_square] = m_moved_piece;
-        m_black_board[m_last_destination_square] = 7;
+        m_white_board[destination_square] = m_moved_piece;
+        m_black_board[destination_square] = 7;
 
         if (m_moved_piece == 5) // Moving king
         {
@@ -1603,9 +1603,9 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 
             // Update king bit and king position
             m_pieces[0][5] = destination_bit;
-            m_king_position[0] = m_last_destination_square;
+            m_king_position[0] = destination_square;
 
-            state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, m_last_destination_square);
+            state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
 
             // Castling
             if (move.getData() == 16772) // White kingside castling
@@ -1657,12 +1657,12 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             state_info->isCheck = state_info->previous->checkBits[0] & destination_bit;
             // Discover checks
             if (not state_info->isCheck)
-                state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, m_last_destination_square);
+                state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
 
             state_info->reversibleMovesMade = 0; // Move is irreversible
 
             // Set NNUEU input
-            nnueuChanges.add(m_last_destination_square, state_info->lastOriginSquare);
+            nnueuChanges.add(destination_square, state_info->lastOriginSquare);
 
             if (destination_bit & EIGHT_ROW_BITBOARD) // Promotions
             {
@@ -1671,16 +1671,16 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 m_promoted_piece = move.getPromotingPiece() + 1;
                 m_pieces[0][m_promoted_piece] |= destination_bit;
 
-                m_white_board[m_last_destination_square] = m_promoted_piece;
+                m_white_board[destination_square] = m_promoted_piece;
                 // Direct check and discover check
                 if (not state_info->isCheck)
-                    state_info->isCheck = state_info->previous->checkBits[m_promoted_piece] & destination_bit || isPromotionCheck(m_promoted_piece, m_last_destination_square);
+                    state_info->isCheck = state_info->previous->checkBits[m_promoted_piece] & destination_bit || isPromotionCheck(m_promoted_piece, destination_square);
                 // Set NNUEU input
-                nnueuChanges.add(64 * m_promoted_piece + m_last_destination_square, state_info->lastOriginSquare);
+                nnueuChanges.add(64 * m_promoted_piece + destination_square, state_info->lastOriginSquare);
 
-                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][m_last_destination_square] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_promoted_piece][m_last_destination_square];
+                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][destination_square] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_promoted_piece][destination_square];
             }
-            else if (m_last_destination_square == state_info->previous->pSquare) // Passant
+            else if (destination_square == state_info->previous->pSquare) // Passant
             {
                 m_pieces[1][0] &= ~shift_down(destination_bit);
                 m_all_pieces_bit &= ~shift_down(destination_bit);
@@ -1690,12 +1690,12 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 
                 if (not(state_info->isCheck))
                     state_info->isCheck = isDiscoverCheckAfterPassant();
-                m_black_board[m_last_destination_square - 8] = 7;
+                m_black_board[destination_square - 8] = 7;
                 // Set NNUEU input
-                nnueuChanges.addlast(64 * 5 + m_last_destination_square - 8);
+                nnueuChanges.addlast(64 * 5 + destination_square - 8);
                 isPassant = true;
 
-                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][0][m_last_destination_square - 8];
+                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][0][destination_square - 8];
             }
         }
         // Moving any piece except king or pawn
@@ -1707,10 +1707,10 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             state_info->isCheck = state_info->previous->checkBits[m_moved_piece] & destination_bit;
             // Discover checks
             if (not state_info->isCheck)
-                state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, m_last_destination_square);
+                state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
 
             // Set NNUEU input
-            nnueuChanges.add(64 * m_moved_piece + m_last_destination_square, 64 * m_moved_piece + state_info->lastOriginSquare);
+            nnueuChanges.add(64 * m_moved_piece + destination_square, 64 * m_moved_piece + state_info->lastOriginSquare);
         }
         // Captures (Non passant)
         if (captured_piece != 7 && not isPassant)
@@ -1719,9 +1719,9 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             m_pieces_bit[1] &= ~destination_bit;
             state_info->reversibleMovesMade = 0; // Move is irreversible
             // Set NNUEU input
-            nnueuChanges.addlast(64 * (5 + captured_piece) + m_last_destination_square);
+            nnueuChanges.addlast(64 * (5 + captured_piece) + destination_square);
             // CLEAR CASTLING RIGHTS if capturing an enemy rook on the corner
-            mask = castlingMask[m_last_destination_square];
+            mask = castlingMask[destination_square];
             if (mask != 0)
             {
                 // Toggle out old rights
@@ -1731,13 +1731,13 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 // Toggle in new rights
                 state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
             }
-            state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][m_last_destination_square];
+            state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][destination_square];
         }
 
         state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->previous->pSquare];
 
         // Updating passant square
-        if (m_moved_piece == 0 && (m_last_destination_square - (state_info->lastOriginSquare)) == 16)
+        if (m_moved_piece == 0 && (destination_square - state_info->lastOriginSquare) == 16)
             state_info->pSquare = (state_info->lastOriginSquare) + 8;
         else
             state_info->pSquare = 0;
@@ -1747,12 +1747,12 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     else // Black's move
     {
         m_moved_piece = m_black_board[state_info->lastOriginSquare];
-        captured_piece = m_white_board[m_last_destination_square];
+        captured_piece = m_white_board[destination_square];
         assert(m_moved_piece != 7); 
 
         m_black_board[state_info->lastOriginSquare] = 7;
-        m_black_board[m_last_destination_square] = m_moved_piece;
-        m_white_board[m_last_destination_square] = 7;
+        m_black_board[destination_square] = m_moved_piece;
+        m_white_board[destination_square] = 7;
 
         if (m_moved_piece == 5) // Moving king
         {
@@ -1769,10 +1769,10 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 
             // Now update the black king's bitboard and position
             m_pieces[1][5] = destination_bit;
-            m_king_position[1] = m_last_destination_square;
+            m_king_position[1] = destination_square;
 
             // Check if this exposes or creates check
-            state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, m_last_destination_square);
+            state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
 
             // Castling
             if (move.getData() == 20412) // Black kingside castling
@@ -1824,12 +1824,12 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             state_info->isCheck = state_info->previous->checkBits[0] & destination_bit;
             // Discover checks
             if (not state_info->isCheck)
-                state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, m_last_destination_square);
+                state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
 
             state_info->reversibleMovesMade = 0; // Move is irreversible
 
             // Set NNUEU input
-            nnueuChanges.add(64 * 5 + m_last_destination_square, 64 * 5 + state_info->lastOriginSquare);
+            nnueuChanges.add(64 * 5 + destination_square, 64 * 5 + state_info->lastOriginSquare);
 
             if (destination_bit & FIRST_ROW_BITBOARD) // Promotions
             {
@@ -1838,16 +1838,16 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 m_promoted_piece = move.getPromotingPiece() + 1;
                 m_pieces[1][m_promoted_piece] |= destination_bit;
 
-                m_black_board[m_last_destination_square] = m_promoted_piece;
+                m_black_board[destination_square] = m_promoted_piece;
                 // Direct check and discover checks
                 if (not state_info->isCheck)
-                    state_info->isCheck = state_info->previous->checkBits[m_promoted_piece] & destination_bit || isPromotionCheck(m_promoted_piece, m_last_destination_square);
+                    state_info->isCheck = state_info->previous->checkBits[m_promoted_piece] & destination_bit || isPromotionCheck(m_promoted_piece, destination_square);
                 // Set NNUEU input
-                nnueuChanges.add(64 * (m_promoted_piece + 5) + m_last_destination_square, 64 * 5 + state_info->lastOriginSquare);
+                nnueuChanges.add(64 * (m_promoted_piece + 5) + destination_square, 64 * 5 + state_info->lastOriginSquare);
 
-                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][m_last_destination_square] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_promoted_piece][m_last_destination_square];
+                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][destination_square] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_promoted_piece][destination_square];
             }
-            else if (m_last_destination_square == state_info->previous->pSquare) // Passant
+            else if (destination_square == state_info->previous->pSquare) // Passant
             {
                 // Remove captured piece
                 m_all_pieces_bit &= ~shift_up(destination_bit);
@@ -1856,12 +1856,12 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 captured_piece = 0;
                 if (not state_info->isCheck)
                     state_info->isCheck = isDiscoverCheckAfterPassant();
-                m_white_board[m_last_destination_square + 8] = 7;
+                m_white_board[destination_square + 8] = 7;
                 // Set NNUEU input
-                nnueuChanges.addlast(m_last_destination_square + 8);
+                nnueuChanges.addlast(destination_square + 8);
                 isPassant = true;
 
-                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][0][m_last_destination_square + 8];
+                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][0][destination_square + 8];
             }
         }
         // Moving any piece except king or pawn
@@ -1873,10 +1873,10 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             state_info->isCheck = state_info->previous->checkBits[m_moved_piece] & destination_bit;
             // Discover checks
             if (not state_info->isCheck)
-                state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, m_last_destination_square);
+                state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
 
             // Set NNUEU input
-            nnueuChanges.add(64 * (5 + m_moved_piece) + m_last_destination_square, 64 * (5 + m_moved_piece) + state_info->lastOriginSquare);
+            nnueuChanges.add(64 * (5 + m_moved_piece) + destination_square, 64 * (5 + m_moved_piece) + state_info->lastOriginSquare);
         }
         // Captures (Non passant)
         if (captured_piece != 7 && not isPassant)
@@ -1885,9 +1885,9 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             m_pieces[0][captured_piece] &= ~destination_bit;
             m_pieces_bit[0] &= ~destination_bit;
             // Set NNUEU input
-            nnueuChanges.addlast(64 * captured_piece + m_last_destination_square);
+            nnueuChanges.addlast(64 * captured_piece + destination_square);
             // CLEAR CASTLING RIGHTS if capturing an enemy rook on the corner
-            mask = castlingMask[m_last_destination_square];
+            mask = castlingMask[destination_square];
             if (mask != 0)
             {
                 // Toggle out old rights
@@ -1897,13 +1897,13 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 // Toggle in new rights
                 state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
             }
-            state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][m_last_destination_square];
+            state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][destination_square];
         }
 
         state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->previous->pSquare];
 
         // Updating passant square
-        if (m_moved_piece == 0 && ((state_info->lastOriginSquare) - m_last_destination_square) == 16)
+        if (m_moved_piece == 0 && ((state_info->lastOriginSquare) - destination_square) == 16)
             state_info->pSquare = (state_info->lastOriginSquare) - 8;
         else
             state_info->pSquare = 0;
@@ -1912,7 +1912,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     }
     state_info->capturedPiece = captured_piece;
 
-    state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][state_info->lastOriginSquare] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][m_last_destination_square];
+    state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][state_info->lastOriginSquare] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][destination_square];
     state_info->zobristKey ^= zobrist_keys::blackToMoveZobristNumber;
     m_turn = not m_turn;
 
@@ -2208,9 +2208,9 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 
     state_info->lastOriginSquare = move.getOriginSquare();
     uint64_t origin_bit = 1ULL << state_info->lastOriginSquare;
-    m_last_destination_square = move.getDestinationSquare();
-    state_info->lastDestinationSquare = m_last_destination_square;
-    uint64_t destination_bit = 1ULL << m_last_destination_square;
+    int destination_square = move.getDestinationSquare();
+    state_info->lastDestinationSquare = destination_square;
+    uint64_t destination_bit = 1ULL << destination_square;
     int captured_piece;
 
     m_all_pieces_bit &= ~origin_bit;
@@ -2231,7 +2231,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 
         // Clear bits if capturing a rook ON the destination square
         {
-            uint8_t mask = castlingMask[m_last_destination_square];
+            uint8_t mask = castlingMask[destination_square];
             if (captured_piece != 7 && mask)
                 state_info->castlingRights &= ~mask;
         }
@@ -2244,7 +2244,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
         }
 #endif
         m_moved_piece = m_white_board[state_info->lastOriginSquare];
-        captured_piece = m_black_board[m_last_destination_square];
+        captured_piece = m_black_board[destination_square];
         assert(m_moved_piece != 7); // Moved piece must be a piece (not empty square or own piece)
 
         // Promotions
@@ -2254,18 +2254,18 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             m_pieces[0][4] |= destination_bit;
 
             // Set NNUE input
-            nnueuChanges.add(64 * 4 + m_last_destination_square, state_info->lastOriginSquare);
+            nnueuChanges.add(64 * 4 + destination_square, state_info->lastOriginSquare);
 
             // Captures (Non passant)
             if (captured_piece != 7)
             {
                 m_pieces[1][captured_piece] &= ~destination_bit;
                 // Set NNUE input
-                nnueuChanges.addlast(64 * (5 + captured_piece) + m_last_destination_square);
-                m_black_board[m_last_destination_square] = 7;
+                nnueuChanges.addlast(64 * (5 + captured_piece) + destination_square);
+                m_black_board[destination_square] = 7;
 #ifndef DEBUG
                 // CLEAR CASTLING RIGHTS if capturing an enemy rook on the corner
-                uint8_t mask = castlingMask[m_last_destination_square];
+                uint8_t mask = castlingMask[destination_square];
                 if (mask != 0)
                 {
                     // Toggle out old rights
@@ -2275,14 +2275,14 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
                     // Toggle in new rights
                     state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
                 }
-                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][m_last_destination_square];
+                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][destination_square];
 #endif
             }
             m_white_board[state_info->lastOriginSquare] = 7;
-            m_white_board[m_last_destination_square] = 4;
+            m_white_board[destination_square] = 4;
 
             // Direct or discover checks
-            state_info->isCheck = isQueenCheck(m_last_destination_square) or isDiscoverCheck(state_info->lastOriginSquare, m_last_destination_square);
+            state_info->isCheck = isQueenCheck(destination_square) or isDiscoverCheck(state_info->lastOriginSquare, destination_square);
         }
         else // Normal captures
         {
@@ -2291,10 +2291,10 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             {
                 // Update king bit and king position
                 m_pieces[0][5] = destination_bit;
-                m_king_position[0] = m_last_destination_square;
+                m_king_position[0] = destination_square;
 
                 // Discover checks
-                state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, m_last_destination_square);
+                state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
             }
             // Moving any piece except king
             else
@@ -2304,22 +2304,22 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
                 // Checks
                 state_info->isCheck = state_info->previous->checkBits[m_moved_piece] & destination_bit;
                 if (not state_info->isCheck)
-                    state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, m_last_destination_square);
+                    state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
 
                 // Set NNUE input
-                nnueuChanges.add(64 * m_moved_piece + m_last_destination_square, 64 * m_moved_piece + state_info->lastOriginSquare);
+                nnueuChanges.add(64 * m_moved_piece + destination_square, 64 * m_moved_piece + state_info->lastOriginSquare);
             }
             // Captures (Non passant)
             m_pieces[1][captured_piece] &= ~destination_bit;
             // Set NNUE input
-            nnueuChanges.addlast(64 * (5 + captured_piece) + m_last_destination_square);
+            nnueuChanges.addlast(64 * (5 + captured_piece) + destination_square);
 
             m_white_board[state_info->lastOriginSquare] = 7;
-            m_white_board[m_last_destination_square] = m_moved_piece;
-            m_black_board[m_last_destination_square] = 7;
+            m_white_board[destination_square] = m_moved_piece;
+            m_black_board[destination_square] = 7;
 #ifndef DEBUG
             // CLEAR CASTLING RIGHTS if capturing an enemy rook on the corner
-            uint8_t mask = castlingMask[m_last_destination_square];
+            uint8_t mask = castlingMask[destination_square];
             if (mask != 0)
             {
                 // Toggle out old rights
@@ -2329,14 +2329,14 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
                 // Toggle in new rights
                 state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
             }
-            state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][m_last_destination_square];
+            state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][destination_square];
 #endif
         }
 #ifndef DEBUG
         state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->previous->pSquare];
 
         // Updating passant square
-        if (m_moved_piece == 0 && (m_last_destination_square - (state_info->lastOriginSquare)) == 16)
+        if (m_moved_piece == 0 && (destination_square - (state_info->lastOriginSquare)) == 16)
             state_info->pSquare = (state_info->lastOriginSquare) + 8;
         else
             state_info->pSquare = 0;
@@ -2356,7 +2356,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 
         // Clear bits if capturing a rook ON the destination square
         {
-            uint8_t mask = castlingMask[m_last_destination_square];
+            uint8_t mask = castlingMask[destination_square];
             if (captured_piece != 7 && mask)
                 state_info->castlingRights &= ~mask;
         }
@@ -2369,7 +2369,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
         }
 #endif
         m_moved_piece = m_black_board[state_info->lastOriginSquare];
-        captured_piece = m_white_board[m_last_destination_square];
+        captured_piece = m_white_board[destination_square];
         assert(m_moved_piece != 7); // Moved piece must be a piece (not empty square or own piece)
 
         // Promotions
@@ -2379,18 +2379,18 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             m_pieces[1][4] |= destination_bit;
 
             // Set NNUE input
-            nnueuChanges.add(64 * 9 + m_last_destination_square, 64 * 5 + state_info->lastOriginSquare);
+            nnueuChanges.add(64 * 9 + destination_square, 64 * 5 + state_info->lastOriginSquare);
 
             // Captures (Non passant)
             if (captured_piece != 7)
             {
                 m_pieces[0][captured_piece] &= ~destination_bit;
                 // Set NNUE input
-                nnueuChanges.addlast(64 * captured_piece + m_last_destination_square);
-                m_white_board[m_last_destination_square] = 7;
+                nnueuChanges.addlast(64 * captured_piece + destination_square);
+                m_white_board[destination_square] = 7;
 #ifndef DEBUG
                 // CLEAR CASTLING RIGHTS if capturing an enemy rook on the corner
-                uint8_t mask = castlingMask[m_last_destination_square];
+                uint8_t mask = castlingMask[destination_square];
                 if (mask != 0)
                 {
                     // Toggle out old rights
@@ -2400,14 +2400,14 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
                     // Toggle in new rights
                     state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
                 }
-                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][m_last_destination_square];
+                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][destination_square];
 #endif
             }
             m_black_board[state_info->lastOriginSquare] = 7;
-            m_black_board[m_last_destination_square] = 4;
+            m_black_board[destination_square] = 4;
 
             // Direct or discover checks
-            state_info->isCheck = isQueenCheck(m_last_destination_square) or isDiscoverCheck(state_info->lastOriginSquare, m_last_destination_square);
+            state_info->isCheck = isQueenCheck(destination_square) or isDiscoverCheck(state_info->lastOriginSquare, destination_square);
         }
         // Non promotions
         else
@@ -2417,10 +2417,10 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             {
                 // Update king bit and king position
                 m_pieces[1][5] = destination_bit;
-                m_king_position[1] = m_last_destination_square;
+                m_king_position[1] = destination_square;
 
                 // Discover checks
-                state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, m_last_destination_square);
+                state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
             }
             // Moving any piece except king
             else
@@ -2430,13 +2430,13 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
                 // Checks
                 state_info->isCheck = state_info->previous->checkBits[m_moved_piece] & destination_bit;
                 if (not state_info->isCheck)
-                    state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, m_last_destination_square);
+                    state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
 
                 // Set NNUE input
-                nnueuChanges.add(64 * (5 + m_moved_piece) + m_last_destination_square, 64 * (5 + m_moved_piece) + state_info->lastOriginSquare);
+                nnueuChanges.add(64 * (5 + m_moved_piece) + destination_square, 64 * (5 + m_moved_piece) + state_info->lastOriginSquare);
 #ifndef DEBUG
                 // CLEAR CASTLING RIGHTS if capturing an enemy rook on the corner
-                uint8_t mask = castlingMask[m_last_destination_square];
+                uint8_t mask = castlingMask[destination_square];
                 if (mask != 0)
                 {
                     // Toggle out old rights
@@ -2446,23 +2446,23 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
                     // Toggle in new rights
                     state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
                 }
-                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][m_last_destination_square];
+                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][destination_square];
 #endif
             }
             // Captures (Non passant)
             m_pieces[0][captured_piece] &= ~destination_bit;
             // Set NNUE input
-            nnueuChanges.addlast(64 * captured_piece + m_last_destination_square);
+            nnueuChanges.addlast(64 * captured_piece + destination_square);
 
             m_black_board[state_info->lastOriginSquare] = 7;
-            m_black_board[m_last_destination_square] = m_moved_piece;
-            m_white_board[m_last_destination_square] = 7;
+            m_black_board[destination_square] = m_moved_piece;
+            m_white_board[destination_square] = 7;
         }
 #ifndef DEBUG
         state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->previous->pSquare];
 
         // Updating passant square
-        if (m_moved_piece == 0 && ((state_info->lastOriginSquare) - m_last_destination_square) == 16)
+        if (m_moved_piece == 0 && ((state_info->lastOriginSquare) - destination_square) == 16)
             state_info->pSquare = (state_info->lastOriginSquare) - 8;
         else
             state_info->pSquare = 0;
@@ -2476,7 +2476,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 
 #ifndef DEBUG
     BitPosition::setAllPiecesBits();
-    state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][state_info->lastOriginSquare] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][m_last_destination_square];
+    state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][state_info->lastOriginSquare] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][destination_square];
     state_info->zobristKey ^= zobrist_keys::blackToMoveZobristNumber;
     // assert(computeFullZobristKey() == state_info->zobristKey);
 #endif
