@@ -94,7 +94,6 @@ private:
         m_pieces_bit[0] = m_pieces_bit[1] = m_all_pieces_bit = 0ULL;
         m_turn = false;
         m_moved_piece = m_promoted_piece = 7;
-        m_last_destination_square = m_check_square = 65;
         m_check_rays = m_num_checks = 0;
         m_king_position[0] = m_king_position[1] = 64;
         m_blockers_set = false;
