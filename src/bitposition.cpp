@@ -1526,7 +1526,7 @@ bool BitPosition::isDraw() const
                "StateInfo chain broken during three-fold scan");
 
         stp = stp->previous->previous;
-        
+
         if (stp->zobristKey == state_info->zobristKey)
             if (++repetitions == 2)
                 return true;
@@ -2200,9 +2200,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     assert(move.getData() != 0);
     assert(not getIsCheckOnInitialization(not m_turn));
     NNUEU::NNUEUChange nnueuChanges;
-    // Save irreversible aspects of position and create a new state
-    // Irreversible aspects include: castlingRights, fiftyMoveCount and zobristKey
-    std::memcpy(&new_state_info, state_info, offsetof(StateInfo, zobristKey));
+
     new_state_info.previous = state_info;
     state_info->next = &new_state_info;
     state_info = &new_state_info;

@@ -26,10 +26,11 @@ enum CastlingRights : uint8_t
 struct StateInfo
 {
     // Copied when making a move or capture
-    int8_t castlingRights;   // Bits: 0=WhiteKS, 1=WhiteQS, 2=BlackKS, 3=BlackQS
+    // None at the moment
     // Bellow this. Not copied when making a capture (will be recomputed anyhow)
     uint64_t zobristKey;
     int reversibleMovesMade; // Used for three-fold checks
+    int8_t castlingRights;   // Bits: 0=WhiteKS, 1=WhiteQS, 2=BlackKS, 3=BlackQS
 
     // Bellow this. Not copied when making a move (will be recomputed anyhow)
     uint64_t straightPinnedPieces;
