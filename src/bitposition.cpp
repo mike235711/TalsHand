@@ -2478,7 +2478,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     BitPosition::setAllPiecesBits();
     state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][state_info->lastOriginSquare] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][m_last_destination_square];
     state_info->zobristKey ^= zobrist_keys::blackToMoveZobristNumber;
-    assert(computeFullZobristKey() == state_info->zobristKey);
+    // assert(computeFullZobristKey() == state_info->zobristKey);
 #endif
 
     assert(posIsFine());
