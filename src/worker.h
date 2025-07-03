@@ -58,7 +58,7 @@ private:
         accumulatorStack.pop();
     }
     // Calls first move search iteratively
-    std::pair<Move, int16_t> iterativeSearch(int8_t start_depth = 1,
+    std::pair<Move, int16_t> iterativeSearch(int8_t start_depth = 2,
                                              int8_t fixed_max_depth = 99);
 
     // Calls alphaBetaSearch after each root move
