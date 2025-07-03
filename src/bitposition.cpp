@@ -1515,22 +1515,22 @@ bool BitPosition::isDraw() const
 
     // We start from 4 plies back since making two moves cant repeat the position (at least 4 are needed)
     // This is safe since we know that the position is at least 8 moves old
-    const StateInfo *stp = state_info->previous->previous->previous->previous;
+    const StateInfo *stp = state_info->previous->previous;
     int pliesBack = 4;
 
-    // Now perform the usual repetition scan 
     int repetitions = 0;
     while (stp && pliesBack <= state_info->reversibleMovesMade)
     {
-        if (stp->zobristKey == state_info->zobristKey)
-            if (++repetitions == 2)
-                return true;
-
         /* We’re about to jump back two more plies – make sure they exist   */
         assert(stp->previous && stp->previous->previous &&
                "StateInfo chain broken during three-fold scan");
 
         stp = stp->previous->previous;
+        
+        if (stp->zobristKey == state_info->zobristKey)
+            if (++repetitions == 2)
+                return true;
+
         pliesBack += 2;
     }
 
