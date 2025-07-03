@@ -192,7 +192,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
     // Check if we have stored this position in ttable
     TTEntry *ttEntry = tt.probe(currentPos.getZobristKey());
     Move tt_move{0};
-    bool is_pv_node{false};
+
     // If position is stored in ttable
     if (ttEntry != nullptr)
     {
@@ -202,7 +202,6 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
             if (ttEntry->getDepth() >= depth)
                 return ttEntry->getValue();
 
-            is_pv_node = true;
             tt_move = ttEntry->getMove();
             assert(tt_move.getData() == 0 || currentPos.ttMoveIsOk(tt_move));
         }
