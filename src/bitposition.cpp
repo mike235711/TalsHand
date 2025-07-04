@@ -2758,7 +2758,7 @@ Move *BitPosition::inCheckPawnCapturesNonQueenProms(Move *&move_list) const
             {
                 continue;
             }
-            else // Promotions
+            else // Promotions (non queen)
             {
                 *move_list++ = Move(origin, m_check_square, 0);
                 *move_list++ = Move(origin, m_check_square, 1);
@@ -2777,7 +2777,7 @@ Move *BitPosition::inCheckPawnCapturesNonQueenProms(Move *&move_list) const
             {
                 continue;
             }
-            else // Promotions
+            else // Promotions (non queen)
             {
                 *move_list++ = Move(origin, m_check_square, 0);
                 *move_list++ = Move(origin, m_check_square, 1);
@@ -2923,140 +2923,72 @@ Move *BitPosition::pawnNonCapturesNonQueenProms(Move *&move_list) const
 }
 Move *BitPosition::knightNonCaptures(Move *&move_list) const
 {
-    if (m_turn)
+    uint64_t piece_bits = m_pieces[not m_turn][1] & ~(state_info->pinnedPieces);
+    while (piece_bits)
     {
-        uint64_t piece_bits = m_pieces[0][1] & ~((state_info->pinnedPieces));
-        while (piece_bits)
+        int origin = popLeastSignificantBit(piece_bits);
+        uint64_t destinations = precomputed_moves::knight_moves[origin] & ~m_all_pieces_bit;
+        while (destinations)
         {
-            int origin = popLeastSignificantBit(piece_bits);
-            uint64_t destinations = precomputed_moves::knight_moves[origin] & ~m_all_pieces_bit;
-            while (destinations)
-            {
-                int destination = popLeastSignificantBit(destinations);
-                *move_list++ = Move(origin, destination);
-            }
-        }
-    }
-    else
-    {
-        uint64_t piece_bits = m_pieces[1][1] & ~((state_info->pinnedPieces));
-        while (piece_bits)
-        {
-            int origin = popLeastSignificantBit(piece_bits);
-            uint64_t destinations = precomputed_moves::knight_moves[origin] & ~m_all_pieces_bit;
-            while (destinations)
-            {
-                int destination = popLeastSignificantBit(destinations);
-                *move_list++ = Move(origin, destination);
-            }
+            int destination = popLeastSignificantBit(destinations);
+            *move_list++ = Move(origin, destination);
         }
     }
     return move_list;
 }
 Move *BitPosition::bishopNonCaptures(Move *&move_list) const
 {
-    if (m_turn)
+    uint64_t piece_bits = m_pieces[not m_turn][2] & ~state_info->straightPinnedPieces;
+    while (piece_bits)
     {
-        uint64_t piece_bits = m_pieces[0][2] & ~(state_info->straightPinnedPieces);
-        while (piece_bits)
+        int origin = popLeastSignificantBit(piece_bits);
+        uint64_t destinations = BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & m_all_pieces_bit) & ~m_all_pieces_bit;
+        while (destinations)
         {
-            int origin = popLeastSignificantBit(piece_bits);
-            uint64_t destinations = BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & m_all_pieces_bit) & ~m_all_pieces_bit;
-            while (destinations)
-            {
-                int destination = popLeastSignificantBit(destinations);
-                *move_list++ = Move(origin, destination);
-            }
-        }
-    }
-    else
-    {
-        uint64_t piece_bits = m_pieces[1][2] & ~(state_info->straightPinnedPieces);
-        while (piece_bits)
-        {
-            int origin = popLeastSignificantBit(piece_bits);
-            uint64_t destinations = BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & m_all_pieces_bit) & ~m_all_pieces_bit;
-            while (destinations)
-            {
-                int destination = popLeastSignificantBit(destinations);
-                *move_list++ = Move(origin, destination);
-            }
+            int destination = popLeastSignificantBit(destinations);
+            *move_list++ = Move(origin, destination);
         }
     }
     return move_list;
 }
 Move *BitPosition::rookNonCaptures(Move *&move_list) const
 {
-    if (m_turn)
+    uint64_t piece_bits = m_pieces[not m_turn][3] & ~state_info->diagonalPinnedPieces;
+    while (piece_bits)
     {
-        uint64_t piece_bits = m_pieces[0][3] & ~state_info->diagonalPinnedPieces;
-        while (piece_bits)
+        int origin = popLeastSignificantBit(piece_bits);
+        uint64_t destinations = RmagicNOMASK(origin, precomputed_moves::rook_unfull_rays[origin] & m_all_pieces_bit) & ~m_all_pieces_bit;
+        while (destinations)
         {
-            int origin = popLeastSignificantBit(piece_bits);
-            uint64_t destinations = RmagicNOMASK(origin, precomputed_moves::rook_unfull_rays[origin] & m_all_pieces_bit) & ~m_all_pieces_bit;
-            while (destinations)
-            {
-                int destination = popLeastSignificantBit(destinations);
-                *move_list++ = Move(origin, destination);
-            }
-        }
-    }
-    else
-    {
-        uint64_t piece_bits = m_pieces[1][3] & ~state_info->diagonalPinnedPieces;
-        while (piece_bits)
-        {
-            int origin = popLeastSignificantBit(piece_bits);
-            uint64_t destinations = RmagicNOMASK(origin, precomputed_moves::rook_unfull_rays[origin] & m_all_pieces_bit) & ~m_all_pieces_bit;
-            while (destinations)
-            {
-                int destination = popLeastSignificantBit(destinations);
-                *move_list++ = Move(origin, destination);
-            }
+            int destination = popLeastSignificantBit(destinations);
+            *move_list++ = Move(origin, destination);
         }
     }
     return move_list;
 }
 Move *BitPosition::queenNonCaptures(Move *&move_list) const
 {
-    if (m_turn)
+    uint64_t piece_bits = m_pieces[not m_turn][4];
+    while (piece_bits)
     {
-        uint64_t piece_bits = m_pieces[0][4];
-        while (piece_bits)
+        int origin = popLeastSignificantBit(piece_bits);
+        uint64_t destinations = (BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & m_all_pieces_bit) | RmagicNOMASK(origin, precomputed_moves::rook_unfull_rays[origin] & m_all_pieces_bit)) & ~m_all_pieces_bit;
+        while (destinations)
         {
-            int origin = popLeastSignificantBit(piece_bits);
-            uint64_t destinations = (BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & m_all_pieces_bit) | RmagicNOMASK(origin, precomputed_moves::rook_unfull_rays[origin] & m_all_pieces_bit)) & ~m_all_pieces_bit;
-            while (destinations)
-            {
-                int destination = popLeastSignificantBit(destinations);
-                *move_list++ = Move(origin, destination);
-            }
-        }
-    }
-    else
-    {
-        uint64_t piece_bits = m_pieces[1][4];
-        while (piece_bits)
-        {
-            int origin = popLeastSignificantBit(piece_bits);
-            uint64_t destinations = (BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & m_all_pieces_bit) | RmagicNOMASK(origin, precomputed_moves::rook_unfull_rays[origin] & m_all_pieces_bit)) & ~m_all_pieces_bit;
-            while (destinations)
-            {
-                int destination = popLeastSignificantBit(destinations);
-                *move_list++ = Move(origin, destination);
-            }
+            int destination = popLeastSignificantBit(destinations);
+            *move_list++ = Move(origin, destination);
         }
     }
     return move_list;
 }
 Move *BitPosition::kingNonCaptures(Move *&move_list) const
 {
+    for (int destination : getBitIndices(precomputed_moves::king_moves[m_king_position[not m_turn]] & ~m_all_pieces_bit))
+    {
+        *move_list++ = Move(m_king_position[not m_turn], destination);
+    }
     if (m_turn)
     {
-        for (int destination : getBitIndices(precomputed_moves::king_moves[m_king_position[0]] & ~m_all_pieces_bit))
-        {
-            *move_list++ = Move(m_king_position[0], destination);
-        }
         // Kingside castling
         if ((state_info->castlingRights & WHITE_KS) && (m_king_position[0] == 4) && (m_all_pieces_bit & 96) == 0)
             *move_list++ = castling_moves[0][0];
@@ -3066,10 +2998,6 @@ Move *BitPosition::kingNonCaptures(Move *&move_list) const
     }
     else
     {
-        for (int destination : getBitIndices(precomputed_moves::king_moves[m_king_position[1]] & ~m_all_pieces_bit))
-        {
-            *move_list++ = Move(m_king_position[1], destination);
-        }
         // Kingside castling
         if ((state_info->castlingRights & BLACK_KS) && (m_king_position[1] == 60) && (m_all_pieces_bit & 6917529027641081856) == 0)
             *move_list++ = castling_moves[1][0];
