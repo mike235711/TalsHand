@@ -2188,7 +2188,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 
     if (m_turn) // White's move
     {
-#ifndef DEBUG
+#ifndef NDEBUG
         // Clear bits if a rook or king moved FROM this square
         {
             uint8_t mask = castlingMask[state_info->lastOriginSquare];
@@ -2230,7 +2230,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
                 // Set NNUE input
                 nnueuChanges.addlast(64 * (5 + captured_piece) + destination_square);
                 m_black_board[destination_square] = 7;
-#ifndef DEBUG
+#ifndef NDEBUG
                 // CLEAR CASTLING RIGHTS if capturing an enemy rook on the corner
                 uint8_t mask = castlingMask[destination_square];
                 if (mask != 0)
@@ -2284,7 +2284,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             m_white_board[state_info->lastOriginSquare] = 7;
             m_white_board[destination_square] = m_moved_piece;
             m_black_board[destination_square] = 7;
-#ifndef DEBUG
+#ifndef NDEBUG
             // CLEAR CASTLING RIGHTS if capturing an enemy rook on the corner
             uint8_t mask = castlingMask[destination_square];
             if (mask != 0)
@@ -2299,7 +2299,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][destination_square];
 #endif
         }
-#ifndef DEBUG
+#ifndef NDEBUG
         state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->previous->pSquare];
 
         // Updating passant square
@@ -2313,7 +2313,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     }
     else // Black's move
     {
-#ifndef DEBUG
+#ifndef NDEBUG
         // Clear bits if a rook or king moved FROM this square
         {
             uint8_t mask = castlingMask[state_info->lastOriginSquare];
@@ -2355,7 +2355,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
                 // Set NNUE input
                 nnueuChanges.addlast(64 * captured_piece + destination_square);
                 m_white_board[destination_square] = 7;
-#ifndef DEBUG
+#ifndef NDEBUG
                 // CLEAR CASTLING RIGHTS if capturing an enemy rook on the corner
                 uint8_t mask = castlingMask[destination_square];
                 if (mask != 0)
@@ -2401,7 +2401,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 
                 // Set NNUE input
                 nnueuChanges.add(64 * (5 + m_moved_piece) + destination_square, 64 * (5 + m_moved_piece) + state_info->lastOriginSquare);
-#ifndef DEBUG
+#ifndef NDEBUG
                 // CLEAR CASTLING RIGHTS if capturing an enemy rook on the corner
                 uint8_t mask = castlingMask[destination_square];
                 if (mask != 0)
@@ -2425,7 +2425,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             m_black_board[destination_square] = m_moved_piece;
             m_white_board[destination_square] = 7;
         }
-#ifndef DEBUG
+#ifndef NDEBUG
         state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->previous->pSquare];
 
         // Updating passant square
@@ -2441,7 +2441,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     state_info->capturedPiece = captured_piece;
     m_ply++;
 
-#ifndef DEBUG
+#ifndef NDEBUG
     BitPosition::setAllPiecesBits();
     state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][state_info->lastOriginSquare] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][destination_square];
     state_info->zobristKey ^= zobrist_keys::blackToMoveZobristNumber;
