@@ -28,7 +28,7 @@ public:
     Thread();
     virtual ~Thread();
 
-    void startSearching();
+    std::pair<Move, int16_t> startSearching(int8_t max_depth);
     void run_custom_job(std::function<void()> f);
 
     void waitToFinishSearch();
@@ -72,7 +72,7 @@ public:
 
     bool stop;
 
-    void startThinking(BitPosition &pos, std::unique_ptr<std::deque<StateInfo>> &stateInfos, int timeLimit, bool pondering);
+    std::pair<Move, int16_t> startThinking(BitPosition &pos, std::unique_ptr<std::deque<StateInfo>> &stateInfos, int timeLimit, bool pondering, int8_t max_depth);
     void waitToFinishSearch();
     void clear();
     void set(int numThreads, TranspositionTable &tt, NNUEU::Network &network, const NNUEU::Transformer &transformer);

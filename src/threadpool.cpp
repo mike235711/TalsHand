@@ -31,11 +31,12 @@ void Thread::run_custom_job(std::function<void()> f)
         f(); // for now we run it synchronously
 }
 
-void Thread::startSearching()
+std::pair<Move, int16_t> Thread::startSearching(int8_t max_depth)
 {
     assert(worker);
-    run_custom_job([this]
-                   { worker->startSearching(); });
+    // run_custom_job([this]
+    //                { worker->startSearching(max_depth); });
+    return worker->startSearching(max_depth);
 }
 
 // Blocks on the condition variable until the thread has finished searching
@@ -88,10 +89,11 @@ inline void clonePositionPerThread(const BitPosition &src,
     dstRoot.next = nullptr;
 }
 
-void ThreadPool::startThinking(BitPosition &pos,
-                               std::unique_ptr<std::deque<StateInfo>> &stateInfos,
-                               int timeLimit,
-                               bool pondering)
+std::pair<Move, int16_t> ThreadPool::startThinking(BitPosition &pos,
+                                                   std::unique_ptr<std::deque<StateInfo>> &stateInfos,
+                                                   int timeLimit,
+                                                   bool pondering,
+                                                   int8_t max_depth = 99)
 {
     main_thread()->waitToFinishSearch();
     main_thread()->worker->ponder = pondering;
@@ -116,5 +118,5 @@ void ThreadPool::startThinking(BitPosition &pos,
     for (auto &thPtr : threads)
         thPtr->waitToFinishSearch();
 
-    main_thread()->startSearching();
+    return main_thread()->startSearching(max_depth);
 }

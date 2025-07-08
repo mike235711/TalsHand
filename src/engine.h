@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <deque>
+#include <filesystem>
 
 #include "bitposition.h"
 #include "threadpool.h"
@@ -53,6 +54,11 @@ public:
     // network related
     void loadNNUEU();
 
+    int perftTest(int depth, bool quiescent);
+
+    // Performance testing utilities
+    std::string searchFixedDepth(int8_t depth);
+
 private:
     BitPosition pos;
     // If a std::vector were used, adding new elements beyond its current capacity could 
@@ -71,12 +77,14 @@ private:
     NNUEU::Network network;
     // Used to transform the accumulator, it is heavy so we use a pointer
     std::unique_ptr<NNUEU::Transformer> transformer;
+    
 
     // Stuff to read from the configuration at initialization
     int numThreads; // Number of threads to use, for the moment we use 1 to keep it simple
     size_t ttSize; // Transposition table size
     bool ponder; // If the engine will think in opponent's time or not, for the moment we dont ponder to keep it simple
     std::string NNUEUFile; // Location of where the NNUEU weights are stored to be loaded
+    std::filesystem::path execDir; // Executable directory
 };
 
 #endif // #ifndef ENGINE_H

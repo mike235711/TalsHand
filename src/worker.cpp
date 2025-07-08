@@ -31,23 +31,6 @@ Worker::Worker(TranspositionTable &ttable,
     // rootPos / rootState are filled just before the search starts
 }
 
-//  startSearching – wrapper around iterative deepening
-std::pair<Move, int16_t> Worker::startSearching()
-{
-    accumulatorStack.reset(rootPos, *transformer);
-    auto result = iterativeSearch(); // result = {bestMove, score}
-
-    // only thread-0 is the “main” UCI thread → tell the GUI our move
-    if (isMainThread())
-    {
-        std::cout << "bestmove "
-                  << result.first.toString() // e.g. e2e4, e7e8q …
-                  << '\n'                    // newline required by protocol
-                  << std::flush;             // be sure it reaches the GUI
-    }
-    return result;
-}
-
 bool Worker::stopSearch(const std::vector<int16_t> &values, int streak, int depth)
 {
     // If not endgame
@@ -498,4 +481,21 @@ std::pair<Move, int16_t> Worker::iterativeSearch(int8_t start_depth, int8_t fixe
     }
     std::cout << "Depth: " << completedDepth << "\n";
     return std::pair<Move, int16_t>(bestMove, bestValue);
+}
+
+//  startSearching – wrapper around iterative deepening
+std::pair<Move, int16_t> Worker::startSearching(int8_t max_depth)
+{
+    accumulatorStack.reset(rootPos, *transformer);
+    auto result = iterativeSearch(2, max_depth); // result = {bestMove, score}
+
+    // only thread-0 is the “main” UCI thread → tell the GUI our move
+    if (isMainThread())
+    {
+        std::cout << "bestmove "
+                  << result.first.toString() // e.g. e2e4, e7e8q …
+                  << '\n'                    // newline required by protocol
+                  << std::flush;             // be sure it reaches the GUI
+    }
+    return result;
 }

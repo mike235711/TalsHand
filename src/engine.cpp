@@ -2,6 +2,7 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 
 #include "engine.h"
 #include "bitposition.h"
@@ -79,6 +80,97 @@ namespace
 
 } // namespace
 
+int THEngine::perftTest(int depth, bool quiescent)
+{
+    if (depth == 0)
+    {
+        return 1;
+    }
+    int nodes = 0;
+    Move move;
+    StateInfo st;
+
+    if (quiescent)
+    {
+        pos.setBlockersPinsAndCheckBitsInQS();
+        if (pos.getIsCheck())
+        {
+            QSMoveSelectorCheck move_selector(pos);
+            move_selector.init();
+            while ((move = move_selector.select_legal()) != Move(0))
+            {
+                pos.makeMove(move, st);
+                nodes += perftTest(depth - 1, quiescent);
+                pos.unmakeMove(move);
+            }
+        }
+        else
+        {
+            QSMoveSelectorNotCheck move_selector(pos);
+            move_selector.init();
+            while ((move = move_selector.select_legal()) != Move(0))
+            {
+                pos.makeMove(move, st);
+                nodes += perftTest(depth - 1, quiescent);
+                pos.unmakeMove(move);
+            }
+        }
+    }
+    else
+    {
+        pos.setBlockersAndPinsInAB(); // For discovered checks and move generators
+        pos.setCheckBits();           // For direct checks
+
+        // Check if we have stored this position in ttable
+        TTEntry *ttEntry = tt.probe(pos.getZobristKey());
+        Move tt_move{0};
+
+        // If position is stored in ttable
+        if (ttEntry != nullptr)
+        {
+            tt_move = ttEntry->getMove();
+        }
+
+        // Transposition table move search
+        if (tt_move.getData() != 0)
+        {
+            pos.makeMove(tt_move, st);
+            nodes += perftTest(depth - 1, quiescent);
+            pos.unmakeMove(tt_move);
+        }
+
+        // We only search if tt_move didn't produce a cutoff in the search tree
+        if (not pos.getIsCheck()) // Not in check
+        {
+            Move move;
+            ABMoveSelectorNotCheck move_selector(pos, tt_move);
+            move_selector.init_all();
+            while ((move = move_selector.select_legal()) != Move(0))
+            {
+                pos.makeMove(move, st);
+                nodes += perftTest(depth - 1, quiescent);
+                pos.unmakeMove(move);
+            }
+        }
+        else // In check
+        {
+            pos.setCheckInfo();
+            Move move;
+            ABMoveSelectorCheck move_selector(pos, tt_move);
+            move_selector.init();
+            while ((move = move_selector.select_legal()) != Move(0))
+            {
+                pos.makeMove(move, st);
+                nodes += perftTest(depth - 1, quiescent);
+                pos.unmakeMove(move);
+            }
+        }
+        // Saving a tt value
+        tt.save(pos.getZobristKey(), 0, depth, move, true);
+    }
+    return nodes;
+}
+
 constexpr auto STARTFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 constexpr int MaxHashMB = 33554432;
 std::size_t HardwareCores = std::max<std::size_t>(std::thread::hardware_concurrency(), 1);
@@ -90,19 +182,22 @@ constexpr auto DefaultNNUEFile = "models/NNUEU_quantized_model_v4_param_350_epoc
 constexpr std::size_t DefaultHashMB = 16; // Stockfish defaults to 16 MB
 
 THEngine::THEngine(std::optional<std::string> path)
-    : pos(), stateInfos(std::make_unique<std::deque<StateInfo>>(1)) // A one-element deque whose first node becomes the “previous” link for the root position
-      ,
-      timeLeft(0), threadpool(), tt(), network(), transformer(std::make_unique<NNUEU::Transformer>()),
+    : pos(), stateInfos(std::make_unique<std::deque<StateInfo>>(1)),
+      timeLeft(0), threadpool(), tt(), network(),
+      transformer(std::make_unique<NNUEU::Transformer>()),
       numThreads(std::clamp<int>(int(HardwareCores), 1, MaxThreads)),
-      ttSize(std::min<std::size_t>(DefaultHashMB, MaxHashMB)), ponder(false), NNUEUFile(DefaultNNUEFile)
+      ttSize(std::min<std::size_t>(DefaultHashMB, MaxHashMB)),
+      ponder(false), NNUEUFile(DefaultNNUEFile)
 {
-    // Put a legal start position on the board so evaluators see something valid
-    pos.fromFen(STARTFEN, &stateInfos->back());
-
-    // Bring every heavyweight component up to its default size
-    resizeThreads(); // uses numThreads
-    setTTSize();     // uses ttSize
-    loadNNUEU();     // uses NNUEUFile
+    std::error_code ec;
+    if (path && !path->empty()) 
+        execDir = std::filesystem::canonical(*path, ec).parent_path();
+    if (ec || execDir.empty()) // fall back to CWD on error
+        execDir = std::filesystem::current_path();
+        pos.fromFen(STARTFEN, &stateInfos->back());
+    resizeThreads();
+    setTTSize();
+    loadNNUEU();
 }
 
 void THEngine::readUci()
@@ -287,8 +382,18 @@ void THEngine::setTTSize()
 
 void THEngine::loadNNUEU()
 {
-    transformer->load(NNUEUFile);
-    network.load(NNUEUFile);
+    namespace fs = std::filesystem;
+    fs::path p{NNUEUFile};
+    // If the user gave a relative path, anchor it to the executable’s dir
+    if (!p.is_absolute())
+        p = execDir / ".." / p; // exe/../models/…
+    if (!fs::exists(p))
+    {
+        std::cerr << "Error: NNUEU weights not found: " << p << '\n';
+        std::exit(EXIT_FAILURE);
+    }
+    transformer->load(p.string());
+    network.load(p.string());
     threadpool.clear();
 }
 
@@ -300,10 +405,16 @@ void THEngine::settimeLeft(int ourTime, int ourInc)
 void THEngine::goSearch()
 {
     resizeThreads();
-    threadpool.startThinking(pos, stateInfos, timeLeft, ponder);
+    threadpool.startThinking(pos, stateInfos, timeLeft, ponder, 99);
 }
 
 void THEngine::stopSearch()
 {
     threadpool.stop = true;
+}
+
+std::string THEngine::searchFixedDepth(int8_t depth)
+{
+    std::pair<Move, int16_t> result = threadpool.startThinking(pos, stateInfos, timeLeft = 999999, ponder, depth);
+    return result.first.toString();
 }

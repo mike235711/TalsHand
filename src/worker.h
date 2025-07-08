@@ -30,7 +30,7 @@ public:
            size_t idx);
 
     // Entry point called by Thread::startSearching()
-    std::pair<Move, int16_t> startSearching();
+    std::pair<Move, int16_t> startSearching(int8_t max_depth);
 
     bool isMainThread() const { return threadIdx == 0; }
 
