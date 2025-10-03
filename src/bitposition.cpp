@@ -539,23 +539,22 @@ bool BitPosition::isLegal(const T *move) const
     else
     {
         int origin_square = move->getOriginSquare();
-        int destination_square = move->getDestinationSquare();
         // Knight moves are always legal
         if ((1ULL << origin_square) & m_pieces[not m_turn][1])
             return true;
         // King moves
         else if (origin_square == m_king_position[not m_turn])
-            return newKingSquareIsSafe(destination_square);
+            return newKingSquareIsSafe(move->getDestinationSquare());
         // Rest of pieces
         else
-            return ((1ULL << origin_square) & (state_info->pinnedPieces)) == 0 || precomputed_moves::OnLineBitboards[origin_square][destination_square] & m_pieces[not m_turn][5];
+            return ((1ULL << origin_square) & (state_info->pinnedPieces)) == 0 || precomputed_moves::OnLineBitboards[origin_square][move->getDestinationSquare()] & m_pieces[not m_turn][5];
     }
 }
 
 bool BitPosition::isNormalMoveLegal(int origin_square, int destination_square) const
 // Return if we are in check or not by sliders, for the case of discovered checks
 // For direct checks we know because of the move
-// This is only called when origin is in line with king position and there are no pieces in between
+// This is only called in isMate within QuisenceSearch
 {
     // Move is legal if piece is not pinned, otherwise if origin, destination and king position are aligned
     // Knight moves are always legal
@@ -577,13 +576,13 @@ bool BitPosition::isCaptureLegal(const T *move) const
 // This is only called when origin is in line with king position and there are no pieces in between
 {
     int origin_square = move->getOriginSquare();
-    int destination_square = move->getDestinationSquare();
+
     // King moves
     if (origin_square == m_king_position[not m_turn])
-        return newKingSquareIsSafe(destination_square); // FIX THIS FOR BOTH COLORS
+        return newKingSquareIsSafe(move->getDestinationSquare()); // FIX THIS FOR BOTH COLORS
     // Rest of pieces
     else
-        return ((1ULL << origin_square) & (state_info->pinnedPieces)) == 0 || precomputed_moves::OnLineBitboards[origin_square][destination_square] & m_pieces[not m_turn][5];
+        return ((1ULL << origin_square) & (state_info->pinnedPieces)) == 0 || precomputed_moves::OnLineBitboards[origin_square][move->getDestinationSquare()] & m_pieces[not m_turn][5];
 }
 
 bool BitPosition::ttMoveIsOk(Move move) const
