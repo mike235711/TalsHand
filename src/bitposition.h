@@ -704,14 +704,14 @@ public:
         {
             // Check that the origin square has a piece of the current player
             int moving_piece = m_white_board[origin];
-            if (!(m_pieces[0][moving_piece] & origin_bit))
-            {
-                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << "\n";
-                return false;
-            }
             if (moving_piece == 7)
             {
-                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << "\n";
+                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in m_white_board \n";
+                return false;
+            }
+            if (!(m_pieces[0][moving_piece] & origin_bit))
+            {
+                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in array of piece bits\n";
                 return false;
             }
             // Check that the destination square does NOT contain a piece of the current player
@@ -725,14 +725,14 @@ public:
         {
             // Check that the origin square has a piece of the current player
             int moving_piece = m_black_board[origin];
-            if (!(m_pieces[1][moving_piece] & origin_bit))
-            {
-                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << "\n";
-                return false;
-            }
             if (m_black_board[origin] == 7)
             {
-                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << "\n";
+                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in m_black_board\n";
+                return false;
+            }
+            if (!(m_pieces[1][moving_piece] & origin_bit))
+            {
+                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in array of piece bits\n";
                 return false;
             }
             // Check that the destination square does NOT contain a piece of the current player
