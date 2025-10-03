@@ -59,7 +59,7 @@ private:
     // 64-bit to represent pieces on board for each piece type and color
     uint64_t m_pieces[2][6];
 
-    // Bits to represent all pieces of each player
+    // Bits to represent all pieces of each player and all pieces of both players
     uint64_t m_pieces_bit[2];
     uint64_t m_all_pieces_bit{};
 

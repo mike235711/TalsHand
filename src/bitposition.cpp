@@ -515,7 +515,6 @@ void BitPosition::setBlockersAndPinsInAB()
     state_info->pinnedPieces = state_info->straightPinnedPieces | state_info->diagonalPinnedPieces;
 }
 
-// Functions we call during move generation
 template <typename T>
 bool BitPosition::isLegal(const T *move) const
 // Return if we are in check or not by sliders, for the case of discovered checks
@@ -570,18 +569,6 @@ bool BitPosition::isNormalMoveLegal(int origin_square, int destination_square) c
         return ((1ULL << origin_square) & (state_info->pinnedPieces)) == 0 || precomputed_moves::OnLineBitboards[origin_square][destination_square] & m_pieces[not m_turn][5];
 }
 
-bool BitPosition::isRefutationLegal(Move move) const
-{
-    int origin_square = move.getOriginSquare();
-    int destination_square = move.getDestinationSquare();
-    // Move is legal if piece is not pinned, otherwise if origin, destination and king position are aligned
-    // King moves
-    if (origin_square == m_king_position[not m_turn])
-        return newKingSquareIsSafe(destination_square);
-    // Rest of pieces
-    else
-        return ((1ULL << origin_square) & (state_info->pinnedPieces)) == 0 || precomputed_moves::OnLineBitboards[origin_square][destination_square] & m_pieces[not m_turn][5];
-}
 
 template <typename T>
 bool BitPosition::isCaptureLegal(const T *move) const
@@ -1346,7 +1333,7 @@ Move *BitPosition::inCheckOrderedCapturesAndKingMoves(Move *&move_list) const
         }
     }
     // Knight captures from checking position
-    piece_moves = precomputed_moves::knight_moves[m_check_square] & m_pieces[not m_turn][1] & ~((state_info->pinnedPieces));
+    piece_moves = precomputed_moves::knight_moves[m_check_square] & m_pieces[not m_turn][1] & ~state_info->pinnedPieces;
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
@@ -1506,10 +1493,17 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 // Move piece and switch white and black roles, without rotating the board.
 // The main difference with makeCapture is that we set blockers and pins here when making a move
 {
-    assert(moveIsFine(move));
+    if (!moveIsFine(move))
+    {
+        std::cerr << "Assertion failed in makeMove: moveIsFine(move)\n";
+        std::cerr << "FEN: " << toFenString() << "\n";
+        std::cerr << "Move: " << move.toString() << "\n";
+        assert(false);
+    }
     assert(move.getData() != 0);
     assert(not getIsCheckOnInitialization(not m_turn));
     NNUEU::NNUEUChange nnueuChanges;
+
     // Save irreversible aspects of position and create a new state
     // Irreversible aspects include: castlingRights, reversibleMovesMade and zobristKey
     std::memcpy(&new_state_info, state_info, offsetof(StateInfo, straightPinnedPieces));
@@ -1821,7 +1815,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 m_pieces[0][0] &= ~shift_up(destination_bit);
                 m_pieces_bit[0] &= ~shift_up(destination_bit);
                 captured_piece = 0;
-                if (not state_info->isCheck)
+
+                if (not(state_info->isCheck))
                     state_info->isCheck = isDiscoverCheckAfterPassant();
                 m_white_board[destination_square + 8] = 7;
                 // Set NNUEU input
@@ -1888,9 +1883,27 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     // So we store it in the m_ply+1 position because the initial position (or position after capture) is the m_ply 0.
     m_ply++;
 
-    assert(posIsFine());
-    assert(!isKingInCheck(m_turn));
-    assert(getIsCheckOnInitialization(m_turn) == state_info->isCheck);
+    if (!posIsFine())
+    {
+        std::cerr << "Assertion failed in makeMove: posIsFine()\n";
+        std::cerr << "FEN: " << toFenString() << "\n";
+        std::cerr << "Move: " << move.toString() << "\n";
+        assert(false);
+    }
+    if (isKingInCheck(m_turn))
+    {
+        std::cerr << "Assertion failed in makeMove: !isKingInCheck(m_turn)\n";
+        std::cerr << "FEN: " << toFenString() << "\n";
+        std::cerr << "Move: " << move.toString() << "\n";
+        assert(false);
+    }
+    if (getIsCheckOnInitialization(m_turn) != state_info->isCheck)
+    {
+        std::cerr << "Assertion failed in makeMove: getIsCheckOnInitialization(m_turn) == state_info->isCheck\n";
+        std::cerr << "FEN: " << toFenString() << "\n";
+        std::cerr << "Move: " << move.toString() << "\n";
+        assert(false);
+    }
     // assert(computeFullZobristKey() == state_info->zobristKey);
     return nnueuChanges;
 }
@@ -2151,16 +2164,40 @@ void BitPosition::unmakeMove(T move)
     }
 
     m_turn = not m_turn;
-    assert(posIsFine());
-    assert(!isKingInCheck(m_turn));
-    assert(getIsCheckOnInitialization(m_turn) == state_info->isCheck);
+    if (!posIsFine())
+    {
+        std::cerr << "Assertion failed in unmakeMove: posIsFine()\n";
+        std::cerr << "FEN: " << toFenString() << "\n";
+        std::cerr << "Move: " << move.toString() << "\n";
+        assert(false);
+    }
+    if (isKingInCheck(m_turn))
+    {
+        std::cerr << "Assertion failed in unmakeMove: !isKingInCheck(m_turn)\n";
+        std::cerr << "FEN: " << toFenString() << "\n";
+        std::cerr << "Move: " << move.toString() << "\n";
+        assert(false);
+    }
+    if (getIsCheckOnInitialization(m_turn) != state_info->isCheck)
+    {
+        std::cerr << "Assertion failed in unmakeMove: getIsCheckOnInitialization(m_turn) == state_info->isCheck\n";
+        std::cerr << "FEN: " << toFenString() << "\n";
+        std::cerr << "Move: " << move.toString() << "\n";
+        assert(false);
+    }
 }
 
 template <typename T>
 NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 // Captures and queen promotions
 {
-    assert(moveIsFine(move));
+    if (!moveIsFine(move))
+    {
+        std::cerr << "Assertion failed in makeCapture: moveIsFine(move)\n";
+        std::cerr << "FEN: " << toFenString() << "\n";
+        std::cerr << "Move: " << move.toString() << "\n";
+        assert(false);
+    }
     assert(move.getData() != 0);
     assert(not getIsCheckOnInitialization(not m_turn));
     NNUEU::NNUEUChange nnueuChanges;
@@ -2561,9 +2598,27 @@ void BitPosition::unmakeCapture(T move)
     }
 
     m_turn = not m_turn;
-    assert(posIsFine());
-    assert(!isKingInCheck(m_turn));
-    assert(getIsCheckOnInitialization(m_turn) == state_info->isCheck);
+    if (!posIsFine())
+    {
+        std::cerr << "Assertion failed in unmakeCapture: posIsFine()\n";
+        std::cerr << "FEN: " << toFenString() << "\n";
+        std::cerr << "Move: " << move.toString() << "\n";
+        assert(false);
+    }
+    if (isKingInCheck(m_turn))
+    {
+        std::cerr << "Assertion failed in unmakeCapture: !isKingInCheck(m_turn)\n";
+        std::cerr << "FEN: " << toFenString() << "\n";
+        std::cerr << "Move: " << move.toString() << "\n";
+        assert(false);
+    }
+    if (getIsCheckOnInitialization(m_turn) != state_info->isCheck)
+    {
+        std::cerr << "Assertion failed in unmakeCapture: getIsCheckOnInitialization(m_turn) == state_info->isCheck\n";
+        std::cerr << "FEN: " << toFenString() << "\n";
+        std::cerr << "Move: " << move.toString() << "\n";
+        assert(false);
+    }
 }
 
 // Game ending functions
