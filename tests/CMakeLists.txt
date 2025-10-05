@@ -20,6 +20,9 @@ target_link_libraries(unit_tests PRIVATE
 )
 
 include(CTest)
-catch_discover_tests(unit_tests)
+catch_discover_tests(unit_tests
+    PROPERTIES
+        TIMEOUT 10000
+)
 
 

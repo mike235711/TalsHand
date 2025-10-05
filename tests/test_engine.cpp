@@ -4,6 +4,19 @@
 #include <vector>
 #include <chrono>
 #include "engine.h"
+#include "precomputed_moves.h"
+#include "magicmoves.h"
+#include "zobrist_keys.h"
+
+
+struct TestInitializer {
+    TestInitializer() {
+        initmagicmoves();
+        zobrist_keys::initializeZobristNumbers();
+    }
+};
+
+static TestInitializer initialize_tests;
 
 TEST_CASE("Perft Tests")
 {
@@ -16,7 +29,7 @@ TEST_CASE("Perft Tests")
         REQUIRE(engine.perftTest(2, false) == 400);
         REQUIRE(engine.perftTest(3, false) == 8902);
         REQUIRE(engine.perftTest(4, false) == 197281);
-        REQUIRE(engine.perftTest(6, false) == 4865609);
+        REQUIRE(engine.perftTest(5, false) == 4865609);
     }
     SECTION("Position 2")
     {
@@ -25,7 +38,7 @@ TEST_CASE("Perft Tests")
         REQUIRE(engine.perftTest(2, false) == 2039);
         REQUIRE(engine.perftTest(3, false) == 97862);
         REQUIRE(engine.perftTest(4, false) == 4085603);
-        REQUIRE(engine.perftTest(6, false) == 193690690);
+        REQUIRE(engine.perftTest(5, false) == 193690690);
     }
     SECTION("Position 3")
     {
@@ -34,7 +47,7 @@ TEST_CASE("Perft Tests")
         REQUIRE(engine.perftTest(2, false) == 191);
         REQUIRE(engine.perftTest(3, false) == 2812);
         REQUIRE(engine.perftTest(4, false) == 43238);
-        REQUIRE(engine.perftTest(6, false) == 674624);
+        REQUIRE(engine.perftTest(5, false) == 674624);
     }
     SECTION("Position 4")
     {
@@ -43,7 +56,7 @@ TEST_CASE("Perft Tests")
         REQUIRE(engine.perftTest(2, false) == 264);
         REQUIRE(engine.perftTest(3, false) == 9467);
         REQUIRE(engine.perftTest(4, false) == 422333);
-        REQUIRE(engine.perftTest(6, false) == 15833292);
+        REQUIRE(engine.perftTest(5, false) == 15833292);
     }
     SECTION("Position 5")
     {
@@ -52,7 +65,7 @@ TEST_CASE("Perft Tests")
         REQUIRE(engine.perftTest(2, false) == 1486);
         REQUIRE(engine.perftTest(3, false) == 62379);
         REQUIRE(engine.perftTest(4, false) == 2103487);
-        REQUIRE(engine.perftTest(6, false) == 89941194);
+        REQUIRE(engine.perftTest(5, false) == 89941194);
     }
     SECTION("Position 6")
     {
@@ -61,7 +74,7 @@ TEST_CASE("Perft Tests")
         REQUIRE(engine.perftTest(2, false) == 2079);
         REQUIRE(engine.perftTest(3, false) == 89890);
         REQUIRE(engine.perftTest(4, false) == 389594);
-        REQUIRE(engine.perftTest(6, false) == 164075551);
+        REQUIRE(engine.perftTest(5, false) == 164075551);
     }
 }
 
@@ -76,7 +89,7 @@ TEST_CASE("Quiescence Search Perft Tests")
         REQUIRE(engine.perftTest(2, true) == 400);
         REQUIRE(engine.perftTest(3, true) == 8902);
         REQUIRE(engine.perftTest(4, true) == 197281);
-        REQUIRE(engine.perftTest(6, true) == 4865609);
+        REQUIRE(engine.perftTest(5, true) == 4865609);
     }
     SECTION("Position 2")
     {
@@ -85,7 +98,7 @@ TEST_CASE("Quiescence Search Perft Tests")
         REQUIRE(engine.perftTest(2, true) == 2039);
         REQUIRE(engine.perftTest(3, true) == 97862);
         REQUIRE(engine.perftTest(4, true) == 4085603);
-        REQUIRE(engine.perftTest(6, true) == 193690690);
+        REQUIRE(engine.perftTest(5, true) == 193690690);
     }
     SECTION("Position 3")
     {
@@ -94,7 +107,7 @@ TEST_CASE("Quiescence Search Perft Tests")
         REQUIRE(engine.perftTest(2, true) == 191);
         REQUIRE(engine.perftTest(3, true) == 2812);
         REQUIRE(engine.perftTest(4, true) == 43238);
-        REQUIRE(engine.perftTest(6, true) == 674624);
+        REQUIRE(engine.perftTest(5, true) == 674624);
     }
     SECTION("Position 4")
     {
@@ -103,7 +116,7 @@ TEST_CASE("Quiescence Search Perft Tests")
         REQUIRE(engine.perftTest(2, true) == 264);
         REQUIRE(engine.perftTest(3, true) == 9467);
         REQUIRE(engine.perftTest(4, true) == 422333);
-        REQUIRE(engine.perftTest(6, true) == 15833292);
+        REQUIRE(engine.perftTest(5, true) == 15833292);
     }
     SECTION("Position 5")
     {
@@ -112,7 +125,7 @@ TEST_CASE("Quiescence Search Perft Tests")
         REQUIRE(engine.perftTest(2, true) == 1486);
         REQUIRE(engine.perftTest(3, true) == 62379);
         REQUIRE(engine.perftTest(4, true) == 2103487);
-        REQUIRE(engine.perftTest(6, true) == 89941194);
+        REQUIRE(engine.perftTest(5, true) == 89941194);
     }
     SECTION("Position 6")
     {
@@ -121,7 +134,7 @@ TEST_CASE("Quiescence Search Perft Tests")
         REQUIRE(engine.perftTest(2, true) == 2079);
         REQUIRE(engine.perftTest(3, true) == 89890);
         REQUIRE(engine.perftTest(4, true) == 389594);
-        REQUIRE(engine.perftTest(6, true) == 164075551);
+        REQUIRE(engine.perftTest(5, true) == 164075551);
     }
 }
 
