@@ -6,7 +6,6 @@ set(SOURCES
     magicmoves.cpp
     move_selectors.cpp
     network.cpp
-    nnueu.cpp
     nnueu_scalar.cpp
     precomputed_moves.cpp
     threadpool.cpp

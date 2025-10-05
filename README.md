@@ -3,7 +3,7 @@
 In this project I will create a chess engine from scratch. Classical chess engines usually consist of 3 main parts:
 
 * A move generator, generating all legal moves in a chess position
-* A function that evaluates positions (Possibly a neural network)
+* A function that evaluates positions (A Neural Network)
 * An algorithm that searches in the variations and chooses the best move
 
 I have created my own move generator, taking into account all the rules of chess and implementing bitboards (representing chess boards using length 64 bits). Speed in this part of the engine is essential because the engine will have to calculate many variations and chess is usually played with time limtis.
@@ -18,7 +18,7 @@ I have also applied quiescence search so that in tactical positions (when there 
 
 A common technique to implement with alpha-beta pruning is iterative deepening. It consists of performing iterative searches of increasing depths. Which allow for fast move ordering using the transposition table at low depths making higher depths more efficient.
 
-When searching for moves I have added a score to moves depending on capturing pieces, making checks and move safety. The algorithm is contructed such that it considers high score moves first, making it faster because it prunes more branches. 
+When searching for moves I have added a score to moves depending on capturing pieces, making checks and move safety. The algorithm is constructed such that it considers high score moves first, making it faster because it prunes more branches. 
 
 I have also included a principal variation (PV) searchm and non-PV search, where moves are generated differently. Trying to generate less moves for positions which will likely produce a cutoff.
 
@@ -29,19 +29,6 @@ The transposition table makes it possible to check for principal variation nodes
 To play a game against the engine, download this repository and you can load the engine to any UCI compatible chess GUI (such as BANKSIAGUI). You can also play against the engine on Lichess https://lichess.org/@/LaManodeTal.
 
 Hope you enjoy and beat the engine :)
-
-
-To do:
-* Pruning at shallow depth 
-* Search extensions
-* Late move reductions / extensions
-
-* Futility pruning
-* Null move pruning
-* Internal Iterative deepening
-
-Tried but didn't improve engine:
-* Killer moves
 
 # NNUEU (Ultra Efficiently Updatable Neural Networks)
 

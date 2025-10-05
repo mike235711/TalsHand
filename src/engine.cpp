@@ -95,9 +95,17 @@ int THEngine::perftTest(int depth, bool quiescent)
         pos.setBlockersPinsAndCheckBitsInQS();
         if (pos.getIsCheck())
         {
-            QSMoveSelectorCheck move_selector(pos);
-            move_selector.init();
-            while ((move = move_selector.select_legal()) != Move(0))
+            QSMoveSelectorCheck captures_move_selector(pos);
+            captures_move_selector.init();
+            while ((move = captures_move_selector.select_legal()) != Move(0))
+            {
+                pos.makeMove(move, st);
+                nodes += perftTest(depth - 1, quiescent);
+                pos.unmakeMove(move);
+            }
+            QSMoveSelectorCheckNonCaptures non_captures_move_selector(pos);
+            non_captures_move_selector.init();
+            while ((move = non_captures_move_selector.select_legal()) != Move(0))
             {
                 pos.makeMove(move, st);
                 nodes += perftTest(depth - 1, quiescent);
@@ -106,9 +114,17 @@ int THEngine::perftTest(int depth, bool quiescent)
         }
         else
         {
-            QSMoveSelectorNotCheck move_selector(pos);
-            move_selector.init();
-            while ((move = move_selector.select_legal()) != Move(0))
+            QSMoveSelectorNotCheck captures_move_selector(pos);
+            captures_move_selector.init();
+            while ((move = captures_move_selector.select_legal()) != Move(0))
+            {
+                pos.makeMove(move, st);
+                nodes += perftTest(depth - 1, quiescent);
+                pos.unmakeMove(move);
+            }
+            QSMoveSelectorNotCheckNonCaptures non_captures_move_selector(pos, Move(0));
+            non_captures_move_selector.init();
+            while ((move = non_captures_move_selector.select_legal()) != Move(0))
             {
                 pos.makeMove(move, st);
                 nodes += perftTest(depth - 1, quiescent);
