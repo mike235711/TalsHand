@@ -6,6 +6,8 @@
 #include <deque>
 #include <filesystem>
 
+#include <optional>
+
 #include "bitposition.h"
 #include "threadpool.h"
 #include "network.h"
@@ -30,7 +32,7 @@ public:
     ~THEngine() { waitToFinishSearch(); }
 
     // Test move generation
-    std::uint64_t perftTest(const std::string &fen, int depth);
+    std::uint64_t perftTest(int depth, bool quiescent, const std::optional<std::string>& filename = std::nullopt);
 
     // uci functions
     void readUci(); // Reads uci loop (options, position and time)
@@ -53,8 +55,6 @@ public:
 
     // network related
     void loadNNUEU();
-
-    int perftTest(int depth, bool quiescent);
 
     // Performance testing utilities
     std::string searchFixedDepth(int8_t depth);

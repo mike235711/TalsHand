@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <map>
+#include <fstream>
 
 #include "engine.h"
 #include "bitposition.h"
@@ -80,111 +82,141 @@ namespace
 
 } // namespace
 
-int THEngine::perftTest(int depth, bool quiescent)
+namespace
 {
-    if (depth == 0)
+    std::uint64_t perft_recursive(int depth, bool quiescent, BitPosition& pos, TranspositionTable& tt, std::ofstream* outfile, const std::string& prefix)
     {
-        return 1;
+        if (depth == 0)
+        {
+            return 1;
+        }
+
+        std::uint64_t total_nodes = 0;
+        Move move;
+        StateInfo st;
+
+        // Use a map to generate and sort moves in one step, ensuring consistent order.
+        std::map<std::string, Move> sorted_moves;
+
+        if (quiescent)
+        {
+            pos.setBlockersPinsAndCheckBitsInQS();
+            if (pos.getIsCheck())
+            {
+                QSMoveSelectorCheck captures_move_selector(pos);
+                captures_move_selector.init();
+                while ((move = captures_move_selector.select_legal()) != Move(0))
+                {
+                    sorted_moves[move.toString()] = move;
+                }
+                QSMoveSelectorCheckNonCaptures non_captures_move_selector(pos);
+                non_captures_move_selector.init();
+                while ((move = non_captures_move_selector.select_legal()) != Move(0))
+                {
+                    sorted_moves[move.toString()] = move;
+                }
+            }
+            else
+            {
+                QSMoveSelectorNotCheck captures_move_selector(pos);
+                captures_move_selector.init();
+                while ((move = captures_move_selector.select_legal()) != Move(0))
+                {
+                    sorted_moves[move.toString()] = move;
+                }
+                QSMoveSelectorNotCheckNonCaptures non_captures_move_selector(pos, Move(0));
+                non_captures_move_selector.init();
+                while ((move = non_captures_move_selector.select_legal()) != Move(0))
+                {
+                    sorted_moves[move.toString()] = move;
+                }
+            }
+        }
+        else // Not quiescent (standard AB move generator)
+        {
+            pos.setBlockersAndPinsInAB();
+            pos.setCheckBits();
+            TTEntry *ttEntry = tt.probe(pos.getZobristKey());
+            Move tt_move{0};
+            if (ttEntry != nullptr) tt_move = ttEntry->getMove();
+            if (tt_move.getData() != 0) sorted_moves[tt_move.toString()] = tt_move;
+
+            if (not pos.getIsCheck())
+            {
+                ABMoveSelectorNotCheck move_selector(pos, tt_move);
+                move_selector.init_all();
+                while ((move = move_selector.select_legal()) != Move(0))
+                {
+                    sorted_moves[move.toString()] = move;
+                }
+            }
+            else // In check
+            {
+                pos.setCheckInfo();
+                ABMoveSelectorCheck move_selector(pos, tt_move);
+                move_selector.init();
+                while ((move = move_selector.select_legal()) != Move(0))
+                {
+                    sorted_moves[move.toString()] = move;
+                }
+            }
+        }
+
+        for (const auto& [move_string, current_move] : sorted_moves)
+        {
+            pos.makeMove(current_move, st);
+
+            // Recursively call to get the node count for this specific branch
+            std::uint64_t child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move_string + " ");
+
+            if (outfile && depth == 1) 
+            {
+                child_nodes = perft_recursive(1, quiescent, pos, tt, nullptr, "");
+            } 
+            else 
+            {
+                child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move_string + " ");
+            }
+            
+            pos.unmakeMove(current_move);
+
+            if (outfile) {
+                (*outfile) << prefix << move_string << ": " << child_nodes << std::endl;
+            }
+            
+            total_nodes += child_nodes;
+        }
+        
+        tt.save(pos.getZobristKey(), 0, depth, Move(0), true);
+        
+        return total_nodes;
     }
-    int nodes = 0;
-    Move move;
-    StateInfo st;
+}
 
-    if (quiescent)
-    {
-        pos.setBlockersPinsAndCheckBitsInQS();
-        if (pos.getIsCheck())
-        {
-            QSMoveSelectorCheck captures_move_selector(pos);
-            captures_move_selector.init();
-            while ((move = captures_move_selector.select_legal()) != Move(0))
-            {
-                pos.makeMove(move, st);
-                nodes += perftTest(depth - 1, quiescent);
-                pos.unmakeMove(move);
-            }
-            QSMoveSelectorCheckNonCaptures non_captures_move_selector(pos);
-            non_captures_move_selector.init();
-            while ((move = non_captures_move_selector.select_legal()) != Move(0))
-            {
-                pos.makeMove(move, st);
-                nodes += perftTest(depth - 1, quiescent);
-                pos.unmakeMove(move);
-            }
+std::uint64_t THEngine::perftTest(int depth, bool quiescent, const std::optional<std::string>& filename)
+{
+    // If a filename is provided, open the file and start the recursion.
+    if (filename) {
+        std::ofstream outfile_stream(*filename);
+        if (!outfile_stream.is_open()) {
+            std::cerr << "Error: Failed to open output file " << *filename << std::endl;
+            return 0;
         }
-        else
-        {
-            QSMoveSelectorNotCheck captures_move_selector(pos);
-            captures_move_selector.init();
-            while ((move = captures_move_selector.select_legal()) != Move(0))
-            {
-                pos.makeMove(move, st);
-                nodes += perftTest(depth - 1, quiescent);
-                pos.unmakeMove(move);
-            }
-            QSMoveSelectorNotCheckNonCaptures non_captures_move_selector(pos, Move(0));
-            non_captures_move_selector.init();
-            while ((move = non_captures_move_selector.select_legal()) != Move(0))
-            {
-                pos.makeMove(move, st);
-                nodes += perftTest(depth - 1, quiescent);
-                pos.unmakeMove(move);
-            }
-        }
+        
+        // Start the recursion with an empty prefix string ""
+        std::uint64_t total_nodes = perft_recursive(depth - 1, quiescent, pos, tt, &outfile_stream, "");
+        
+        // Write the total at the end, just like the Python script.
+        outfile_stream << "\nTotal: " << total_nodes << std::endl;
+        
+        std::cout << "Generated perft data for FEN '" << pos.toFenString() << "' at depth " << depth << " in '" << *filename << "'" << std::endl;
+        std::cout << "Total nodes: " << total_nodes << std::endl;
+
+        return total_nodes;
     }
-    else
-    {
-        pos.setBlockersAndPinsInAB(); // For discovered checks and move generators
-        pos.setCheckBits();           // For direct checks
 
-        // Check if we have stored this position in ttable
-        TTEntry *ttEntry = tt.probe(pos.getZobristKey());
-        Move tt_move{0};
-
-        // If position is stored in ttable
-        if (ttEntry != nullptr)
-        {
-            tt_move = ttEntry->getMove();
-        }
-
-        // Transposition table move search
-        if (tt_move.getData() != 0)
-        {
-            pos.makeMove(tt_move, st);
-            nodes += perftTest(depth - 1, quiescent);
-            pos.unmakeMove(tt_move);
-        }
-
-        // We only search if tt_move didn't produce a cutoff in the search tree
-        if (not pos.getIsCheck()) // Not in check
-        {
-            Move move;
-            ABMoveSelectorNotCheck move_selector(pos, tt_move);
-            move_selector.init_all();
-            while ((move = move_selector.select_legal()) != Move(0))
-            {
-                pos.makeMove(move, st);
-                nodes += perftTest(depth - 1, quiescent);
-                pos.unmakeMove(move);
-            }
-        }
-        else // In check
-        {
-            pos.setCheckInfo();
-            Move move;
-            ABMoveSelectorCheck move_selector(pos, tt_move);
-            move_selector.init();
-            while ((move = move_selector.select_legal()) != Move(0))
-            {
-                pos.makeMove(move, st);
-                nodes += perftTest(depth - 1, quiescent);
-                pos.unmakeMove(move);
-            }
-        }
-        // Saving a tt value
-        tt.save(pos.getZobristKey(), 0, depth, move, true);
-    }
-    return nodes;
+    // If no filename, just run the counter without the file pointer and prefix.
+    return perft_recursive(depth, quiescent, pos, tt, nullptr, "");
 }
 
 constexpr auto STARTFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";

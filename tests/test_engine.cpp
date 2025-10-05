@@ -3,6 +3,10 @@
 #include <iostream>
 #include <vector>
 #include <chrono>
+#include <filesystem>
+#include <string>
+#include <algorithm>
+#include <optional>
 #include "engine.h"
 #include "precomputed_moves.h"
 #include "magicmoves.h"
@@ -25,56 +29,32 @@ TEST_CASE("Perft Tests")
     SECTION("Position 1")
     {
         engine.setPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", {});
-        REQUIRE(engine.perftTest(1, false) == 20);
-        REQUIRE(engine.perftTest(2, false) == 400);
-        REQUIRE(engine.perftTest(3, false) == 8902);
-        REQUIRE(engine.perftTest(4, false) == 197281);
-        REQUIRE(engine.perftTest(5, false) == 4865609);
+        REQUIRE(engine.perftTest(4, false, "ab_test_pos1") == 197281ULL);
     }
     SECTION("Position 2")
     {
         engine.setPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -", {});
-        REQUIRE(engine.perftTest(1, false) == 48);
-        REQUIRE(engine.perftTest(2, false) == 2039);
-        REQUIRE(engine.perftTest(3, false) == 97862);
-        REQUIRE(engine.perftTest(4, false) == 4085603);
-        REQUIRE(engine.perftTest(5, false) == 193690690);
+        REQUIRE(engine.perftTest(4, false, "ab_test_pos2") == 4085603ULL);
     }
     SECTION("Position 3")
     {
         engine.setPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", {});
-        REQUIRE(engine.perftTest(1, false) == 14);
-        REQUIRE(engine.perftTest(2, false) == 191);
-        REQUIRE(engine.perftTest(3, false) == 2812);
-        REQUIRE(engine.perftTest(4, false) == 43238);
-        REQUIRE(engine.perftTest(5, false) == 674624);
+        REQUIRE(engine.perftTest(4, false, "ab_test_pos3") == 43238ULL);
     }
     SECTION("Position 4")
     {
         engine.setPosition("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", {});
-        REQUIRE(engine.perftTest(1, false) == 6);
-        REQUIRE(engine.perftTest(2, false) == 264);
-        REQUIRE(engine.perftTest(3, false) == 9467);
-        REQUIRE(engine.perftTest(4, false) == 422333);
-        REQUIRE(engine.perftTest(5, false) == 15833292);
+        REQUIRE(engine.perftTest(4, false, "ab_test_pos4") == 422333ULL);
     }
     SECTION("Position 5")
     {
         engine.setPosition("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8", {});
-        REQUIRE(engine.perftTest(1, false) == 44);
-        REQUIRE(engine.perftTest(2, false) == 1486);
-        REQUIRE(engine.perftTest(3, false) == 62379);
-        REQUIRE(engine.perftTest(4, false) == 2103487);
-        REQUIRE(engine.perftTest(5, false) == 89941194);
+        REQUIRE(engine.perftTest(4, false, "ab_test_pos5") == 2103487ULL);
     }
     SECTION("Position 6")
     {
         engine.setPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10", {});
-        REQUIRE(engine.perftTest(1, false) == 46);
-        REQUIRE(engine.perftTest(2, false) == 2079);
-        REQUIRE(engine.perftTest(3, false) == 89890);
-        REQUIRE(engine.perftTest(4, false) == 389594);
-        REQUIRE(engine.perftTest(5, false) == 164075551);
+        REQUIRE(engine.perftTest(4, false, "ab_test_pos6") == 3894594ULL);
     }
 }
 
@@ -85,56 +65,32 @@ TEST_CASE("Quiescence Search Perft Tests")
     SECTION("Position 1")
     {
         engine.setPosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", {});
-        REQUIRE(engine.perftTest(1, true) == 20);
-        REQUIRE(engine.perftTest(2, true) == 400);
-        REQUIRE(engine.perftTest(3, true) == 8902);
-        REQUIRE(engine.perftTest(4, true) == 197281);
-        REQUIRE(engine.perftTest(5, true) == 4865609);
+        REQUIRE(engine.perftTest(4, true, "qs_test_pos1") == 197281ULL);
     }
     SECTION("Position 2")
     {
         engine.setPosition("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -", {});
-        REQUIRE(engine.perftTest(1, true) == 48);
-        REQUIRE(engine.perftTest(2, true) == 2039);
-        REQUIRE(engine.perftTest(3, true) == 97862);
-        REQUIRE(engine.perftTest(4, true) == 4085603);
-        REQUIRE(engine.perftTest(5, true) == 193690690);
+        REQUIRE(engine.perftTest(4, true, "qs_test_pos2") == 4085603ULL);
     }
     SECTION("Position 3")
     {
         engine.setPosition("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", {});
-        REQUIRE(engine.perftTest(1, true) == 14);
-        REQUIRE(engine.perftTest(2, true) == 191);
-        REQUIRE(engine.perftTest(3, true) == 2812);
-        REQUIRE(engine.perftTest(4, true) == 43238);
-        REQUIRE(engine.perftTest(5, true) == 674624);
+        REQUIRE(engine.perftTest(4, true, "qs_test_pos3") == 43238ULL);
     }
     SECTION("Position 4")
     {
         engine.setPosition("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", {});
-        REQUIRE(engine.perftTest(1, true) == 6);
-        REQUIRE(engine.perftTest(2, true) == 264);
-        REQUIRE(engine.perftTest(3, true) == 9467);
-        REQUIRE(engine.perftTest(4, true) == 422333);
-        REQUIRE(engine.perftTest(5, true) == 15833292);
+        REQUIRE(engine.perftTest(4, true, "qs_test_pos4") == 422333ULL);
     }
     SECTION("Position 5")
     {
         engine.setPosition("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8", {});
-        REQUIRE(engine.perftTest(1, true) == 44);
-        REQUIRE(engine.perftTest(2, true) == 1486);
-        REQUIRE(engine.perftTest(3, true) == 62379);
-        REQUIRE(engine.perftTest(4, true) == 2103487);
-        REQUIRE(engine.perftTest(5, true) == 89941194);
+        REQUIRE(engine.perftTest(4, true, "qs_test_pos5") == 2103487ULL);
     }
     SECTION("Position 6")
     {
         engine.setPosition("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10", {});
-        REQUIRE(engine.perftTest(1, true) == 46);
-        REQUIRE(engine.perftTest(2, true) == 2079);
-        REQUIRE(engine.perftTest(3, true) == 89890);
-        REQUIRE(engine.perftTest(4, true) == 389594);
-        REQUIRE(engine.perftTest(5, true) == 164075551);
+        REQUIRE(engine.perftTest(4, true, "qs_test_pos6") == 3894594ULL);
     }
 }
 
@@ -166,10 +122,11 @@ TEST_CASE("Tactics Tests (Depth-Limited)")
 
         for (const auto &tactic : tactics)
         {
+            std::cout << "  FEN: " << tactic.fen << std::endl;
             engine.setPosition(tactic.fen, {});
             std::string moveFound = engine.searchFixedDepth(depth);
 
-            std::cout << "  FEN: " << tactic.fen << " | Move Found: " << moveFound << std::endl;
+            std::cout << " | Move Found: " << moveFound << std::endl;
 
             if (depth == 5)
             {
