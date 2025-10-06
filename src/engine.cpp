@@ -167,7 +167,7 @@ namespace
             pos.makeMove(current_move, st);
 
             // Recursively call to get the node count for this specific branch
-            std::uint64_t child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move_string + " ");
+            std::uint64_t child_nodes;
 
             if (outfile && depth == 1) 
             {
