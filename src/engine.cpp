@@ -95,9 +95,6 @@ namespace
         Move move;
         StateInfo st;
 
-        // Use a map to generate and sort moves in one step, ensuring consistent order.
-        std::map<std::string, Move> sorted_moves;
-
         if (quiescent)
         {
             pos.setBlockersPinsAndCheckBitsInQS();
@@ -107,13 +104,39 @@ namespace
                 captures_move_selector.init();
                 while ((move = captures_move_selector.select_legal()) != Move(0))
                 {
-                    sorted_moves[move.toString()] = move;
+                    pos.makeCapture(move, st);
+
+                    std::uint64_t child_nodes;
+
+                    child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
+                    
+                    pos.unmakeCapture(move);
+
+                    if (outfile) {
+                        (*outfile) << prefix << move.toString() << ": " << child_nodes << std::endl;
+                    }
+                    
+                    total_nodes += child_nodes;
                 }
+                pos.setBlockersAndPinsInAB();
+                pos.setCheckBits();
                 QSMoveSelectorCheckNonCaptures non_captures_move_selector(pos);
                 non_captures_move_selector.init();
                 while ((move = non_captures_move_selector.select_legal()) != Move(0))
                 {
-                    sorted_moves[move.toString()] = move;
+                    pos.makeMove(move, st);
+
+                    std::uint64_t child_nodes;
+
+                    child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
+                    
+                    pos.unmakeMove(move);
+
+                    if (outfile) {
+                        (*outfile) << prefix << move.toString() << ": " << child_nodes << std::endl;
+                    }
+                    
+                    total_nodes += child_nodes;
                 }
             }
             else
@@ -122,13 +145,39 @@ namespace
                 captures_move_selector.init();
                 while ((move = captures_move_selector.select_legal()) != Move(0))
                 {
-                    sorted_moves[move.toString()] = move;
+                    pos.makeCapture(move, st);
+
+                    std::uint64_t child_nodes;
+
+                    child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
+                    
+                    pos.unmakeCapture(move);
+
+                    if (outfile) {
+                        (*outfile) << prefix << move.toString() << ": " << child_nodes << std::endl;
+                    }
+                    
+                    total_nodes += child_nodes;
                 }
+                pos.setBlockersAndPinsInAB();
+                pos.setCheckBits();
                 QSMoveSelectorNotCheckNonCaptures non_captures_move_selector(pos, Move(0));
                 non_captures_move_selector.init();
                 while ((move = non_captures_move_selector.select_legal()) != Move(0))
                 {
-                    sorted_moves[move.toString()] = move;
+                    pos.makeMove(move, st);
+
+                    std::uint64_t child_nodes;
+
+                    child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
+                    
+                    pos.unmakeMove(move);
+
+                    if (outfile) {
+                        (*outfile) << prefix << move.toString() << ": " << child_nodes << std::endl;
+                    }
+                    
+                    total_nodes += child_nodes;
                 }
             }
         }
@@ -139,7 +188,22 @@ namespace
             TTEntry *ttEntry = tt.probe(pos.getZobristKey());
             Move tt_move{0};
             if (ttEntry != nullptr) tt_move = ttEntry->getMove();
-            if (tt_move.getData() != 0) sorted_moves[tt_move.toString()] = tt_move;
+            if (tt_move.getData() != 0)
+            {
+                pos.makeMove(tt_move, st);
+
+                std::uint64_t child_nodes;
+
+                child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + tt_move.toString() + " ");
+                
+                pos.unmakeMove(tt_move);
+
+                if (outfile) {
+                    (*outfile) << prefix << tt_move.toString() << ": " << child_nodes << std::endl;
+                }
+                
+                total_nodes += child_nodes;
+            }
 
             if (not pos.getIsCheck())
             {
@@ -147,7 +211,19 @@ namespace
                 move_selector.init_all();
                 while ((move = move_selector.select_legal()) != Move(0))
                 {
-                    sorted_moves[move.toString()] = move;
+                    pos.makeMove(move, st);
+
+                    std::uint64_t child_nodes;
+
+                    child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
+                    
+                    pos.unmakeMove(move);
+
+                    if (outfile) {
+                        (*outfile) << prefix << move.toString() << ": " << child_nodes << std::endl;
+                    }
+                    
+                    total_nodes += child_nodes;
                 }
             }
             else // In check
@@ -157,34 +233,21 @@ namespace
                 move_selector.init();
                 while ((move = move_selector.select_legal()) != Move(0))
                 {
-                    sorted_moves[move.toString()] = move;
+                    pos.makeMove(move, st);
+
+                    std::uint64_t child_nodes;
+
+                    child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
+                    
+                    pos.unmakeMove(move);
+
+                    if (outfile) {
+                        (*outfile) << prefix << move.toString() << ": " << child_nodes << std::endl;
+                    }
+                    
+                    total_nodes += child_nodes;
                 }
             }
-        }
-
-        for (const auto& [move_string, current_move] : sorted_moves)
-        {
-            pos.makeMove(current_move, st);
-
-            // Recursively call to get the node count for this specific branch
-            std::uint64_t child_nodes;
-
-            if (outfile && depth == 1) 
-            {
-                child_nodes = perft_recursive(1, quiescent, pos, tt, nullptr, "");
-            } 
-            else 
-            {
-                child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move_string + " ");
-            }
-            
-            pos.unmakeMove(current_move);
-
-            if (outfile) {
-                (*outfile) << prefix << move_string << ": " << child_nodes << std::endl;
-            }
-            
-            total_nodes += child_nodes;
         }
         
         tt.save(pos.getZobristKey(), 0, depth, Move(0), true);
@@ -204,7 +267,7 @@ std::uint64_t THEngine::perftTest(int depth, bool quiescent, const std::optional
         }
         
         // Start the recursion with an empty prefix string ""
-        std::uint64_t total_nodes = perft_recursive(depth - 1, quiescent, pos, tt, &outfile_stream, "");
+        std::uint64_t total_nodes = perft_recursive(depth, quiescent, pos, tt, &outfile_stream, "");
         
         // Write the total at the end, just like the Python script.
         outfile_stream << "\nTotal: " << total_nodes << std::endl;
