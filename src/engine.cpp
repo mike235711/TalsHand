@@ -100,6 +100,7 @@ namespace
             pos.setBlockersPinsAndCheckBitsInQS();
             if (pos.getIsCheck())
             {
+                pos.setCheckInfo();
                 QSMoveSelectorCheck captures_move_selector(pos);
                 captures_move_selector.init();
                 while ((move = captures_move_selector.select_legal()) != Move(0))
