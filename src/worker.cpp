@@ -207,6 +207,11 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
     // Transposition table move search
     if (tt_move.getData() != 0)
     {
+#ifndef NDEBUG // DEBUG
+    #ifdef VERBOSE_DEBUG
+        std::cout << "Transposition Table move: " << tt_move.toString() << "\n";
+    #endif
+#endif
         no_moves = false;
         makeMove(tt_move, state_info);
         child_value = -alphaBetaSearch(depth - 1, -beta, -alpha);

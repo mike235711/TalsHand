@@ -1492,15 +1492,20 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 // Move piece and switch white and black roles, without rotating the board.
 // The main difference with makeCapture is that we set blockers and pins here when making a move
 {
-    if (!moveIsFine(move))
+#ifndef NDEBUG // DEBUG
+    #ifdef VERBOSE_DEBUG
+        std::cout << "Making move " << move.toString() << "\n";
+    #endif
+    if (!moveIsFine(move)) // DEBUG
     {
         std::cerr << "Assertion failed in makeMove: moveIsFine(move)\n";
         std::cerr << "FEN: " << toFenString() << "\n";
         std::cerr << "Move: " << move.toString() << "\n";
         assert(false);
     }
-    assert(move.getData() != 0);
-    assert(not getIsCheckOnInitialization(not m_turn));
+    assert(move.getData() != 0); // DEBUG
+    assert(not getIsCheckOnInitialization(not m_turn)); // DEBUG
+#endif
     NNUEU::NNUEUChange nnueuChanges;
 
     // Save irreversible aspects of position and create a new state
@@ -1540,6 +1545,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     {
         m_moved_piece = m_white_board[state_info->lastOriginSquare];
         captured_piece = m_black_board[destination_square];
+
         assert(m_moved_piece != 7);
 
         m_white_board[state_info->lastOriginSquare] = 7;
@@ -1708,6 +1714,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     {
         m_moved_piece = m_black_board[state_info->lastOriginSquare];
         captured_piece = m_white_board[destination_square];
+
         assert(m_moved_piece != 7); 
 
         m_black_board[state_info->lastOriginSquare] = 7;
@@ -1881,29 +1888,30 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     // is stored when making the next move to be able to go back.
     // So we store it in the m_ply+1 position because the initial position (or position after capture) is the m_ply 0.
     m_ply++;
-
-    if (!posIsFine())
-    {
-        std::cerr << "Assertion failed in makeMove: posIsFine()\n";
-        std::cerr << "FEN: " << toFenString() << "\n";
-        std::cerr << "Move: " << move.toString() << "\n";
-        assert(false);
-    }
-    if (isKingInCheck(m_turn))
-    {
-        std::cerr << "Assertion failed in makeMove: !isKingInCheck(m_turn)\n";
-        std::cerr << "FEN: " << toFenString() << "\n";
-        std::cerr << "Move: " << move.toString() << "\n";
-        assert(false);
-    }
-    if (getIsCheckOnInitialization(m_turn) != state_info->isCheck)
-    {
-        std::cerr << "Assertion failed in makeMove: getIsCheckOnInitialization(m_turn) == state_info->isCheck\n";
-        std::cerr << "FEN: " << toFenString() << "\n";
-        std::cerr << "Move: " << move.toString() << "\n";
-        assert(false);
-    }
-    // assert(computeFullZobristKey() == state_info->zobristKey);
+#ifndef NDEBUG // DEBUG
+        if (!posIsFine()) // DEBUG
+        {
+            std::cerr << "Assertion failed in makeMove: posIsFine()\n";
+            std::cerr << "FEN: " << toFenString() << "\n";
+            std::cerr << "Move: " << move.toString() << "\n";
+            assert(false);
+        }
+        if (isKingInCheck(m_turn)) // DEBUG
+        {
+            std::cerr << "Assertion failed in makeMove: !isKingInCheck(m_turn)\n";
+            std::cerr << "FEN: " << toFenString() << "\n";
+            std::cerr << "Move: " << move.toString() << "\n";
+            assert(false);
+        }
+        if (getIsCheckOnInitialization(m_turn) != state_info->isCheck) // DEBUG
+        {
+            std::cerr << "Assertion failed in makeMove: getIsCheckOnInitialization(m_turn) == state_info->isCheck\n";
+            std::cerr << "FEN: " << toFenString() << "\n";
+            std::cerr << "Move: " << move.toString() << "\n";
+            assert(false);
+        }
+        assert(computeFullZobristKey() == state_info->zobristKey);
+#endif
     return nnueuChanges;
 }
 template <typename T>
@@ -1912,6 +1920,11 @@ void BitPosition::unmakeMove(T move)
 // track of some irreversible aspects of the game at each ply.These are(white castling rights, black castling rights, passant square,
 // capture index, pins, checks).
 {
+#ifndef NDEBUG
+    #ifdef VERBOSE_DEBUG
+        std::cout << "Unmaking move " << move.toString() << "\n";
+    #endif
+#endif
     // If a move was made before, that means previous position had blockers set (which we restore from ply info)
     m_blockers_set = true;
 
@@ -2163,46 +2176,37 @@ void BitPosition::unmakeMove(T move)
     }
 
     m_turn = not m_turn;
-    if (!posIsFine())
+
+#ifndef NDEBUG // DEBUG
+    if (!posIsFine()) // DEBUG
     {
         std::cerr << "Assertion failed in unmakeMove: posIsFine()\n";
         std::cerr << "FEN: " << toFenString() << "\n";
         std::cerr << "Move: " << move.toString() << "\n";
         assert(false);
     }
-    if (isKingInCheck(m_turn))
+    if (isKingInCheck(m_turn)) // DEBUG
     {
         std::cerr << "Assertion failed in unmakeMove: !isKingInCheck(m_turn)\n";
         std::cerr << "FEN: " << toFenString() << "\n";
         std::cerr << "Move: " << move.toString() << "\n";
         assert(false);
     }
-    if (getIsCheckOnInitialization(m_turn) != state_info->isCheck)
+    if (getIsCheckOnInitialization(m_turn) != state_info->isCheck) // DEBUG
     {
         std::cerr << "Assertion failed in unmakeMove: getIsCheckOnInitialization(m_turn) == state_info->isCheck\n";
         std::cerr << "FEN: " << toFenString() << "\n";
         std::cerr << "Move: " << move.toString() << "\n";
         assert(false);
     }
+#endif
 }
 
 template <typename T>
 NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 // Captures and queen promotions
 {
-    if (!moveIsFine(move))
-    {
-        std::cerr << "Assertion failed in makeCapture: moveIsFine(move)\n";
-        std::cerr << "FEN: " << toFenString() << "\n";
-        std::cerr << "Move: " << move.toString() << "\n";
-        assert(false);
-    }
-    assert(move.getData() != 0);
-    assert(not getIsCheckOnInitialization(not m_turn));
     NNUEU::NNUEUChange nnueuChanges;
-#ifndef NDEBUG
-    std::memcpy(&new_state_info, state_info, offsetof(StateInfo, straightPinnedPieces));
-#endif
     new_state_info.previous = state_info;
     state_info->next = &new_state_info;
     state_info = &new_state_info;
@@ -2215,6 +2219,23 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     state_info->lastDestinationSquare = destination_square;
     uint64_t destination_bit = 1ULL << destination_square;
     int captured_piece;
+#ifndef NDEBUG // DEBUG
+    #ifdef VERBOSE_DEBUG
+        std::cout << "Making capture " << move.toString() << "\n";
+    #endif
+    if (!moveIsFine(move)) // DEBUG
+    {
+        std::cerr << "Assertion failed in makeCapture: moveIsFine(move)\n";
+        std::cerr << "FEN: " << toFenString() << "\n";
+        std::cerr << "Move: " << move.toString() << "\n";
+        assert(false);
+    }
+    assert(move.getData() != 0); // DEBUG
+    assert(not getIsCheckOnInitialization(not m_turn)); // DEBUG
+
+    std::memcpy(&new_state_info, state_info, offsetof(StateInfo, straightPinnedPieces));
+    state_info->pSquare = 0;
+#endif
 
     m_all_pieces_bit &= ~origin_bit;
     m_all_pieces_bit |= destination_bit;
@@ -2224,31 +2245,16 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 
     if (m_turn) // White's move
     {
-#ifndef NDEBUG
-        // Clear bits if a rook or king moved FROM this square
-        {
-            uint8_t mask = castlingMask[state_info->lastOriginSquare];
-            if (mask)
-                state_info->castlingRights &= ~mask;
-        }
-
-        // Clear bits if capturing a rook ON the destination square
-        {
-            uint8_t mask = castlingMask[destination_square];
-            if (captured_piece != 7 && mask)
-                state_info->castlingRights &= ~mask;
-        }
-
-        // If we moved White king from e1 -> clear White's bits, or black king from e8
-        if (m_moved_piece == 5) // a king
-        {
-            if (state_info->lastOriginSquare == 4) // White king from e1
-                state_info->castlingRights &= ~(WHITE_KS | WHITE_QS);
-        }
-#endif
         m_moved_piece = m_white_board[state_info->lastOriginSquare];
         captured_piece = m_black_board[destination_square];
-        assert(m_moved_piece != 7); // Moved piece must be a piece (not empty square or own piece)
+#ifndef NDEBUG // DEBUG
+    // If we moved White king from e1 -> clear White's bits, or black king from e8
+    if (m_moved_piece == 5) // a king
+    {
+        state_info->castlingRights &= ~(WHITE_KS | WHITE_QS);
+    }
+#endif
+        assert(m_moved_piece != 7); // DEBUG: Moved piece must be a piece (not empty square or own piece)
 
         // Promotions
         if (move.getData() & 0b0100000000000000)
@@ -2266,20 +2272,6 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
                 // Set NNUE input
                 nnueuChanges.addlast(64 * (5 + captured_piece) + destination_square);
                 m_black_board[destination_square] = 7;
-#ifndef NDEBUG
-                // CLEAR CASTLING RIGHTS if capturing an enemy rook on the corner
-                uint8_t mask = castlingMask[destination_square];
-                if (mask != 0)
-                {
-                    // Toggle out old rights
-                    state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
-                    // Clear bit(s)
-                    state_info->castlingRights &= ~mask;
-                    // Toggle in new rights
-                    state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
-                }
-                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][destination_square];
-#endif
             }
             m_white_board[state_info->lastOriginSquare] = 7;
             m_white_board[destination_square] = 4;
@@ -2320,59 +2312,19 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             m_white_board[state_info->lastOriginSquare] = 7;
             m_white_board[destination_square] = m_moved_piece;
             m_black_board[destination_square] = 7;
-#ifndef NDEBUG
-            // CLEAR CASTLING RIGHTS if capturing an enemy rook on the corner
-            uint8_t mask = castlingMask[destination_square];
-            if (mask != 0)
-            {
-                // Toggle out old rights
-                state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
-                // Clear bit(s)
-                state_info->castlingRights &= ~mask;
-                // Toggle in new rights
-                state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
-            }
-            state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][destination_square];
-#endif
         }
-#ifndef NDEBUG
-        state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->previous->pSquare];
-
-        // Updating passant square
-        if (m_moved_piece == 0 && (destination_square - (state_info->lastOriginSquare)) == 16)
-            state_info->pSquare = (state_info->lastOriginSquare) + 8;
-        else
-            state_info->pSquare = 0;
-
-        state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->pSquare];
-#endif
     }
     else // Black's move
     {
-#ifndef NDEBUG
-        // Clear bits if a rook or king moved FROM this square
-        {
-            uint8_t mask = castlingMask[state_info->lastOriginSquare];
-            if (mask)
-                state_info->castlingRights &= ~mask;
-        }
-
-        // Clear bits if capturing a rook ON the destination square
-        {
-            uint8_t mask = castlingMask[destination_square];
-            if (captured_piece != 7 && mask)
-                state_info->castlingRights &= ~mask;
-        }
-
+        m_moved_piece = m_black_board[state_info->lastOriginSquare];
+        captured_piece = m_white_board[destination_square];
+#ifndef NDEBUG // DEBUG
         // If we moved White king from e1 -> clear White's bits, or black king from e8
         if (m_moved_piece == 5) // a king
         {
-            if (state_info->lastOriginSquare == 60) // Black king from e8
-                state_info->castlingRights &= ~(BLACK_KS | BLACK_QS);
+            state_info->castlingRights &= ~(BLACK_KS | BLACK_QS);
         }
 #endif
-        m_moved_piece = m_black_board[state_info->lastOriginSquare];
-        captured_piece = m_white_board[destination_square];
         assert(m_moved_piece != 7); // Moved piece must be a piece (not empty square or own piece)
 
         // Promotions
@@ -2391,20 +2343,6 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
                 // Set NNUE input
                 nnueuChanges.addlast(64 * captured_piece + destination_square);
                 m_white_board[destination_square] = 7;
-#ifndef NDEBUG
-                // CLEAR CASTLING RIGHTS if capturing an enemy rook on the corner
-                uint8_t mask = castlingMask[destination_square];
-                if (mask != 0)
-                {
-                    // Toggle out old rights
-                    state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
-                    // Clear bit(s)
-                    state_info->castlingRights &= ~mask;
-                    // Toggle in new rights
-                    state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
-                }
-                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][destination_square];
-#endif
             }
             m_black_board[state_info->lastOriginSquare] = 7;
             m_black_board[destination_square] = 4;
@@ -2437,20 +2375,6 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 
                 // Set NNUE input
                 nnueuChanges.add(64 * (5 + m_moved_piece) + destination_square, 64 * (5 + m_moved_piece) + state_info->lastOriginSquare);
-#ifndef NDEBUG
-                // CLEAR CASTLING RIGHTS if capturing an enemy rook on the corner
-                uint8_t mask = castlingMask[destination_square];
-                if (mask != 0)
-                {
-                    // Toggle out old rights
-                    state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
-                    // Clear bit(s)
-                    state_info->castlingRights &= ~mask;
-                    // Toggle in new rights
-                    state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
-                }
-                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][destination_square];
-#endif
             }
             // Captures (Non passant)
             m_pieces[0][captured_piece] &= ~destination_bit;
@@ -2461,29 +2385,20 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             m_black_board[destination_square] = m_moved_piece;
             m_white_board[destination_square] = 7;
         }
-#ifndef NDEBUG
-        state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->previous->pSquare];
-
-        // Updating passant square
-        if (m_moved_piece == 0 && ((state_info->lastOriginSquare) - destination_square) == 16)
-            state_info->pSquare = (state_info->lastOriginSquare) - 8;
-        else
-            state_info->pSquare = 0;
-
-        state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->pSquare];
-#endif
     }
+#ifndef NDEBUG // DEBUG
+    // Clear bits if moving from or moving to a rook corner square
+    {
+        uint8_t mask = castlingMask[destination_square] | castlingMask[state_info->lastOriginSquare];
+        if (mask)
+            state_info->castlingRights &= ~mask;
+    }
+
+#endif
     m_turn = not m_turn;
     state_info->capturedPiece = captured_piece;
     m_ply++;
-
-#ifndef NDEBUG
-    BitPosition::setAllPiecesBits();
-    state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][state_info->lastOriginSquare] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][destination_square];
-    state_info->zobristKey ^= zobrist_keys::blackToMoveZobristNumber;
-    // assert(computeFullZobristKey() == state_info->zobristKey);
-#endif
-
+    state_info->zobristKey = computeFullZobristKey();
     assert(posIsFine());
     assert(!isKingInCheck(m_turn));
     assert(getIsCheckOnInitialization(m_turn) == state_info->isCheck);
@@ -2492,6 +2407,11 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 template <typename T>
 void BitPosition::unmakeCapture(T move)
 {
+#ifndef NDEBUG // DEBUG
+    #ifdef VERBOSE_DEBUG
+        std::cout << "Unmaking capture: " << move.toString() << "\n";
+    #endif
+#endif
     // If a move was made before, that means previous position had blockers set (which we restore from ply info)
     m_blockers_set = true;
 
@@ -2597,27 +2517,29 @@ void BitPosition::unmakeCapture(T move)
     }
 
     m_turn = not m_turn;
-    if (!posIsFine())
+#ifndef NDEBUG // DEBUG
+    if (!posIsFine()) // DEBUG
     {
         std::cerr << "Assertion failed in unmakeCapture: posIsFine()\n";
         std::cerr << "FEN: " << toFenString() << "\n";
         std::cerr << "Move: " << move.toString() << "\n";
         assert(false);
     }
-    if (isKingInCheck(m_turn))
+    if (isKingInCheck(m_turn)) // DEBUG
     {
         std::cerr << "Assertion failed in unmakeCapture: !isKingInCheck(m_turn)\n";
         std::cerr << "FEN: " << toFenString() << "\n";
         std::cerr << "Move: " << move.toString() << "\n";
         assert(false);
     }
-    if (getIsCheckOnInitialization(m_turn) != state_info->isCheck)
+    if (getIsCheckOnInitialization(m_turn) != state_info->isCheck) // DEBUG
     {
         std::cerr << "Assertion failed in unmakeCapture: getIsCheckOnInitialization(m_turn) == state_info->isCheck\n";
         std::cerr << "FEN: " << toFenString() << "\n";
         std::cerr << "Move: " << move.toString() << "\n";
         assert(false);
     }
+#endif
 }
 
 // Game ending functions
