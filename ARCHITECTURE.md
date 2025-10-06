@@ -45,8 +45,11 @@ The engine communicates via the Universal Chess Interface (UCI) protocol. The UC
 
 ## TODO
 - Fix errors
-- Simplify further `src/bitposition.cpp`
+- Build speed tests with tactics
 - Build tests for the nnueu loading and accumulation
+- Create a tutorial for building and running tests, maybe automate it (1 perfts with debug, 2 nnueu with debug, 3 tactics with debug and verbose, 4 tactics on release build)
+- Simplify castling rights logic in makeMove
+- Simplify further `src/bitposition.cpp` code with m_turn logic
 - Try to see if including zobrist key updates and ttable lookup in quiesence is worth it.
 - Mate distance pruning
 - If not in check we can perform a static evaluation of the position
