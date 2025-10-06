@@ -34,13 +34,6 @@ if(ipo_ok)
     set_property(TARGET talshand PROPERTY INTERPROCEDURAL_OPTIMIZATION $<$<CONFIG:Release>:YES>)
 endif()
 
-# Link-time optimisation if the toolchain supports it
-include(CheckIPOSupported)
-check_ipo_supported(RESULT ipo_ok)
-if(ipo_ok)
-    set_target_properties(talshand PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE YES)
-endif()
-
 # Public interface include path (adjust if you have an include/ dir)
 target_include_directories(talshand PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
@@ -48,6 +41,13 @@ target_include_directories(talshand PUBLIC
 
 # Convenient alias for downstream targets
 add_library(Talshand::lib ALIAS talshand)
+
+# This is the key change. We add the compile definition to the library,
+# but use a generator expression to make it conditional. It will only be
+# applied if the target linking this library is 'tactics_tests'.
+target_compile_definitions(talshand PRIVATE
+    $<$<BOOL:$<TARGET_PROPERTY:tactics_tests,TYPE>>:VERBOSE_DEBUG>
+)
 
 # Stand-alone executable
 add_executable(talshand_exe main.cpp)
