@@ -16,6 +16,12 @@ set(SOURCES
 # Core library
 add_library(talshand STATIC ${SOURCES})
 
+# Add the compile definition for the verbose debug build
+if(ENABLE_VERBOSE_DEBUG)
+  message(STATUS "Verbose debugging enabled (VERBOSE_DEBUG defined)")
+  target_compile_definitions(talshand PUBLIC VERBOSE_DEBUG)
+endif()
+
 # Modern way to set config-specific options
 target_compile_options(talshand PRIVATE
   $<$<CONFIG:Release>:-Ofast -mcpu=apple-m2>

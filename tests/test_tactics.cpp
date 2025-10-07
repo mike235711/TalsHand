@@ -9,6 +9,11 @@
 #include "magicmoves.h"
 #include "zobrist_keys.h"
 
+// Define a default depth in case the file is compiled without the CMake flag.
+#ifndef MAX_TACTICS_DEPTH
+  #define MAX_TACTICS_DEPTH 5
+#endif
+
 // This struct is defined in test_engine.cpp, but since we are in a separate
 // compilation unit, we need it here as well. A better solution would be to
 
@@ -45,7 +50,7 @@ TEST_CASE("Tactics Tests (Depth-Limited)")
     auto total_start_time = std::chrono::high_resolution_clock::now();
 
     // Loop through depths
-    for (int depth = 2; depth <= 5; ++depth)
+    for (int depth = 2; depth <= MAX_TACTICS_DEPTH; ++depth)
     {
         std::cout << "--- Testing at Depth " << depth << " ---" << std::endl;
 
