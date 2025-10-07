@@ -62,6 +62,7 @@ cd build && ctest --verbose
 ## TODO
 - Fix errors
 - Build tests for the nnueu loading and accumulation
+- In the tactics test with the Release version, we could save the time taken in total, and for each depth separately in a flie with a timestamp (to differentiate from other files created like this)
 - Simplify castling rights logic in makeMove
 - Simplify further `src/bitposition.cpp` code with m_turn logic
 - Try to see if including zobrist key updates and ttable lookup in quiesence is worth it.
