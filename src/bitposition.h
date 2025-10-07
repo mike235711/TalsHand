@@ -220,7 +220,6 @@ public:
     template <typename T>
     bool isCaptureLegal(const T *move) const;
 
-    bool isRefutationLegal(Move move) const;
     bool isNormalMoveLegal(int origin_square, int destination_square) const;
 
     bool ttMoveIsOk(Move move) const;

@@ -194,38 +194,7 @@ uint64_t BitPosition::computeFullZobristKey() const
 // Functions we call on initialization
 void BitPosition::initializeZobristKey()
 {
-    state_info->zobristKey = 0;
-
-    auto xor_piece_list = [&](int colour, int piece, uint64_t bb)
-    {
-        while (bb)
-        {
-            int sq = popLeastSignificantBit(bb);
-            state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[colour][piece][sq];
-        }
-    };
-
-    // white non-king pieces (piece types 0..4)
-    for (int pt = 0; pt < 5; ++pt)
-        xor_piece_list(0, pt, m_pieces[0][pt]);
-    // white king
-    state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[0][5][m_king_position[0]];
-
-    // black non-king pieces
-    for (int pt = 0; pt < 5; ++pt)
-        xor_piece_list(1, pt, m_pieces[1][pt]);
-    // black king
-    state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[1][5][m_king_position[1]];
-
-    // side to move
-    if (!m_turn)
-        state_info->zobristKey ^= zobrist_keys::blackToMoveZobristNumber;
-
-    // castling rights
-    state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
-
-    // en-passant file (0-7) or 8 if none
-    state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->pSquare];
+    state_info->zobristKey = computeFullZobristKey();
 }
 
 void BitPosition::setIsCheckOnInitialization()
@@ -2393,7 +2362,6 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
         if (mask)
             state_info->castlingRights &= ~mask;
     }
-
 #endif
     m_turn = not m_turn;
     state_info->capturedPiece = captured_piece;
