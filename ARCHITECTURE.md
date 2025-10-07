@@ -47,7 +47,7 @@ The engine communicates via the Universal Chess Interface (UCI) protocol. The UC
 There are 3 build types (Release, Debug&Verbose and Debug). When running tests it is recommended to first build the Debug type. This will run some bit utils tests and perft tests on debug mode, checking for important assertions. If it passes, then it is recommended to build the Debug&Verbose type. This will run the tactics tests, checking for important assertions and printing which moves are being performed internally in the engine, which is useful for debugging. If it passes, then we wan build the Release version and perform the tactics tests, measuring the time taken to do them. If the time taken has decreased we have a new version of TalsHand!
 
 1) To build and test the Debug version:
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_VERBOSE_DEBUG=OFF
 cmake --build build
 cd build && ctest --verbose
 2) To build and test the Debug&Verbose version:
@@ -55,14 +55,13 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_VERBOSE_DEBUG=ON
 cmake --build build
 cd build && ctest --verbose
 3) To build and test the Release version:
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DENABLE_VERBOSE_DEBUG=OFF
 cmake --build build
 cd build && ctest --verbose
 
 ## TODO
 - Fix errors
 - Build tests for the nnueu loading and accumulation
-- Create a tutorial for building and running tests, maybe automate it (1 perfts with debug, 2 nnueu with debug, 3 tactics with debug and verbose, 4 tactics on release build)
 - Simplify castling rights logic in makeMove
 - Simplify further `src/bitposition.cpp` code with m_turn logic
 - Try to see if including zobrist key updates and ttable lookup in quiesence is worth it.
