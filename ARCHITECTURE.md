@@ -61,7 +61,6 @@ cd build && ctest --verbose
 
 ## TODO
 - Fix errors
-- Improve tests for comparing perft files, if a set of moves has a different number, then go to within the set of moves in the correct file to see which is the move or moves we are missing after that set of moves.
 - Build tests for the nnueu loading and accumulation
 - In the tactics test with the Release version, we could save the time taken in total, and for each depth separately in a flie with a timestamp (to differentiate from other files created like this)
 - After a succesful version release perform a timeprofiler on the tactics test and save the data for future version comparisons.
