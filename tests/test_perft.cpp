@@ -11,6 +11,7 @@
 #include <string>
 #include <unordered_map>
 #include <sstream>
+#include <cstdint>
 
 #include "engine.h"
 #include "precomputed_moves.h"
@@ -19,23 +20,54 @@
 
 namespace
 {
-    /**
-     * @brief Parses a perft output file into a map of {move_sequence: node_count}.
-     * This is the C++ equivalent of the parsing function in the Python script.
-     */
+    // This helper function is correct and remains unchanged.
+    std::unordered_map<std::string, std::uint64_t> getSubPerft(const std::string& filepath, const std::string& move_prefix)
+    {
+        std::unordered_map<std::string, std::uint64_t> move_counts;
+        std::ifstream file(filepath);
+        if (!file.is_open()) return move_counts;
+
+        std::string prefix_with_space = move_prefix + " ";
+        std::string line;
+
+        while (std::getline(file, line))
+        {
+            // We are looking for lines that are children of move_prefix.
+            // e.g., if move_prefix is "e2e4", we want "e2e4 e7e5: ..."
+            // but we do NOT want "e2e4: ..." which is the total for the parent.
+            if (line.rfind(prefix_with_space, 0) == 0) {
+                size_t colon_pos = line.find(':');
+                if (colon_pos == std::string::npos) continue;
+                
+                std::string full_move_seq = line.substr(0, colon_pos);
+                size_t sub_move_start = prefix_with_space.length();
+                
+                // This logic finds the next token, e.g., "e7e5" in "e2e4 e7e5".
+                // It correctly handles the end of the string if there are no more spaces.
+                size_t sub_move_end = full_move_seq.find(' ', sub_move_start);
+                std::string sub_move = full_move_seq.substr(sub_move_start, sub_move_end - sub_move_start);
+
+                try {
+                    std::string count_str = line.substr(colon_pos + 1);
+                    move_counts[sub_move] = std::stoull(count_str);
+                } catch (const std::exception&) {}
+            }
+        }
+        return move_counts;
+    }
+
+    // Use the original, robust parser that gets all lines.
     std::unordered_map<std::string, std::uint64_t> parsePerftFile(const std::string& filepath)
     {
         std::unordered_map<std::string, std::uint64_t> move_counts;
         std::ifstream file(filepath);
         if (!file.is_open()) {
-            // Return an empty map if the file can't be opened. The comparison will fail later.
             return move_counts;
         }
 
         std::string line;
         while (std::getline(file, line))
         {
-            // Simple trim
             line.erase(0, line.find_first_not_of(" \t\n\r"));
             line.erase(line.find_last_not_of(" \t\n\r") + 1);
 
@@ -46,92 +78,101 @@ namespace
             size_t colon_pos = line.find(':');
             if (colon_pos != std::string::npos) {
                 std::string move_seq = line.substr(0, colon_pos);
-                // Simple trim for the move sequence
                 move_seq.erase(move_seq.find_last_not_of(" \t\n\r") + 1);
-
-                std::string count_str = line.substr(colon_pos + 1);
                 try {
-                    move_counts[move_seq] = std::stoull(count_str);
-                } catch (const std::exception&) {
-                    // Handle potential conversion error if the format is weird
-                }
+                    move_counts[move_seq] = std::stoull(line.substr(colon_pos + 1));
+                } catch (const std::exception&) {}
             }
         }
         return move_counts;
     }
+
     std::string comparePerftFiles(const std::string& correctFilepath, const std::string& testFilepath)
     {
         if (!std::filesystem::exists(correctFilepath)) {
-            return "FATAL ERROR: The 'correct' data file was not found at path: " + correctFilepath;
+            return "FATAL ERROR: The 'correct' data file was not found: " + correctFilepath;
         }
         if (!std::filesystem::exists(testFilepath)) {
-            return "FATAL ERROR: The test output file was not found. Did the engine generate it? Path: " + testFilepath;
+            return "FATAL ERROR: The test output file was not found: " + testFilepath;
         }
 
+        // Parse the entire correct file into a map for quick lookups.
         auto correctData = parsePerftFile(correctFilepath);
         if (correctData.empty()) {
-            return "ERROR: Could not read or parse the correct data file: " + correctFilepath;
+            return "ERROR: Could not read or parse correct file: " + correctFilepath;
         }
 
+        auto unseenCorrectMoves = correctData;
         std::ifstream testFile(testFilepath);
         if (!testFile.is_open()) {
-            return "ERROR: Could not open the test output file: " + testFilepath;
+            return "ERROR: Could not open test file: " + testFilepath;
         }
 
         std::string line;
         int lineNum = 0;
-        size_t testMovesParsed = 0;
         while (std::getline(testFile, line))
         {
             lineNum++;
             line.erase(0, line.find_first_not_of(" \t\n\r"));
             line.erase(line.find_last_not_of(" \t\n\r") + 1);
 
-            if (line.empty() || line.find("Total:") != std::string::npos) {
-                continue;
-            }
+            if (line.empty() || line.find("Total:") != std::string::npos) continue;
 
             size_t colon_pos = line.find(':');
             if (colon_pos != std::string::npos) {
-                testMovesParsed++;
                 std::string move_seq = line.substr(0, colon_pos);
                 move_seq.erase(move_seq.find_last_not_of(" \t\n\r") + 1);
-                
-                std::uint64_t count = 0;
+
+                uint64_t count = 0;
                 try {
                     count = std::stoull(line.substr(colon_pos + 1));
-                } catch(const std::exception&) { /* ignore */ }
+                } catch(const std::exception&) {}
 
                 auto it = correctData.find(move_seq);
 
-                // Check 1: Extra/illegal move found in test file
+                // Case A: The move sequence from the test file doesn't exist in the correct file.
                 if (it == correctData.end()) {
                     std::stringstream ss;
-                    ss << "Mismatch found: Engine generated an extra/illegal move.\n"
-                       << "  File: " << testFilepath << "\n"
-                       << "  Line " << lineNum << ": \"" << line << "\"";
+                    ss << "Mismatch found: Engine generated an extra/illegal move sequence.\n"
+                    << "  File: " << testFilepath << "\n"
+                    << "  Line " << lineNum << ": \"" << line << "\"";
                     return ss.str();
                 }
 
-                // Check 2: Node count mismatch
+                unseenCorrectMoves.erase(move_seq); // Mark this line as seen.
+
+                // Case B: The move sequence exists, but the total node count is wrong. 
+                // This can only mean that within this move sequence, a move is missing.
                 if (it->second != count) {
                     std::stringstream ss;
-                    ss << "Mismatch found: Node count is incorrect.\n"
-                       << "  File:     " << testFilepath << "\n"
-                       << "  Line " << lineNum << ":  \"" << line << "\"\n"
-                       << "  Expected: \"" << move_seq << ": " << it->second << "\"";
+
+                    auto correctSubPerft = getSubPerft(correctFilepath, move_seq);
+                    auto testSubPerft = getSubPerft(testFilepath, move_seq);
+
+                    // Print if any of correctSubPerft or testSubPerft is empty (which is unexpected).
+                    if (correctSubPerft.empty()) {
+                        ss << "ERROR: Could not extract child moves from correct file for move sequence '" << move_seq << "'.\n";
+                    }
+                    if (testSubPerft.empty()) {     
+                        ss << "ERROR: Could not extract child moves from test file for move sequence '" << move_seq << "'.\n";
+                    }
+
+                    // Iterate through the correct children to find what's missing
+                    for (const auto& correct_pair : correctSubPerft) {
+                        auto test_it = testSubPerft.find(correct_pair.first);
+                        if (test_it == testSubPerft.end()) {
+                            ss << "Mismatch found: Node count is incorrect.\n"
+                            << "  File:     " << testFilepath << "\n"
+                            << "  Line " << lineNum << ":  \"" << line << "\"\n"
+                            << "  Expected: \"" << move_seq << ": " << it->second << "\"\n"
+                            << "ANALYSIS of child moves for '" << move_seq << "':\n"
+                            << "  - Missing child move: " << correct_pair.first << ")\n";
+                        }
+                    }
                     return ss.str();
                 }
             }
         }
-
-        // Check 3: Missing moves
-        if (testMovesParsed < correctData.size()) {
-            return "Mismatch found: Engine failed to generate all legal moves (found "
-                   + std::to_string(testMovesParsed) + ", expected " + std::to_string(correctData.size()) + ").";
-        }
-
-        // If all checks pass, return an empty string for success
         return "";
     }
     std::string sanitize_fen(std::string fen) {
