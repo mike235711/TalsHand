@@ -90,7 +90,7 @@ private:
     {
         std::fill(std::begin(m_white_board), std::end(m_white_board), 7);
         std::fill(std::begin(m_black_board), std::end(m_black_board), 7);
-        std::fill(&m_pieces[0][0], &m_pieces[0][0] + 12, 0ULL);
+        std::memset(m_pieces, 0ULL, sizeof(m_pieces));
         m_pieces_bit[0] = m_pieces_bit[1] = m_all_pieces_bit = 0ULL;
         m_turn = false;
         m_moved_piece = m_promoted_piece = 7;

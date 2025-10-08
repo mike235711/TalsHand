@@ -108,7 +108,7 @@ namespace precomputed_moves
     /* small table builders --------------------------------------*/
 
     template <typename F>
-    consteval std::array<uint64_t, 64> make64(F fun)
+    constexpr std::array<uint64_t, 64> make64(F fun)
     {
         std::array<uint64_t, 64> a{};
         for (int s = 0; s < 64; ++s)
@@ -117,7 +117,7 @@ namespace precomputed_moves
     }
 
     template <typename F>
-    consteval std::array<std::array<uint64_t, 64>, 64> make64x64(F fun)
+    constexpr std::array<std::array<uint64_t, 64>, 64> make64x64(F fun)
     {
         std::array<std::array<uint64_t, 64>, 64> a{};
         for (int s1 = 0; s1 < 64; ++s1)
