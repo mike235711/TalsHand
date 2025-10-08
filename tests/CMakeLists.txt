@@ -15,17 +15,17 @@ string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPER)
 
 # Scenario 1: Standard Debug Build
 if(CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG" AND NOT ENABLE_VERBOSE_DEBUG)
-    message(STATUS "Registering standard debug tests (unit_tests)")
-    
-    add_executable(unit_tests
+    message(STATUS "Registering standard debug tests (perft_tests)")
+
+    add_executable(perft_tests
         "test_bit_utils.cpp"
         "test_perft.cpp"
     )
-    target_link_libraries(unit_tests PRIVATE
+    target_link_libraries(perft_tests PRIVATE
         Catch2::Catch2WithMain
         Talshand::lib
     )
-    catch_discover_tests(unit_tests)
+    catch_discover_tests(perft_tests)
 endif()
 
 # Scenario 2: Debug Verbose Build (Tactics up to Depth 5)
