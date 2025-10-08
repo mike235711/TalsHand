@@ -491,6 +491,8 @@ std::pair<Move, int16_t> Worker::iterativeSearch(int8_t start_depth, int8_t fixe
 //  startSearching – wrapper around iterative deepening
 std::pair<Move, int16_t> Worker::startSearching(int8_t max_depth)
 {
+    rootMoves.clear();
+    rootScores.clear();
     accumulatorStack.reset(rootPos, *transformer);
     auto result = iterativeSearch(2, max_depth); // result = {bestMove, score}
 
