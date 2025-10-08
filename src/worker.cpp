@@ -314,10 +314,15 @@ std::pair<Move, int16_t> Worker::firstMoveSearch(int8_t depth, int16_t alpha, in
 // This search is done when depth is more than 0 and considers all moves
 // Note that here we have no alpha/beta cutoffs, since we are only applying the first move.
 {
+    // Keep track of best previous iteration score to decide “penalty”
+    // (If a move’s prior score is way below this, we reduce the depth.)
+    int16_t bestScoreFromPreviousIteration;
+            
     // Reorder the first moves by last-known scores or first-time ordering
     if (rootScores.empty())
     {
         rootScores.resize(rootMoves.size(), -30001);
+        bestScoreFromPreviousIteration = -30001;
     }
     else
     {
@@ -325,30 +330,24 @@ std::pair<Move, int16_t> Worker::firstMoveSearch(int8_t depth, int16_t alpha, in
             rootPos.orderAllMovesOnFirstIteration(rootMoves, rootScores);
         rootMoves = result.first;
         rootScores = result.second;
+        bestScoreFromPreviousIteration = rootScores[0];
     }
 
     // Baseline initialization
     int16_t value = static_cast<int16_t>(-30001);
     Move best_move{0};
 
-    // Keep track of best previous iteration score to decide “penalty”
-    // (If a move’s prior score is way below this, we reduce the depth.)
-    int16_t bestScoreFromPreviousIteration = -30001;
-    for (auto sc : rootScores)
-        if (sc > bestScoreFromPreviousIteration)
-            bestScoreFromPreviousIteration = sc;
-
     auto first_move_start_time = std::chrono::high_resolution_clock::now();
 
     currentPos = rootPos;
     NNUEU::NNUEUChange nnueuChange;
+    StateInfo state_info;
 
     // Main loop over candidate moves
     for (std::size_t i = 0; i < rootMoves.size(); ++i)
     {
         Move currentMove = rootMoves[i];
 
-        StateInfo state_info;
         makeMove(currentMove, state_info);
 
         // Decide on “reduction” based on previous iteration’s score
@@ -500,7 +499,7 @@ std::pair<Move, int16_t> Worker::startSearching(int8_t max_depth)
     if (isMainThread())
     {
         std::cout << "bestmove "
-                  << result.first.toString() // e.g. e2e4, e7e8q …
+                  << result.first.toString() 
                   << '\n'                    // newline required by protocol
                   << std::flush;             // be sure it reaches the GUI
     }
