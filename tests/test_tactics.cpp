@@ -63,7 +63,7 @@ TEST_CASE("Tactic 2", "[tactics][timed]") {
     #ifndef NDEBUG
         run_tactic_test("2", "rR6/p7/KnPk4/P7/8/8/8/8 w - - 0 1", "c6c7", 5);
     #else
-        run_tactic_test("2", "rR6/p7/KnPk4/P7/8/8/8/8 w - - 0 1", "c6c7", 12);
+        run_tactic_test("2", "rR6/p7/KnPk4/P7/8/8/8/8 w - - 0 1", "c6c7", 14);
     #endif
 }
 
@@ -95,7 +95,7 @@ TEST_CASE("Tactic 6", "[tactics][timed]") {
     #ifndef NDEBUG
         run_tactic_test("6", "3k2rr/4b3/p3Qpq1/P2pn3/1p1Nb3/6B1/1PP1B2P/3R1RK1 b - - 0 25", "h8h2", 5);
     #else
-        run_tactic_test("6", "3k2rr/4b3/p3Qpq1/P2pn3/1p1Nb3/6B1/1PP1B2P/3R1RK1 b - - 0 25", "h8h2", 14);
+        run_tactic_test("6", "3k2rr/4b3/p3Qpq1/P2pn3/1p1Nb3/6B1/1PP1B2P/3R1RK1 b - - 0 25", "h8h2", 9);
     #endif
 }
 

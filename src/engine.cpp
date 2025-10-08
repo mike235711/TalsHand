@@ -527,6 +527,6 @@ void THEngine::stopSearch()
 
 std::string THEngine::searchFixedDepth(int8_t depth)
 {
-    std::pair<Move, int16_t> result = threadpool.startThinking(pos, stateInfos, timeLeft = 999999, ponder, depth);
+    std::pair<Move, int16_t> result = threadpool.startThinking(pos, stateInfos, std::numeric_limits<int>::max(), ponder, depth);
     return result.first.toString();
 }
