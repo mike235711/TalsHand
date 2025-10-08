@@ -1,0 +1,18 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0] - 2023-10-27
+
+### Added
+- Initial project structure with CMake build system.
+- Core engine components: Bitboard representation, move generation, alpha-beta search, quiscence search and transposition table implementation.
+- Custom NNUEU implementation for fast and efficient position evaluation.
+- UCI protocol support for integration with standard chess GUIs.
+- Multi-stage testing process (Debug, Debug&Verbose, Release) using Catch2.
+- Architectural documentation (`ARCHITECTURE.md`) and project overview (`README.md`).

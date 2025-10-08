@@ -59,6 +59,30 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DENABLE_VERBOSE_DEBUG=OFF
 cmake --build build
 cd build && ctest --verbose
 
+## Versioning and Releases
+
+This project follows [Semantic Versioning](https://semver.org/). The release process is designed to be straightforward, ensuring that each version is properly tagged and documented.
+
+1.  **Update Changelog**: Before creating a new release, update the `[Unreleased]` section in `CHANGELOG.md` with all notable changes. Once finalized, rename the section to the new version number (e.g., `[0.2.0] - YYYY-MM-DD`) and create a new `[Unreleased]` section above it.
+
+2.  **Commit Changes**: Commit the updated `CHANGELOG.md` and any other final changes for the release.
+    ```bash
+    git add CHANGELOG.md
+    git commit -m "docs: Prepare for release v0.1.0"
+    ```
+
+3.  **Tag the Version**: Create an annotated Git tag for the new version.
+    ```bash
+    git tag -a v0.1.0 -m "Version 0.1.0"
+    ```
+
+4.  **Push to GitHub**: Push your commits and the new tag to the remote repository.
+    ```bash
+    git push origin main --tags
+    ```
+
+5.  **Create GitHub Release**: Navigate to the "Releases" section of the GitHub repository. Draft a new release, select the tag you just pushed, and copy the release notes from `CHANGELOG.md` into the description.
+
 ## TODO
 - Build tests for the nnueu loading and accumulation
 - In the tactics test with the Release version, we could save the time taken in total, and for each depth separately in a flie with a timestamp (to differentiate from other files created like this)
