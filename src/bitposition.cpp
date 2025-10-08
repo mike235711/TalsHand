@@ -2175,19 +2175,6 @@ template <typename T>
 NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 // Captures and queen promotions
 {
-    NNUEU::NNUEUChange nnueuChanges;
-    new_state_info.previous = state_info;
-    state_info->next = &new_state_info;
-    state_info = &new_state_info;
-
-    m_blockers_set = false;
-
-    state_info->lastOriginSquare = move.getOriginSquare();
-    uint64_t origin_bit = 1ULL << state_info->lastOriginSquare;
-    int destination_square = move.getDestinationSquare();
-    state_info->lastDestinationSquare = destination_square;
-    uint64_t destination_bit = 1ULL << destination_square;
-    int captured_piece;
 #ifndef NDEBUG // DEBUG
     #ifdef VERBOSE_DEBUG
         std::cout << "Making capture " << move.toString() << "\n";
@@ -2203,8 +2190,22 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     assert(not getIsCheckOnInitialization(not m_turn)); // DEBUG
 
     std::memcpy(&new_state_info, state_info, offsetof(StateInfo, straightPinnedPieces));
-    state_info->pSquare = 0;
 #endif
+    NNUEU::NNUEUChange nnueuChanges;
+    new_state_info.previous = state_info;
+    state_info->next = &new_state_info;
+    state_info = &new_state_info;
+
+    state_info->pSquare = 0;
+
+    m_blockers_set = false;
+
+    state_info->lastOriginSquare = move.getOriginSquare();
+    uint64_t origin_bit = 1ULL << state_info->lastOriginSquare;
+    int destination_square = move.getDestinationSquare();
+    state_info->lastDestinationSquare = destination_square;
+    uint64_t destination_bit = 1ULL << destination_square;
+    int captured_piece;
 
     m_all_pieces_bit &= ~origin_bit;
     m_all_pieces_bit |= destination_bit;
