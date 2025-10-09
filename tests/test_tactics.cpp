@@ -4,6 +4,8 @@
 #include <chrono>
 #include <string>
 #include <iomanip>
+#include <fstream>
+#include <ctime>
 
 #include "engine.h"
 #include "precomputed_moves.h"
@@ -27,6 +29,22 @@ static TestInitializer initialize_tactics_tests;
 // A helper function to run and time a single tactic test to avoid code repetition.
 // While not strictly necessary, it keeps each TEST_CASE block cleaner.
 void run_tactic_test(const std::string& name, const std::string& fen, const std::string& bestMove, int maxDepth = MAX_TACTICS_DEPTH) {
+    #ifdef NDEBUG
+        static std::ofstream results_file = [] {
+            const std::string filename = "tactic_results.csv";
+            std::ofstream file(filename, std::ios_base::app); // Open in append mode
+
+            if (file.is_open()) {
+                // If the file is empty, write the header.
+                file.seekp(0, std::ios::end);
+                if (file.tellp() == 0) {
+                    file << "TacticName,FEN,Depth,MoveFound,TimeTakenSeconds,Timestamp\n";
+                }
+            }
+            return file;
+        }();
+    #endif
+
     THEngine engine;
     engine.setPosition(fen, {});
     std::string moveFound;
@@ -44,6 +62,23 @@ void run_tactic_test(const std::string& name, const std::string& fen, const std:
                   << ": Found '" << moveFound << "' in "
                   << std::fixed << std::setprecision(4) << elapsed.count() << " seconds."
                   << std::endl;
+
+        #ifdef NDEBUG
+            if (results_file.is_open()) {
+                auto now = std::chrono::system_clock::now();
+                auto in_time_t = std::chrono::system_clock::to_time_t(now);
+                std::stringstream timestamp_ss;
+                timestamp_ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %H:%M:%S");
+
+                results_file << name << ","
+                             << "\"" << fen << "\","
+                             << depth << ","
+                             << moveFound << ","
+                             << std::fixed << std::setprecision(4) << elapsed.count() << ","
+                             << timestamp_ss.str()
+                             << "\n";
+            }
+        #endif
 
         if (depth == maxDepth) {
             REQUIRE(moveFound == bestMove);
@@ -95,7 +130,7 @@ TEST_CASE("Tactic 6", "[tactics][timed]") {
     #ifndef NDEBUG
         run_tactic_test("6", "3k2rr/4b3/p3Qpq1/P2pn3/1p1Nb3/6B1/1PP1B2P/3R1RK1 b - - 0 25", "h8h2", 5);
     #else
-        run_tactic_test("6", "3k2rr/4b3/p3Qpq1/P2pn3/1p1Nb3/6B1/1PP1B2P/3R1RK1 b - - 0 25", "h8h2", 9);
+        run_tactic_test("6", "3k2rr/4b3/p3Qpq1/P2pn3/1p1Nb3/6B1/1PP1B2P/3R1RK1 b - - 0 25", "h8h2", 10);
     #endif
 }
 

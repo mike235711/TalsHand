@@ -84,9 +84,9 @@ This project follows [Semantic Versioning](https://semver.org/). The release pro
 5.  **Create GitHub Release**: Navigate to the "Releases" section of the GitHub repository. Draft a new release, select the tag you just pushed, and copy the release notes from `CHANGELOG.md` into the description.
 
 ## TODO
+- BUG: I think something is wrong when choosing a move and search is stopped because of time. Simplify stopping logic due to time.
 - Build tests for the nnueu loading and accumulation
-- In the tactics test with the Release version, we could save the time taken in total, and for each depth separately in a flie with a timestamp (to differentiate from other files created like this)
-- After a succesful version release perform a timeprofiler on the tactics test and save the data for future version comparisons.
+- Include the final test for version release which is to play several games on different positions and time controls against last oldest version and see the score.
 - Simplify castling rights logic in makeMove
 - Simplify further `src/bitposition.cpp` code with m_turn logic
 - Try to see if including zobrist key updates and ttable lookup in quiesence is worth it.
