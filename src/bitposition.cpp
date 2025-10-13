@@ -773,7 +773,7 @@ ScoredMove *BitPosition::pawnCapturesAndQueenProms(ScoredMove *&move_list) const
 ScoredMove *BitPosition::knightCaptures(ScoredMove *&move_list) const
 // All knight captures
 {
-    uint64_t moveable_knights{m_pieces[not m_turn][1]};
+    uint64_t moveable_knights{m_pieces[not m_turn][1] & ~state_info->pinnedPieces};
     uint64_t enemy = m_pieces_bit[m_turn];
     while (moveable_knights)
     {
@@ -1381,7 +1381,7 @@ Move *BitPosition::inCheckOrderedCaptures(Move *&move_list) const
         }
     }
     // Knight captures from checking position
-    piece_moves = precomputed_moves::knight_moves[m_check_square] & m_pieces[not m_turn][1];
+    piece_moves = precomputed_moves::knight_moves[m_check_square] & (m_pieces[not m_turn][1] & ~state_info->pinnedPieces);
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
@@ -2528,7 +2528,7 @@ bool BitPosition::isMate() const
         if (m_turn) // White's turn
         {
             // Single move pawn block
-            uint64_t pawnAdvances{shift_up(m_pieces[0][0] & ~state_info->diagonalPinnedPieces) & ~m_all_pieces_bit};
+            uint64_t pawnAdvances{shift_up(m_pieces[0][0]) & ~m_all_pieces_bit};
             piece_moves = pawnAdvances & m_check_rays;
             while (piece_moves)
             {
@@ -2548,7 +2548,7 @@ bool BitPosition::isMate() const
         else
         {
             // Single move pawn block
-            uint64_t pawnAdvances{shift_down(m_pieces[1][0] & ~state_info->diagonalPinnedPieces) & ~m_all_pieces_bit};
+            uint64_t pawnAdvances{shift_down(m_pieces[1][0]) & ~m_all_pieces_bit};
             piece_moves = pawnAdvances & m_check_rays;
             while (piece_moves)
             {
@@ -2565,8 +2565,8 @@ bool BitPosition::isMate() const
                     return false;
             }
         }
-        // Rook block
-        piece_moves = m_pieces[not m_turn][3] & ~state_info->diagonalPinnedPieces;
+        // Rook/Queen block
+        piece_moves = m_pieces[not m_turn][3] | m_pieces[not m_turn][4];
         while (piece_moves)
         {
             int origin{popLeastSignificantBit(piece_moves)};
@@ -2577,24 +2577,12 @@ bool BitPosition::isMate() const
                     return false;
             }
         }
-        // Bishop block
-        piece_moves = m_pieces[not m_turn][2] & ~state_info->straightPinnedPieces;
+        // Bishop/Queen block
+        piece_moves = m_pieces[not m_turn][2] | m_pieces[not m_turn][4];
         while (piece_moves)
         {
             int origin{popLeastSignificantBit(piece_moves)};
             uint64_t piece_destinations{BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & m_all_pieces_bit) & m_check_rays};
-            while (piece_destinations)
-            {
-                if (isNormalMoveLegal(origin, popLeastSignificantBit(piece_destinations)))
-                    return false;
-            }
-        }
-        // Queen block
-        piece_moves = m_pieces[not m_turn][4];
-        while (piece_moves)
-        {
-            int origin{popLeastSignificantBit(piece_moves)};
-            uint64_t piece_destinations{(RmagicNOMASK(origin, precomputed_moves::rook_unfull_rays[origin] & m_all_pieces_bit) | BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & m_all_pieces_bit)) & m_check_rays};
             while (piece_destinations)
             {
                 if (isNormalMoveLegal(origin, popLeastSignificantBit(piece_destinations)))
