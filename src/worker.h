@@ -84,11 +84,11 @@ private:
     std::chrono::milliseconds timeForMoveMS;
     std::chrono::milliseconds timeLimit;
 
-    // —— root‑level bookkeeping ——
+    // Root‑level bookkeeping
     bool ponder;
     int completedDepth;
 
-    // Stopiing condition utilities
+    // Stopping condition utilities
     bool isEndgame;
     std::unordered_map<Move, std::vector<int16_t>> moveDepthValues;
 
