@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-10-22
+
+### Changed
+- Reworked time management to use a `softTimeLimit` and `hardTimeLimit` system, allowing for more dynamic time allocation during search.
+- Simplified the `firstMoveSearch` logic.
+- Refactored quiescence search move generation to correctly use pinning information.
+
+### Removed
+- Removed the unused `MAX_TACTICS_DEPTH` compile definition.
+
+### Added
+- Added the ability to save data from tactics tests for version comparison.
+
 ## [0.1.0] - 2023-10-27
 
 ### Added
