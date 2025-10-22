@@ -38,7 +38,7 @@ if(CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG" AND ENABLE_VERBOSE_DEBUG)
         Talshand::lib
     )
     # Define the max depth for this build type
-    target_compile_definitions(tactics_tests PRIVATE MAX_TACTICS_DEPTH=5)
+    
     catch_discover_tests(tactics_tests)
 endif()
 
@@ -53,6 +53,6 @@ if(CMAKE_BUILD_TYPE_UPPER STREQUAL "RELEASE")
         Talshand::lib
     )
     # Define the max depth for this build type
-    target_compile_definitions(release_tactics_tests PRIVATE MAX_TACTICS_DEPTH=8)
+    
     catch_discover_tests(release_tactics_tests)
 endif()

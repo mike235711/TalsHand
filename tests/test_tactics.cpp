@@ -12,10 +12,6 @@
 #include "magicmoves.h"
 #include "zobrist_keys.h"
 
-// Define a default depth in case the file is compiled without the CMake flag.
-#ifndef MAX_TACTICS_DEPTH
-  #define MAX_TACTICS_DEPTH 5
-#endif
 
 // This struct ensures initialization code runs once before any tests start.
 struct TestInitializer {
@@ -28,7 +24,7 @@ static TestInitializer initialize_tactics_tests;
 
 // A helper function to run and time a single tactic test to avoid code repetition.
 // While not strictly necessary, it keeps each TEST_CASE block cleaner.
-void run_tactic_test(const std::string& name, const std::string& fen, const std::string& bestMove, int maxDepth = MAX_TACTICS_DEPTH) {
+void run_tactic_test(const std::string& name, const std::string& fen, const std::string& bestMove, int maxDepth) {
     #ifdef NDEBUG
         static std::ofstream results_file = [] {
             const std::string filename = "tactic_results.csv";
