@@ -112,7 +112,7 @@ std::pair<Move, int16_t> ThreadPool::startThinking(BitPosition &pos,
             thPtr->worker->rootPos.fromFen(pos.toFenString(), &thPtr->worker->rootState);
             thPtr->worker->rootState = setupStates->back();
 
-            thPtr->worker->timeLimit = std::chrono::milliseconds(timeLimit); });
+            thPtr->worker->hardTimeLimit = std::chrono::milliseconds(timeLimit); });
     }
 
     for (auto &thPtr : threads)

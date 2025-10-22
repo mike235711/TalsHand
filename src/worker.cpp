@@ -17,8 +17,8 @@ Worker::Worker(TranspositionTable &ttable,
                const NNUEU::Transformer &transformerIn,
                size_t idx)
     : lastFirstMoveTimeTakenMS(0),
-      timeForMoveMS(0),
-      timeLimit(0),
+      softTimeLimit(0),
+      hardTimeLimit(0),
       ponder(false),
       isEndgame(false),
       completedDepth(0),
@@ -73,7 +73,7 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta)
     // Stand pat
     int16_t value = network.evaluate(currentPos, accumulatorStack, *transformer);
 
-    // Beta cutoff
+    // Fail high when making no moves
     if (value >= beta)
         return value;
 
@@ -103,13 +103,10 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta)
             {
                 value = child_value;
                 if (child_value > alpha)
-                {
-                    if (child_value < beta)
-                        alpha = child_value;
-                    else
-                        break; // Fail high
-                }
+                    alpha = child_value;
             }
+            if (child_value >= beta)
+                break; // Fail high
         }
     }
     else // In check
@@ -124,20 +121,15 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta)
             makeCapture(capture, state_info);
             child_value = -quiesenceSearch(-beta, -alpha);
             unmakeCapture(capture);
-            if (value >= beta)
-                break;
 
             if (child_value > value)
             {
                 value = child_value;
                 if (child_value > alpha)
-                {
-                    if (child_value < beta)
-                        alpha = child_value;
-                    else
-                        break; // Fail high
-                }
+                    alpha = child_value;
             }
+            if (child_value >= beta)
+                break; // Fail high
         }
     }
     // If there are no captures we return a game ending eval
@@ -198,7 +190,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
             //     if (our_turn)
             //         alpha = ttEntry->getValue();
             //     // Upper bound at deeper depth
-            //     else
+    //     else
             //         beta = ttEntry->getValue();
             // }
         }
@@ -220,15 +212,10 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
         {
             value = child_value;
             if (child_value > alpha)
-            {
-                best_move = tt_move;
-
-                if (child_value < beta)
-                    alpha = child_value;
-                else
-                    cutoff = true; // Fail high
-            }
+                alpha = child_value;
         }
+        if (child_value >= beta)
+            cutoff = true; // Fail high
     }
 
     // We only search if tt_move didn't produce a cutoff in the search tree
@@ -249,15 +236,10 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
                 {
                     value = child_value;
                     if (child_value > alpha)
-                    {
-                        best_move = move;
-
-                        if (child_value < beta)
-                            alpha = child_value;
-                        else
-                            break; // Fail high
-                    }
+                        alpha = child_value;
                 }
+                if (child_value >= beta)
+                    break; // Fail high
             }
         }
         else // In check
@@ -276,15 +258,10 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
                 {
                     value = child_value;
                     if (child_value > alpha)
-                    {
-                        best_move = move;
-
-                        if (child_value < beta)
-                            alpha = child_value;
-                        else
-                            break; // Fail high
-                    }
+                        alpha = child_value;
                 }
+                if (child_value >= beta)
+                    break; // Fail high
             }
         }
     }
@@ -300,7 +277,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
         // Checkmate against us
         else
         {
-            tt.save(currentPos.getZobristKey(), -30000, depth, best_move, true);
+            tt.save(currentPos.getZobristKey(), -30000 - depth, depth, best_move, true);
             return -30000 - depth;
         }
     }
@@ -317,6 +294,7 @@ std::pair<Move, int16_t> Worker::firstMoveSearch(int8_t depth, int16_t alpha, in
     // Keep track of best previous iteration score to decide “penalty”
     // (If a move’s prior score is way below this, we reduce the depth.)
     int16_t bestScoreFromPreviousIteration;
+    Move bestMovePreviousIteration = rootMoves.empty() ? Move(0) : rootMoves[0];
             
     // Reorder the first moves by last-known scores or first-time ordering
     if (rootScores.empty())
@@ -380,6 +358,17 @@ std::pair<Move, int16_t> Worker::firstMoveSearch(int8_t depth, int16_t alpha, in
         {
             value = child_value;
             best_move = currentMove;
+
+            // If the best move changes, we might need more time
+            if (best_move.getData() != bestMovePreviousIteration.getData())
+            {
+                softTimeLimit += softTimeLimit / 2;
+            }
+        }
+        // If score drops suddenly for the best move, extend time
+        else if (currentMove.getData() == best_move.getData() && child_value < value - 20)
+        {
+            softTimeLimit += softTimeLimit / 4;
         }
         alpha = std::max(alpha, value);
 
@@ -387,7 +376,7 @@ std::pair<Move, int16_t> Worker::firstMoveSearch(int8_t depth, int16_t alpha, in
 
         // Check time
         auto duration = std::chrono::high_resolution_clock::now() - startTime;
-        if (duration >= timeForMoveMS)
+        if (duration >= softTimeLimit)
             break;
     }
 
@@ -410,7 +399,7 @@ std::pair<Move, int16_t> Worker::iterativeSearch(int8_t start_depth, int8_t fixe
     moveDepthValues = {};
 
     lastFirstMoveTimeTakenMS = 1;
-    timeForMoveMS = timeLimit / 4;
+    softTimeLimit = hardTimeLimit / 32;
 
     rootPos.setBlockersAndPinsInAB(); // For discovered checks and move generators
     rootPos.setCheckBits();           // For direct checks
@@ -451,7 +440,7 @@ std::pair<Move, int16_t> Worker::iterativeSearch(int8_t start_depth, int8_t fixe
         // N is first_moves.size() and T is lastFirstMoveTimeTakenMS
         // Hence we can predict the time taken of this new search to be N * T
         std::chrono::milliseconds predictedTimeTakenMs{17 * lastFirstMoveTimeTakenMS};
-        if (predictedTimeTakenMs >= timeForMoveMS)
+        if (predictedTimeTakenMs >= hardTimeLimit)
         {
             break;
         }
@@ -478,7 +467,7 @@ std::pair<Move, int16_t> Worker::iterativeSearch(int8_t start_depth, int8_t fixe
 
         // Check stop condition based on streak and improvement pattern or time duration
         std::chrono::duration<double, std::milli> duration = std::chrono::high_resolution_clock::now() - startTime;
-        if (stopSearch(moveDepthValues[bestMove], streak, depth) || duration >= timeForMoveMS)
+        if (stopSearch(moveDepthValues[bestMove], streak, depth) || duration >= hardTimeLimit)
         {
             break;
         }

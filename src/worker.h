@@ -81,8 +81,8 @@ private:
     // Time control
     std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
     int lastFirstMoveTimeTakenMS;
-    std::chrono::milliseconds timeForMoveMS;
-    std::chrono::milliseconds timeLimit;
+    std::chrono::milliseconds softTimeLimit;
+    std::chrono::milliseconds hardTimeLimit;
 
     // Root‑level bookkeeping
     bool ponder;

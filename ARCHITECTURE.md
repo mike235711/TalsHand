@@ -84,8 +84,7 @@ This project follows [Semantic Versioning](https://semver.org/). The release pro
 5.  **Create GitHub Release**: Navigate to the "Releases" section of the GitHub repository. Draft a new release, select the tag you just pushed, and copy the release notes from `CHANGELOG.md` into the description.
 
 ## TODO
-- BUG(Option 1): I think something is wrong when choosing a move and search is stopped because of time. Simplify stopping logic due to time. Maybe it doesnt make sense to predict the time taken on next iteration based on the previous. Since root nodes could lead to many moves or not (hence increasing alot the next depth or not).
-- BUG(Option2): The bug could instead be due to the nnueu not giving a broad range of possible outputs. This could be due to quantization.
+- We have to include some prediction of the number of moves left in the game so that engine doesn't overthink at the start of the game.
 - Build tests for the nnueu loading and accumulation
 - Include the final test for version release which is to play several games on different positions and time controls against last oldest version and see the score.
 - Simplify castling rights logic in makeMove
