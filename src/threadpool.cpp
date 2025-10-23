@@ -97,6 +97,7 @@ std::pair<Move, int16_t> ThreadPool::startThinking(BitPosition &pos,
 {
     main_thread()->waitToFinishSearch();
     main_thread()->worker->ponder = pondering;
+    main_thread()->worker->hardTimeLimit = std::chrono::milliseconds(timeLimit);
 
     // If we received a fresh move list, take ownership of its history
     assert(stateInfos || setupStates);

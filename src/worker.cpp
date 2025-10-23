@@ -314,7 +314,8 @@ void Worker::firstMoveSearch(int8_t depth, int16_t alpha, int16_t beta)
     NNUEU::NNUEUChange nnueuChange;
     StateInfo state_info;
 
-    std::chrono::duration<double, std::milli> max_move_duration(0);
+    std::chrono::milliseconds max_move_duration(0);
+    bestRootValue = static_cast<int16_t>(-30001);
 
     // Main loop over candidate moves
     for (std::size_t i = 0; i < rootMoves.size(); ++i)
@@ -358,27 +359,27 @@ void Worker::firstMoveSearch(int8_t depth, int16_t alpha, int16_t beta)
             // If the best move changes, we might need more time
             if (bestRootMove.getData() != bestMovePreviousIteration.getData())
             {
-                softTimeLimit += softTimeLimit / 2;
+                softTimeLimit += softTimeLimit / 8;
             }
         }
         // If score drops suddenly for the best move, extend time
         else if (currentMove.getData() == bestRootMove.getData() && child_value < bestRootValue - 20)
         {
-            softTimeLimit += softTimeLimit / 4;
+            softTimeLimit += softTimeLimit / 16;
         }
         alpha = std::max(alpha, bestRootValue);
 
         moveDepthValues[currentMove].emplace_back(child_value);
 
         auto move_end_time = std::chrono::high_resolution_clock::now();
-        auto move_duration = std::chrono::duration<double, std::milli>(move_end_time - move_start_time);
+        auto move_duration = std::chrono::duration_cast<std::chrono::milliseconds>(move_end_time - move_start_time);
         if (move_duration > max_move_duration)
         {
             max_move_duration = move_duration;
         }
 
         // Check time
-        auto duration = move_end_time - startTime;
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(move_end_time - startTime);
         if (duration >= (softTimeLimit - max_move_duration) || duration >= (hardTimeLimit - max_move_duration))
             break;
     }
@@ -389,13 +390,6 @@ void Worker::firstMoveSearch(int8_t depth, int16_t alpha, int16_t beta)
 
 void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
 {
-    isEndgame = rootPos.isEndgame();
-    moveDepthValues = {};
-
-    int divisor = 24 + rootPos.countStartPieces() + rootPos.countAllPieces();
-    std::cout << "Start pieces: " << rootPos.countStartPieces() << ", all pieces: " << rootPos.countAllPieces() << ", divisor: " << divisor << "\n";
-    softTimeLimit = hardTimeLimit / divisor;
-
     rootPos.setBlockersAndPinsInAB(); // For discovered checks and move generators
     rootPos.setCheckBits();           // For direct checks
 
@@ -426,6 +420,11 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
     }
     else
     {
+        isEndgame = rootPos.isEndgame();
+        moveDepthValues = {};
+
+        softTimeLimit = hardTimeLimit / (24 + rootPos.countStartPieces() + rootPos.countAllPieces());
+
         startTime = std::chrono::high_resolution_clock::now();
         Move bestMovePreviousDepth{};
         bestRootValue = static_cast<int16_t>(-30001);
@@ -445,18 +444,16 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
             
             // Check if the best move at this depth is still the same, and adjust its streak
             if (bestRootMove.getData() == bestMovePreviousDepth.getData())
+            {
                 streak++;
+                // Check stop condition based on streak and improvement pattern
+                if (stopSearch(moveDepthValues[bestRootMove], streak, depth))
+                    break;
+            }
             else
             {
                 bestMovePreviousDepth = bestRootMove;
                 streak = 1;
-            }
-
-            // Check stop condition based on streak and improvement pattern or time duration
-            std::chrono::duration<double, std::milli> duration = std::chrono::high_resolution_clock::now() - startTime;
-            if (stopSearch(moveDepthValues[bestRootMove], streak, depth) || duration >= hardTimeLimit)
-            {
-                break;
             }
         }
         // std::cout << "Depth: " << completedDepth << "\n";
