@@ -272,6 +272,9 @@ public:
 
     bool moveIsReseter(Move move);
 
+    int countStartPieces() const;
+    int countAllPieces() const;
+
     template <typename T>
     NNUEU::NNUEUChange makeMove(T move, StateInfo &new_state_info);
     template <typename T>

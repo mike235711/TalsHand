@@ -91,6 +91,48 @@ bool BitPosition::see_ge(Move m, int threshold) const
     return stm != us; // true if we made the last capture
 }
 
+int BitPosition::countStartPieces() const
+{
+    int count = 0;
+
+    // White pieces
+    const uint64_t white_pawn_start = 0x000000000000FF00;
+    const uint64_t white_rook_start = 0x0000000000000081;
+    const uint64_t white_knight_start = 0x0000000000000042;
+    const uint64_t white_bishop_start = 0x0000000000000024;
+    const uint64_t white_queen_start = 0x0000000000000008;
+    const uint64_t white_king_start = 0x0000000000000010;
+
+    count += countBits(m_pieces[0][0] & white_pawn_start);
+    count += countBits(m_pieces[0][1] & white_knight_start);
+    count += countBits(m_pieces[0][2] & white_bishop_start);
+    count += countBits(m_pieces[0][3] & white_rook_start);
+    count += countBits(m_pieces[0][4] & white_queen_start);
+    count += countBits(m_pieces[0][5] & white_king_start);
+
+    // Black pieces
+    const uint64_t black_pawn_start = 0x00FF000000000000;
+    const uint64_t black_rook_start = 0x8100000000000000;
+    const uint64_t black_knight_start = 0x4200000000000000;
+    const uint64_t black_bishop_start = 0x2400000000000000;
+    const uint64_t black_queen_start = 0x0800000000000000;
+    const uint64_t black_king_start = 0x1000000000000000;
+
+    count += countBits(m_pieces[1][0] & black_pawn_start);
+    count += countBits(m_pieces[1][1] & black_knight_start);
+    count += countBits(m_pieces[1][2] & black_bishop_start);
+    count += countBits(m_pieces[1][3] & black_rook_start);
+    count += countBits(m_pieces[1][4] & black_queen_start);
+    count += countBits(m_pieces[1][5] & black_king_start);
+
+    return count;
+}
+
+int BitPosition::countAllPieces() const
+{
+    return countBits(m_all_pieces_bit);
+}
+
 static const uint8_t castlingMask[64] = {
     0x02, 0, 0, 0, 0, 0, 0, 0x01,
     0, 0, 0, 0, 0, 0, 0, 0,
