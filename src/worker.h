@@ -58,14 +58,10 @@ private:
         accumulatorStack.pop();
     }
     // Calls first move search iteratively
-    std::pair<Move, int16_t> iterativeSearch(int8_t start_depth = 2,
-                                             int8_t fixed_max_depth = 99);
+    void iterativeSearch(int8_t start_depth = 2, int8_t fixed_max_depth = 99);
 
     // Calls alphaBetaSearch after each root move
-    std::pair<Move, int16_t> firstMoveSearch(int8_t depth,
-                                             int16_t alpha,
-                                             int16_t beta,
-                                             std::chrono::milliseconds predictedTimeTakenMs);
+    void firstMoveSearch(int8_t depth, int16_t alpha, int16_t beta);
 
     // Calls quisence when depth 0 is reached
     int16_t alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta);
@@ -80,7 +76,6 @@ private:
 
     // Time control
     std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
-    int lastFirstMoveTimeTakenMS;
     std::chrono::milliseconds softTimeLimit;
     std::chrono::milliseconds hardTimeLimit;
 
@@ -96,6 +91,8 @@ private:
     StateInfo rootState; // thread‑local mutable root
     std::vector<Move> rootMoves;
     std::vector<int16_t> rootScores;
+    Move bestRootMove;
+    int16_t bestRootValue;
     // BitPosition object within search
     BitPosition currentPos;
 

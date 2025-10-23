@@ -16,8 +16,7 @@ Worker::Worker(TranspositionTable &ttable,
                NNUEU::Network &networkIn,
                const NNUEU::Transformer &transformerIn,
                size_t idx)
-    : lastFirstMoveTimeTakenMS(0),
-      softTimeLimit(0),
+    : softTimeLimit(0),
       hardTimeLimit(0),
       ponder(false),
       isEndgame(false),
@@ -287,15 +286,15 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
     return value;
 }
 
-std::pair<Move, int16_t> Worker::firstMoveSearch(int8_t depth, int16_t alpha, int16_t beta, std::chrono::milliseconds predictedTimeTakenMs)
+void Worker::firstMoveSearch(int8_t depth, int16_t alpha, int16_t beta)
 // This search is done when depth is more than 0 and considers all moves
 // Note that here we have no alpha/beta cutoffs, since we are only applying the first move.
 {
     // Keep track of best previous iteration score to decide “penalty”
     // (If a move’s prior score is way below this, we reduce the depth.)
     int16_t bestScoreFromPreviousIteration;
-    Move bestMovePreviousIteration = rootMoves.empty() ? Move(0) : rootMoves[0];
-            
+    Move bestMovePreviousIteration = bestRootMove;
+
     // Reorder the first moves by last-known scores or first-time ordering
     if (rootScores.empty())
     {
@@ -311,19 +310,16 @@ std::pair<Move, int16_t> Worker::firstMoveSearch(int8_t depth, int16_t alpha, in
         bestScoreFromPreviousIteration = rootScores[0];
     }
 
-    // Baseline initialization
-    int16_t value = static_cast<int16_t>(-30001);
-    Move best_move{0};
-
-    auto first_move_start_time = std::chrono::high_resolution_clock::now();
-
     currentPos = rootPos;
     NNUEU::NNUEUChange nnueuChange;
     StateInfo state_info;
 
+    std::chrono::duration<double, std::milli> max_move_duration(0);
+
     // Main loop over candidate moves
     for (std::size_t i = 0; i < rootMoves.size(); ++i)
     {
+        auto move_start_time = std::chrono::high_resolution_clock::now();
         Move currentMove = rootMoves[i];
 
         makeMove(currentMove, state_info);
@@ -354,52 +350,51 @@ std::pair<Move, int16_t> Worker::firstMoveSearch(int8_t depth, int16_t alpha, in
         rootScores[i] = child_value;
 
         // Track if this is the best so far
-        if (child_value > value)
+        if (child_value > bestRootValue)
         {
-            value = child_value;
-            best_move = currentMove;
+            bestRootValue = child_value;
+            bestRootMove = currentMove;
 
             // If the best move changes, we might need more time
-            if (best_move.getData() != bestMovePreviousIteration.getData())
+            if (bestRootMove.getData() != bestMovePreviousIteration.getData())
             {
                 softTimeLimit += softTimeLimit / 2;
             }
         }
         // If score drops suddenly for the best move, extend time
-        else if (currentMove.getData() == best_move.getData() && child_value < value - 20)
+        else if (currentMove.getData() == bestRootMove.getData() && child_value < bestRootValue - 20)
         {
             softTimeLimit += softTimeLimit / 4;
         }
-        alpha = std::max(alpha, value);
+        alpha = std::max(alpha, bestRootValue);
 
-        moveDepthValues[currentMove].emplace_back(value);
+        moveDepthValues[currentMove].emplace_back(child_value);
+
+        auto move_end_time = std::chrono::high_resolution_clock::now();
+        auto move_duration = std::chrono::duration<double, std::milli>(move_end_time - move_start_time);
+        if (move_duration > max_move_duration)
+        {
+            max_move_duration = move_duration;
+        }
 
         // Check time
-        auto duration = std::chrono::high_resolution_clock::now() - startTime;
-        if (duration >= softTimeLimit)
+        auto duration = move_end_time - startTime;
+        if (duration >= (softTimeLimit - max_move_duration) || duration >= (hardTimeLimit - max_move_duration))
             break;
     }
 
-    // Time taken for this entire loop
-    lastFirstMoveTimeTakenMS = static_cast<int>(
-                                   std::chrono::duration_cast<std::chrono::milliseconds>(
-                                       std::chrono::high_resolution_clock::now() - first_move_start_time)
-                                       .count()) +
-                               1;
-
     // Save in TT as “exact”
-    tt.save(currentPos.getZobristKey(), value, depth, best_move, true);
-
-    return std::pair<Move, int16_t>(best_move, value);
+    tt.save(currentPos.getZobristKey(), bestRootValue, depth, bestRootMove, true);
 }
 
-std::pair<Move, int16_t> Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
+void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
 {
     isEndgame = rootPos.isEndgame();
     moveDepthValues = {};
 
-    lastFirstMoveTimeTakenMS = 1;
-    softTimeLimit = hardTimeLimit / 32;
+    int divisor = 24 + rootPos.countStartPieces() + rootPos.countAllPieces();
+    std::cout << "Start pieces: " << rootPos.countStartPieces() << ", all pieces: " << rootPos.countAllPieces() << ", divisor: " << divisor << "\n";
+    softTimeLimit = hardTimeLimit / divisor;
 
     rootPos.setBlockersAndPinsInAB(); // For discovered checks and move generators
     rootPos.setCheckBits();           // For direct checks
@@ -422,58 +417,50 @@ std::pair<Move, int16_t> Worker::iterativeSearch(int8_t start_depth, int8_t fixe
         while ((candidate = msel.select_legal()) != Move(0))
             rootMoves.push_back(candidate);
     }
+    
     // If there is only one move in the position, we make it
     if (rootMoves.size() == 1)
-        return std::pair<Move, int16_t>(rootMoves[0], 0);
-
-    startTime = std::chrono::high_resolution_clock::now();
-    Move bestMove{};
-    Move bestMovePreviousDepth{};
-    int16_t bestValue;
-    std::pair<Move, int16_t> tuple;
-    int streak = 1;                          // To keep track of the improvement streak
-
-    // Iterative deepening
-    for (int8_t depth = start_depth; depth <= fixed_max_depth; ++depth)
     {
-        // We are going to perform N searches of time T, where:
-        // N is first_moves.size() and T is lastFirstMoveTimeTakenMS
-        // Hence we can predict the time taken of this new search to be N * T
-        std::chrono::milliseconds predictedTimeTakenMs{17 * lastFirstMoveTimeTakenMS};
-        if (predictedTimeTakenMs >= hardTimeLimit)
-        {
-            break;
-        }
-
-        // Set best current values to worse possible ones (so that we try to improve them)
-        int16_t alpha{-31001};
-        int16_t beta{31001};
-
-        // Search
-        tuple = firstMoveSearch(depth, alpha, beta, predictedTimeTakenMs);
-        bestMove = tuple.first;
-        bestValue = tuple.second;
-
-        completedDepth = static_cast<int>(depth);
-        
-        // Check if the best move at this depth is still the same, and adjust its streak
-        if (bestMove.getData() == bestMovePreviousDepth.getData())
-            streak++;
-        else
-        {
-            bestMovePreviousDepth = bestMove;
-            streak = 1;
-        }
-
-        // Check stop condition based on streak and improvement pattern or time duration
-        std::chrono::duration<double, std::milli> duration = std::chrono::high_resolution_clock::now() - startTime;
-        if (stopSearch(moveDepthValues[bestMove], streak, depth) || duration >= hardTimeLimit)
-        {
-            break;
-        }
+        bestRootMove = rootMoves[0];
+        bestRootValue = 0;
     }
-    std::cout << "Depth: " << completedDepth << "\n";
-    return std::pair<Move, int16_t>(bestMove, bestValue);
+    else
+    {
+        startTime = std::chrono::high_resolution_clock::now();
+        Move bestMovePreviousDepth{};
+        bestRootValue = static_cast<int16_t>(-30001);
+        int streak = 1;                          // To keep track of the improvement streak
+
+        // Iterative deepening
+        for (int8_t depth = start_depth; depth <= fixed_max_depth; ++depth)
+        {
+            // Set best current values to worse possible ones (so that we try to improve them)
+            int16_t alpha{-31001};
+            int16_t beta{31001};
+
+            // Search
+            firstMoveSearch(depth, alpha, beta);
+
+            completedDepth = static_cast<int>(depth);
+            
+            // Check if the best move at this depth is still the same, and adjust its streak
+            if (bestRootMove.getData() == bestMovePreviousDepth.getData())
+                streak++;
+            else
+            {
+                bestMovePreviousDepth = bestRootMove;
+                streak = 1;
+            }
+
+            // Check stop condition based on streak and improvement pattern or time duration
+            std::chrono::duration<double, std::milli> duration = std::chrono::high_resolution_clock::now() - startTime;
+            if (stopSearch(moveDepthValues[bestRootMove], streak, depth) || duration >= hardTimeLimit)
+            {
+                break;
+            }
+        }
+        // std::cout << "Depth: " << completedDepth << "\n";
+    }
 }
 
 //  startSearching – wrapper around iterative deepening
@@ -482,15 +469,15 @@ std::pair<Move, int16_t> Worker::startSearching(int8_t max_depth)
     rootMoves.clear();
     rootScores.clear();
     accumulatorStack.reset(rootPos, *transformer);
-    auto result = iterativeSearch(2, max_depth); // result = {bestMove, score}
+    iterativeSearch(2, max_depth);
 
     // only thread-0 is the “main” UCI thread → tell the GUI our move
     if (isMainThread())
     {
         std::cout << "bestmove "
-                  << result.first.toString() 
+                  << bestRootMove.toString()
                   << '\n'                    // newline required by protocol
                   << std::flush;             // be sure it reaches the GUI
     }
-    return result;
+    return {bestRootMove, bestRootValue};
 }
