@@ -286,7 +286,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
     return value;
 }
 
-void Worker::firstMoveSearch(int8_t depth, int16_t alpha, int16_t beta)
+bool Worker::firstMoveSearch(int8_t depth, int16_t alpha, int16_t beta)
 // This search is done when depth is more than 0 and considers all moves
 // Note that here we have no alpha/beta cutoffs, since we are only applying the first move.
 {
@@ -381,11 +381,13 @@ void Worker::firstMoveSearch(int8_t depth, int16_t alpha, int16_t beta)
         // Check time
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(move_end_time - startTime);
         if (duration >= (softTimeLimit - max_move_duration) || duration >= (hardTimeLimit - max_move_duration))
-            break;
+            return true;
     }
 
     // Save in TT as “exact”
     tt.save(currentPos.getZobristKey(), bestRootValue, depth, bestRootMove, true);
+
+    return false;
 }
 
 void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
@@ -411,7 +413,7 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
         while ((candidate = msel.select_legal()) != Move(0))
             rootMoves.push_back(candidate);
     }
-    
+
     // If there is only one move in the position, we make it
     if (rootMoves.size() == 1)
     {
@@ -438,12 +440,14 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
             int16_t beta{31001};
 
             // Search
-            firstMoveSearch(depth, alpha, beta);
+            bool stop_search = firstMoveSearch(depth, alpha, beta);
 
             completedDepth = static_cast<int>(depth);
             
+            if (stop_search)
+                break;
             // Check if the best move at this depth is still the same, and adjust its streak
-            if (bestRootMove.getData() == bestMovePreviousDepth.getData())
+            else if (bestRootMove.getData() == bestMovePreviousDepth.getData())
             {
                 streak++;
                 // Check stop condition based on streak and improvement pattern
