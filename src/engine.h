@@ -58,6 +58,7 @@ public:
 
     // Performance testing utilities
     std::string searchFixedDepth(int8_t depth);
+    std::string searchWithTimeConstraint(int timeLimitMs);
 
 private:
     BitPosition pos;

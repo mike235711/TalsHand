@@ -530,3 +530,9 @@ std::string THEngine::searchFixedDepth(int8_t depth)
     std::pair<Move, int16_t> result = threadpool.startThinking(pos, stateInfos, std::numeric_limits<int>::max(), ponder, depth);
     return result.first.toString();
 }
+
+std::string THEngine::searchWithTimeConstraint(int timeLimitMs)
+{
+    std::pair<Move, int16_t> result = threadpool.startThinking(pos, stateInfos, timeLimitMs, ponder, 99);
+    return result.first.toString();
+}
