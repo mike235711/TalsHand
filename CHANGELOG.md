@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-10-24
+
+### Changed
+- Simplified and improved time management logic to prevent time extensions.
+- Simplified `firstMoveSearch` and `iterativeSearch` functions.
+
+### Added
+- Added time-limited tests for release builds.
+- Added methods to count pieces on the board.
+
+### Fixed
+- We check for time after depth is finished, so that unfinished searches dont corrupt result.
+- The engine now immediately plays a move when a mate is found.
+
+
 ## [0.2.0] - 2025-10-22
 
 ### Changed
