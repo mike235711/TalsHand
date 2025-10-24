@@ -416,7 +416,8 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
             auto end_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - startTime);
 
-            if (duration >= softTimeLimit)
+            // We exceed time limit or we have a mate score
+            if (duration >= softTimeLimit || bestRootValue >= 29000)
                 break;             
             // Check if the best move at this depth is still the same, and adjust its streak
             else if (bestRootMove.getData() == bestMovePreviousDepth.getData())
