@@ -286,10 +286,14 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
     return value;
 }
 
-bool Worker::firstMoveSearch(int8_t depth, int16_t alpha, int16_t beta)
+bool Worker::firstMoveSearch(int8_t depth)
 // This search is done when depth is more than 0 and considers all moves
 // Note that here we have no alpha/beta cutoffs, since we are only applying the first move.
 {
+    // Set best current values to worse possible ones (so that we try to improve them)
+    int16_t alpha{-31001};
+    int16_t beta{31001};
+    
     // Keep track of best previous iteration score to decide “penalty”
     // (If a move’s prior score is way below this, we reduce the depth.)
     int16_t bestScoreFromPreviousIteration;
@@ -425,7 +429,7 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
         isEndgame = rootPos.isEndgame();
         moveDepthValues = {};
 
-        softTimeLimit = hardTimeLimit / (24 + rootPos.countStartPieces() + rootPos.countAllPieces());
+        softTimeLimit = hardTimeLimit / (32 + rootPos.countStartPieces() + rootPos.countAllPieces());
 
         startTime = std::chrono::high_resolution_clock::now();
         Move bestMovePreviousDepth{};
@@ -435,12 +439,8 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
         // Iterative deepening
         for (int8_t depth = start_depth; depth <= fixed_max_depth; ++depth)
         {
-            // Set best current values to worse possible ones (so that we try to improve them)
-            int16_t alpha{-31001};
-            int16_t beta{31001};
-
             // Search
-            bool stop_search = firstMoveSearch(depth, alpha, beta);
+            bool stop_search = firstMoveSearch(depth);
 
             completedDepth = static_cast<int>(depth);
             
