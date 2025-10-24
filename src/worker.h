@@ -61,7 +61,7 @@ private:
     void iterativeSearch(int8_t start_depth = 2, int8_t fixed_max_depth = 99);
 
     // Calls alphaBetaSearch after each root move
-    bool firstMoveSearch(int8_t depth);
+    void firstMoveSearch(int8_t depth);
 
     // Calls quisence when depth 0 is reached
     int16_t alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta);

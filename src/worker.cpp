@@ -286,24 +286,20 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
     return value;
 }
 
-bool Worker::firstMoveSearch(int8_t depth)
+void Worker::firstMoveSearch(int8_t depth)
 // This search is done when depth is more than 0 and considers all moves
 // Note that here we have no alpha/beta cutoffs, since we are only applying the first move.
 {
-    // Set best current values to worse possible ones (so that we try to improve them)
-    int16_t alpha{-31001};
-    int16_t beta{31001};
-    
     // Keep track of best previous iteration score to decide “penalty”
     // (If a move’s prior score is way below this, we reduce the depth.)
-    int16_t bestScoreFromPreviousIteration;
-    Move bestMovePreviousIteration = bestRootMove;
+    int16_t bestRootValuePreviousIteration;
+    Move bestRootMovePreviousIteration = bestRootMove;
 
     // Reorder the first moves by last-known scores or first-time ordering
     if (rootScores.empty())
     {
         rootScores.resize(rootMoves.size(), -30001);
-        bestScoreFromPreviousIteration = -30001;
+        bestRootValuePreviousIteration = -30001;
     }
     else
     {
@@ -311,20 +307,18 @@ bool Worker::firstMoveSearch(int8_t depth)
             rootPos.orderAllMovesOnFirstIteration(rootMoves, rootScores);
         rootMoves = result.first;
         rootScores = result.second;
-        bestScoreFromPreviousIteration = rootScores[0];
+        bestRootValuePreviousIteration = rootScores[0];
     }
 
     currentPos = rootPos;
     NNUEU::NNUEUChange nnueuChange;
     StateInfo state_info;
 
-    std::chrono::milliseconds max_move_duration(0);
     bestRootValue = static_cast<int16_t>(-30001);
 
     // Main loop over candidate moves
     for (std::size_t i = 0; i < rootMoves.size(); ++i)
     {
-        auto move_start_time = std::chrono::high_resolution_clock::now();
         Move currentMove = rootMoves[i];
 
         makeMove(currentMove, state_info);
@@ -334,20 +328,20 @@ bool Worker::firstMoveSearch(int8_t depth)
         if (depth > 1 && !rootScores.empty())
         {
             int16_t prevScore = rootScores[i];
-            if (prevScore + 1000 < bestScoreFromPreviousIteration)
+            if (prevScore + 1000 < bestRootValuePreviousIteration)
                 reduction = 1;
         }
 
         // Do the “reduced” (or normal) alpha-beta search:
         int8_t searchDepth = std::max(0, depth - 1 - reduction);
 
-        int16_t child_value = -alphaBetaSearch(searchDepth, -beta, -alpha);
+        int16_t child_value = -alphaBetaSearch(searchDepth, -31001, -bestRootValue);
 
-        // If a reduced search "fails high" (beats alpha),
+        // If a reduced search beats the best score so far,
         // we re-search at the full depth to avoid missing a good move.
-        if (reduction > 0 && child_value > alpha)
+        if (reduction > 0 && child_value > bestRootValue)
         {
-            child_value = -alphaBetaSearch(depth - 1, -beta, -alpha);
+            child_value = -alphaBetaSearch(depth - 1, -31001, -bestRootValue);
         }
         unmakeMove(currentMove);
 
@@ -359,39 +353,13 @@ bool Worker::firstMoveSearch(int8_t depth)
         {
             bestRootValue = child_value;
             bestRootMove = currentMove;
-
-            // If the best move changes, we might need more time
-            if (bestRootMove.getData() != bestMovePreviousIteration.getData())
-            {
-                softTimeLimit += softTimeLimit / 8;
-            }
         }
-        // If score drops suddenly for the best move, extend time
-        else if (currentMove.getData() == bestRootMove.getData() && child_value < bestRootValue - 20)
-        {
-            softTimeLimit += softTimeLimit / 16;
-        }
-        alpha = std::max(alpha, bestRootValue);
 
         moveDepthValues[currentMove].emplace_back(child_value);
-
-        auto move_end_time = std::chrono::high_resolution_clock::now();
-        auto move_duration = std::chrono::duration_cast<std::chrono::milliseconds>(move_end_time - move_start_time);
-        if (move_duration > max_move_duration)
-        {
-            max_move_duration = move_duration;
-        }
-
-        // Check time
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(move_end_time - startTime);
-        if (duration >= (softTimeLimit - max_move_duration) || duration >= (hardTimeLimit - max_move_duration))
-            return true;
     }
 
     // Save in TT as “exact”
     tt.save(currentPos.getZobristKey(), bestRootValue, depth, bestRootMove, true);
-
-    return false;
 }
 
 void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
@@ -440,12 +408,16 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
         for (int8_t depth = start_depth; depth <= fixed_max_depth; ++depth)
         {
             // Search
-            bool stop_search = firstMoveSearch(depth);
+            firstMoveSearch(depth);
 
             completedDepth = static_cast<int>(depth);
-            
-            if (stop_search)
-                break;
+
+            // Get max move duration of the root moves to make sure we have time to think for another move
+            auto end_time = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - startTime);
+
+            if (duration >= softTimeLimit)
+                break;             
             // Check if the best move at this depth is still the same, and adjust its streak
             else if (bestRootMove.getData() == bestMovePreviousDepth.getData())
             {
