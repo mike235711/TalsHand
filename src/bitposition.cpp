@@ -213,6 +213,7 @@ static constexpr ShiftFunc shift_forward_left[2] = {shift_up_left, shift_down_le
 static constexpr uint64_t promotion_ranks[2] = {EIGHT_ROW_BITBOARD, FIRST_ROW_BITBOARD};
 static constexpr uint64_t double_move_boards[2] = {THIRD_ROW_BITBOARD, SIXTH_ROW_BITBOARD};
 static constexpr int pawn_move_offsets[2] = {-8, 8}; // destination - origin
+static constexpr int double_pawn_move_offsets[2] = {-16, 16}; // destination - origin
 static constexpr int pawn_capture_offsets_right[2] = {-9, 7}; // destination - origin
 static constexpr int pawn_capture_offsets_left[2] = {-7, 9}; // destination - origin
 
@@ -911,7 +912,7 @@ ScoredMove *BitPosition::pawnAllMoves(ScoredMove *&move_list) const
     while (double_moves)
     {
         int destination = popLeastSignificantBit(double_moves);
-        *move_list++ = Move(destination + 2 * pawn_move_offsets[not m_turn], destination);
+        *move_list++ = Move(destination + double_pawn_move_offsets[not m_turn], destination);
     }
 
     // Right shift captures
@@ -1067,7 +1068,7 @@ Move *BitPosition::inCheckPawnBlocks(Move *&move_list) const
     while (pawn_blocks)
     {
         int destination = popLeastSignificantBit(pawn_blocks);
-        *move_list++ = Move(destination + 2 * pawn_move_offsets[not m_turn], destination);
+        *move_list++ = Move(destination + double_pawn_move_offsets[not m_turn], destination);
     }
 
     return move_list;
@@ -2366,46 +2367,25 @@ bool BitPosition::isMate() const
             if (precomputed_moves::knight_moves[popLeastSignificantBit(piece_moves)] & m_check_rays)
                 return false;
         }
-        if (m_turn) // White's turn
+
+        // Single move pawn block
+        uint64_t single_pawn_advances = shift_forward[not m_turn](m_pieces[not m_turn][0]) & ~m_all_pieces_bit;
+        piece_moves = single_pawn_advances & m_check_rays;
+        while (piece_moves)
         {
-            // Single move pawn block
-            uint64_t pawnAdvances{shift_up(m_pieces[0][0]) & ~m_all_pieces_bit};
-            piece_moves = pawnAdvances & m_check_rays;
-            while (piece_moves)
-            {
-                int destination{popLeastSignificantBit(piece_moves)};
-                if (isNormalMoveLegal(destination - 8, destination))
-                    return false;
-            }
-            // Double move pawn block
-            piece_moves = shift_up(pawnAdvances) & m_check_rays;
-            while (piece_moves)
-            {
-                int destination{popLeastSignificantBit(piece_moves)};
-                if (isNormalMoveLegal(destination - 16, destination))
-                    return false;
-            }
+            int destination = popLeastSignificantBit(piece_moves);
+            if (isNormalMoveLegal(destination + pawn_move_offsets[not m_turn], destination))
+                return false;
         }
-        else
+        // Double move pawn block
+        piece_moves = shift_forward[not m_turn](single_pawn_advances) & m_check_rays;
+        while (piece_moves)
         {
-            // Single move pawn block
-            uint64_t pawnAdvances{shift_down(m_pieces[1][0]) & ~m_all_pieces_bit};
-            piece_moves = pawnAdvances & m_check_rays;
-            while (piece_moves)
-            {
-                int destination{popLeastSignificantBit(piece_moves)};
-                if (isNormalMoveLegal(destination + 8, destination))
-                    return false;
-            }
-            // Double move pawn block
-            piece_moves = shift_down(pawnAdvances) & m_check_rays;
-            while (piece_moves)
-            {
-                int destination{popLeastSignificantBit(piece_moves)};
-                if (isNormalMoveLegal(destination + 16, destination))
-                    return false;
-            }
+            int destination = popLeastSignificantBit(piece_moves);
+            if (isNormalMoveLegal(destination + double_pawn_move_offsets[not m_turn], destination))
+                return false;
         }
+
         // Rook/Queen block
         piece_moves = m_pieces[not m_turn][3] | m_pieces[not m_turn][4];
         while (piece_moves)
