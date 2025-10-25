@@ -1771,7 +1771,7 @@ void BitPosition::unmakeMove(T move)
     {
         int moved_piece = m_board[1][destination_square];
         // Castling, Passant and promotions
-        if (move.getData() & 0b0100000000000000)
+        if (move.isSpecial())
         {
             // Unmake kingside castling
             if (move.getData() == 20412)
@@ -1887,7 +1887,7 @@ void BitPosition::unmakeMove(T move)
     {
         int moved_piece = m_board[0][destination_square];
         // Special moves
-        if (move.getData() & 0b0100000000000000)
+        if (move.isSpecial())
         {
             // Unmake kingside castling
             if (move.getData() == 16772)
@@ -2075,7 +2075,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
         assert(m_moved_piece != 7); // DEBUG: Moved piece must be a piece (not empty square or own piece)
 
         // Promotions
-        if (move.getData() & 0b0100000000000000)
+        if (move.isSpecial())
         {
             m_pieces[0][0] &= ~origin_bit;
             m_pieces[0][4] |= destination_bit;
@@ -2139,7 +2139,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
         assert(m_moved_piece != 7); // Moved piece must be a piece (not empty square or own piece)
 
         // Promotions
-        if (move.getData() & 0b0100000000000000)
+        if (move.isSpecial())
         {
             m_pieces[1][0] &= ~origin_bit;
             m_pieces[1][4] |= destination_bit;
@@ -2246,7 +2246,7 @@ void BitPosition::unmakeCapture(T move)
 
     int moved_piece = m_board[m_turn][destination_square];
     // Promotions
-    if (move.getData() & 0b0100000000000000)
+    if (move.isSpecial())
     {
         moved_piece = 0;
         m_pieces[m_turn][0] |= origin_bit;

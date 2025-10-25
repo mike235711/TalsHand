@@ -55,6 +55,7 @@ public:
     int getOriginSquare() const { return data & 63; }
     int getDestinationSquare() const { return (data >> 6) & 63; }
     int getPromotingPiece() const { return (data >> 12) & 3; }
+    bool isSpecial() const { return (data & 0x4000) != 0; }
 
     std::string toString() const
     {
