@@ -884,154 +884,88 @@ Move *BitPosition::kingCaptures(Move *&move_list) const
 // All move generations (for PV Nodes in Alpha-Beta)
 ScoredMove *BitPosition::pawnAllMoves(ScoredMove *&move_list) const
 {
-    if (m_turn)
+    const int side = not m_turn;
+    const uint64_t pawns = m_pieces[side][0];
+    const uint64_t promotion_rank = promotion_ranks[side];
+    const uint64_t non_promotion_rank = ~promotion_rank;
+
+    // Single moves
+    uint64_t single_moves = shift_forward[side](pawns & ~state_info->diagonalPinnedPieces) & ~m_all_pieces_bit;
+    uint64_t single_non_promotions = single_moves & non_promotion_rank;
+    while (single_non_promotions)
     {
-        // Single moves
-        uint64_t piece_moves{shift_up(m_pieces[0][0] & ~(state_info->diagonalPinnedPieces)) & ~m_all_pieces_bit};
-        while (piece_moves)
+        int destination = popLeastSignificantBit(single_non_promotions);
+        *move_list++ = Move(destination + pawn_move_offsets[side], destination);
+    }
+    uint64_t single_promotions = single_moves & promotion_rank;
+    while (single_promotions)
+    {
+        int destination = popLeastSignificantBit(single_promotions);
+        *move_list++ = Move(destination + pawn_move_offsets[side], destination, 3); // Queen
+        *move_list++ = Move(destination + pawn_move_offsets[side], destination, 2); // Rook
+        *move_list++ = Move(destination + pawn_move_offsets[side], destination, 1); // Bishop
+        *move_list++ = Move(destination + pawn_move_offsets[side], destination, 0); // Knight
+    }
+
+    // Double moves
+    uint64_t double_move_board = (side == 0) ? THIRD_ROW_BITBOARD : SIXTH_ROW_BITBOARD;
+    uint64_t double_moves = shift_forward[side](single_moves & double_move_board) & ~m_all_pieces_bit;
+    while (double_moves)
+    {
+        int destination = popLeastSignificantBit(double_moves);
+        *move_list++ = Move(destination + 2 * pawn_move_offsets[side], destination);
+    }
+
+    // Right shift captures
+    uint64_t right_captures = shift_forward_right[side](pawns & NON_RIGHT_BITBOARD & ~state_info->straightPinnedPieces) & m_pieces_bit[m_turn];
+    uint64_t right_captures_non_promotions = right_captures & non_promotion_rank;
+    while (right_captures_non_promotions)
+    {
+        int destination = popLeastSignificantBit(right_captures_non_promotions);
+        *move_list++ = Move(destination + pawn_capture_offsets_right[side], destination);
+    }
+    uint64_t right_captures_promotions = right_captures & promotion_rank;
+    while (right_captures_promotions)
+    {
+        int destination = popLeastSignificantBit(right_captures_promotions);
+        *move_list++ = Move(destination + pawn_capture_offsets_right[side], destination, 3);
+        *move_list++ = Move(destination + pawn_capture_offsets_right[side], destination, 2);
+        *move_list++ = Move(destination + pawn_capture_offsets_right[side], destination, 1);
+        *move_list++ = Move(destination + pawn_capture_offsets_right[side], destination, 0);
+    }
+
+    // Left shift captures
+    uint64_t left_captures = shift_forward_left[side](pawns & NON_LEFT_BITBOARD & ~state_info->straightPinnedPieces) & m_pieces_bit[m_turn];
+    uint64_t left_captures_non_promotions = left_captures & non_promotion_rank;
+    while (left_captures_non_promotions)
+    {
+        int destination = popLeastSignificantBit(left_captures_non_promotions);
+        *move_list++ = Move(destination + pawn_capture_offsets_left[side], destination);
+    }
+    uint64_t left_captures_promotions = left_captures & promotion_rank;
+    while (left_captures_promotions)
+    {
+        int destination = popLeastSignificantBit(left_captures_promotions);
+        *move_list++ = Move(destination + pawn_capture_offsets_left[side], destination, 3);
+        *move_list++ = Move(destination + pawn_capture_offsets_left[side], destination, 2);
+        *move_list++ = Move(destination + pawn_capture_offsets_left[side], destination, 1);
+        *move_list++ = Move(destination + pawn_capture_offsets_left[side], destination, 0);
+    }
+
+    // En passant
+    if (state_info->pSquare)
+    {
+        uint64_t passant_attackers = precomputed_moves::pawn_attacks[m_turn][state_info->pSquare] & pawns;
+        while (passant_attackers)
         {
-            int destination{popLeastSignificantBit(piece_moves)};
-            if (destination < 56) // Non promotions
+            int origin = popLeastSignificantBit(passant_attackers);
+            if (kingIsSafeAfterPassant(origin, state_info->pSquare + pawn_move_offsets[side]))
             {
-                *move_list++ = Move(destination - 8, destination);
-            }
-            else // Promotions
-            {
-                *move_list++ = Move(destination - 8, destination, 3);
-                *move_list++ = Move(destination - 8, destination, 2);
-                *move_list++ = Move(destination - 8, destination, 1);
-                *move_list++ = Move(destination - 8, destination, 0);
-            }
-        }
-        // Double moves
-        piece_moves = shift_up((shift_up(m_pieces[0][0] & ~(state_info->diagonalPinnedPieces)) & ~m_all_pieces_bit) & THIRD_ROW_BITBOARD) & ~m_all_pieces_bit;
-        while (piece_moves)
-        {
-            int destination{popLeastSignificantBit(piece_moves)};
-            *move_list++ = Move(destination - 16, destination);
-        }
-        // Right shift captures
-        piece_moves = shift_up_right(m_pieces[0][0] & NON_RIGHT_BITBOARD & ~(state_info->straightPinnedPieces)) & m_pieces_bit[m_turn];
-        while (piece_moves)
-        {
-            int destination{popLeastSignificantBit(piece_moves)};
-            if (destination < 56) // Non promotions
-            {
-                *move_list++ = Move(destination - 9, destination);
-            }
-            else // Promotions
-            {
-                *move_list++ = Move(destination - 9, destination, 3);
-                *move_list++ = Move(destination - 9, destination, 2);
-                *move_list++ = Move(destination - 9, destination, 1);
-                *move_list++ = Move(destination - 9, destination, 0);
-            }
-        }
-        // Left shift captures
-        piece_moves = shift_up_left(m_pieces[0][0] & NON_LEFT_BITBOARD & ~(state_info->straightPinnedPieces)) & m_pieces_bit[m_turn];
-        while (piece_moves)
-        {
-            int destination{popLeastSignificantBit(piece_moves)};
-            if (destination < 56) // Non promotions
-            {
-                *move_list++ = Move(destination - 7, destination);
-            }
-            else // Promotions
-            {
-                *move_list++ = Move(destination - 7, destination, 3);
-                *move_list++ = Move(destination - 7, destination, 2);
-                *move_list++ = Move(destination - 7, destination, 1);
-                *move_list++ = Move(destination - 7, destination, 0);
-            }
-        }
-        // Passant
-        if (state_info->pSquare)
-        {
-            piece_moves = precomputed_moves::pawn_attacks[m_turn][(state_info->pSquare)] & m_pieces[0][0];
-            while (piece_moves)
-            {
-                int origin{popLeastSignificantBit(piece_moves)};
-                if (kingIsSafeAfterPassant(origin, (state_info->pSquare) - 8)) // Legal
-                {
-                    *move_list++ = Move(origin, state_info->pSquare, 0);
-                }
+                *move_list++ = Move(origin, state_info->pSquare, 0);
             }
         }
     }
-    else // Black moves
-    {
-        // Single moves
-        uint64_t piece_moves{shift_down(m_pieces[1][0] & ~(state_info->diagonalPinnedPieces)) & ~m_all_pieces_bit};
-        while (piece_moves)
-        {
-            int destination{popLeastSignificantBit(piece_moves)};
-            if (destination > 7) // Non promotions
-            {
-                *move_list++ = Move(destination + 8, destination);
-            }
-            else // Promotions
-            {
-                *move_list++ = Move(destination + 8, destination, 3);
-                *move_list++ = Move(destination + 8, destination, 2);
-                *move_list++ = Move(destination + 8, destination, 1);
-                *move_list++ = Move(destination + 8, destination, 0);
-            }
-        }
-        // Double moves
-        piece_moves = shift_down((shift_down(m_pieces[1][0] & ~(state_info->diagonalPinnedPieces)) & ~m_all_pieces_bit) & SIXTH_ROW_BITBOARD) & ~m_all_pieces_bit;
-        while (piece_moves)
-        {
-            int destination{popLeastSignificantBit(piece_moves)};
-            *move_list++ = Move(destination + 16, destination);
-        }
-        // Right shift captures
-        piece_moves = shift_down_right(m_pieces[1][0] & NON_RIGHT_BITBOARD & ~(state_info->straightPinnedPieces)) & m_pieces_bit[m_turn];
-        while (piece_moves)
-        {
-            int destination{popLeastSignificantBit(piece_moves)};
-            if (destination > 7) // Non promotions
-            {
-                *move_list++ = Move(destination + 7, destination);
-            }
-            else // Promotions
-            {
-                *move_list++ = Move(destination + 7, destination, 3);
-                *move_list++ = Move(destination + 7, destination, 2);
-                *move_list++ = Move(destination + 7, destination, 1);
-                *move_list++ = Move(destination + 7, destination, 0);
-            }
-        }
-        // Left shift captures
-        piece_moves = shift_down_left(m_pieces[1][0] & NON_LEFT_BITBOARD & ~(state_info->straightPinnedPieces)) & m_pieces_bit[m_turn];
-        while (piece_moves)
-        {
-            int destination{popLeastSignificantBit(piece_moves)};
-            if (destination > 7) // Non promotions
-            {
-                *move_list++ = Move(destination + 9, destination);
-            }
-            else // Promotions
-            {
-                *move_list++ = Move(destination + 9, destination, 3);
-                *move_list++ = Move(destination + 9, destination, 2);
-                *move_list++ = Move(destination + 9, destination, 1);
-                *move_list++ = Move(destination + 9, destination, 0);
-            }
-        }
-        // Passant
-        if ((state_info->pSquare) != 0)
-        {
-            piece_moves = precomputed_moves::pawn_attacks[m_turn][(state_info->pSquare)] & m_pieces[1][0];
-            while (piece_moves)
-            {
-                int origin{popLeastSignificantBit(piece_moves)};
-                if (kingIsSafeAfterPassant(origin, (state_info->pSquare) + 8)) // Legal
-                {
-                    *move_list++ = Move(origin, (state_info->pSquare), 0);
-                }
-            }
-        }
-    }
+
     return move_list;
 }
 ScoredMove *BitPosition::knightAllMoves(ScoredMove *&move_list) const
