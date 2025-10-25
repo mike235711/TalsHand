@@ -300,13 +300,9 @@ public:
             return 30;
         }
         // Non promotions
-        if (m_turn)
-        {
-            return m_board[1][move.getDestinationSquare()];
-        }
         else
         {
-            return m_board[0][move.getDestinationSquare()];
+            return m_board[m_turn][move.getDestinationSquare()];
         }
     }
     int aBMoveValue(Move move) const
@@ -316,28 +312,17 @@ public:
         if (move.getData() & 0b0100000000000000)
         {
             // Promotions
-            if (m_turn && m_board[0][move.getOriginSquare()] == 0)
-                return 30;
-            else if (not m_turn && m_board[1][move.getOriginSquare()] == 0)
+            if (m_board[not m_turn][move.getOriginSquare()] == 0)
                 return 30;
             // Castling
             return 2;
         }
         // Non promotions
-        int score = 0;
-        if (m_turn)
-        {
-            int piece_at = m_board[1][move.getDestinationSquare()];
-            if (piece_at != 7)
-                score += piece_at + 1;
-        }
-        else
-        {
-            int piece_at = m_board[0][move.getDestinationSquare()];
-            if (piece_at != 7)
-                score += piece_at + 1;
-        }
-        return score;
+        int piece_at = m_board[m_turn][move.getDestinationSquare()];
+        if (piece_at != 7)
+            return piece_at + 1;
+            
+        return 0;
     }
 
     bool isEndgame() const
