@@ -86,9 +86,10 @@ This project follows [Semantic Versioning](https://semver.org/). The release pro
 ## TODO
 - Build tests for the nnueu loading and accumulation
 - Include the final test for version release which is to play several games on different positions and time controls against last oldest version and see the score.
-- Simplify castling rights logic in makeMove
 - Simplify further `src/bitposition.cpp` code with m_turn logic
 - Try to see if including zobrist key updates and ttable lookup in quiesence is worth it.
+- Aspiration windows
+- Build three nnueu's, one for openings, one for middle game and another for endgames.  
 - Mate distance pruning
 - If not in check we can perform a static evaluation of the position
 - Build an ss to save search tree information
