@@ -134,14 +134,14 @@ int BitPosition::countAllPieces() const
 }
 
 static const uint8_t castlingMask[64] = {
-    0x02, 0, 0, 0, 0, 0, 0, 0x01,
+    0x02, 0, 0, 0, 0x03, 0, 0, 0x01,
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
-    0x08, 0, 0, 0, 0, 0, 0, 0x04};
+    0x08, 0, 0, 0, 0xC, 0, 0, 0x04};
 
 template NNUEU::NNUEUChange BitPosition::makeMove<Move>(Move move, StateInfo &new_stae_info);
 template NNUEU::NNUEUChange BitPosition::makeMove<ScoredMove>(ScoredMove move, StateInfo &new_stae_info);
@@ -161,7 +161,7 @@ template bool BitPosition::isLegal<ScoredMove>(const ScoredMove *move) const;
 template bool BitPosition::isCaptureLegal<Move>(const Move *move) const;
 template bool BitPosition::isCaptureLegal<ScoredMove>(const ScoredMove *move) const;
 
-Move castling_moves[2][2]{{Move(16772), Move(16516)}, {Move(20412), Move(20156)}}; // [[WKS, WQS], [BKS, BQS]]
+Move castling_moves[2][2]{{Move(16772), Move(16516)}, {Move(20412), Move(20156)}}; // [[WKS, WQS], [BKS, BQS]] (origin = origin of king, destination = destination of king)
 
 constexpr uint64_t NON_LEFT_BITBOARD = 0b1111111011111110111111101111111011111110111111101111111011111110;
 constexpr uint64_t NON_RIGHT_BITBOARD = 0b0111111101111111011111110111111101111111011111110111111101111111;
@@ -1536,22 +1536,12 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     int captured_piece;
     m_promoted_piece = 7; // Representing no promotion (Used for updating check info)
     state_info->reversibleMovesMade++;
-    uint8_t mask = castlingMask[state_info->lastOriginSquare];
     bool isPassant = false;
 
     m_all_pieces_bit &= ~origin_bit;
     m_all_pieces_bit |= destination_bit;
     m_pieces_bit[not m_turn] ^= (origin_bit | destination_bit);
 
-    if (mask != 0)
-    {
-        // Toggle out old rights from Zobrist
-        state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
-        // Clear the bit(s)
-        state_info->castlingRights &= ~mask;
-        // Toggle in new rights
-        state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
-    }
     if (m_turn) // White's move
     {
         m_moved_piece = m_white_board[state_info->lastOriginSquare];
@@ -1565,19 +1555,6 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 
         if (m_moved_piece == 5) // Moving king
         {
-            // Update castling rights
-            if (state_info->lastOriginSquare == 4 && (state_info->castlingRights & (WHITE_KS | WHITE_QS)))
-            {
-                uint8_t oldCR = state_info->castlingRights;
-                state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[oldCR];
-
-                // Clear White's kingside and queenside bits
-                state_info->castlingRights &= ~(WHITE_KS | WHITE_QS);
-
-                uint8_t newCR = state_info->castlingRights;
-                state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[newCR];
-            }
-
             // Update king bit and king position
             m_pieces[0][5] = destination_bit;
             m_king_position[0] = destination_square;
@@ -1697,18 +1674,16 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             state_info->reversibleMovesMade = 0; // Move is irreversible
             // Set NNUEU input
             nnueuChanges.addlast(64 * (5 + captured_piece) + destination_square);
-            // CLEAR CASTLING RIGHTS if capturing an enemy rook on the corner
-            mask = castlingMask[destination_square];
+
+            state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][destination_square];
+
+            uint8_t mask = castlingMask[destination_square];
             if (mask != 0)
             {
-                // Toggle out old rights
                 state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
-                // Clear bit(s)
                 state_info->castlingRights &= ~mask;
-                // Toggle in new rights
                 state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
             }
-            state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][destination_square];
         }
 
         state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->previous->pSquare];
@@ -1734,17 +1709,6 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 
         if (m_moved_piece == 5) // Moving king
         {
-            if (state_info->lastOriginSquare == 60 && (state_info->castlingRights & (BLACK_KS | BLACK_QS)))
-            {
-                uint8_t oldCR = state_info->castlingRights;
-                state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[oldCR];
-
-                state_info->castlingRights &= ~(BLACK_KS | BLACK_QS);
-
-                uint8_t newCR = state_info->castlingRights;
-                state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[newCR];
-            }
-
             // Now update the black king's bitboard and position
             m_pieces[1][5] = destination_bit;
             m_king_position[1] = destination_square;
@@ -1865,18 +1829,16 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             m_pieces_bit[0] &= ~destination_bit;
             // Set NNUEU input
             nnueuChanges.addlast(64 * captured_piece + destination_square);
-            // CLEAR CASTLING RIGHTS if capturing an enemy rook on the corner
-            mask = castlingMask[destination_square];
+
+            state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][destination_square];
+
+            uint8_t mask = castlingMask[destination_square];
             if (mask != 0)
             {
-                // Toggle out old rights
                 state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
-                // Clear bit(s)
                 state_info->castlingRights &= ~mask;
-                // Toggle in new rights
                 state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
             }
-            state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][destination_square];
         }
 
         state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->previous->pSquare];
@@ -1893,6 +1855,14 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 
     state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][state_info->lastOriginSquare] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][destination_square];
     state_info->zobristKey ^= zobrist_keys::blackToMoveZobristNumber;
+    // Update castling rights
+    uint8_t mask = castlingMask[state_info->lastOriginSquare];
+    if (mask != 0)
+    {
+        state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
+        state_info->castlingRights &= ~mask;
+        state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
+    }
     m_turn = not m_turn;
 
     // Note, we store the zobrist key in it's array when making the move. However the rest of the ply info
@@ -1921,6 +1891,30 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             std::cerr << "Move: " << move.toString() << "\n";
             assert(false);
         }
+        // If the castling rights are on, the king must be on initial square
+        if (not m_turn && (state_info->castlingRights & 0b0011) != 0) // Move we did was white's
+        {
+            int king_square = m_king_position[m_turn];
+            if (king_square != 4)
+            {
+                std::cerr << "Assertion failed in makeMove: White castling rights are active but king is not on initial square\n";
+                std::cerr << "FEN: " << toFenString() << "\n";
+                std::cerr << "Move: " << move.toString() << "\n";
+                assert(false);
+            }
+        }
+        else if (m_turn && (state_info->castlingRights & 0b1100) != 0) // Move we did was black's
+        {
+            int king_square = m_king_position[m_turn];
+            if (king_square != 60)
+            {
+                std::cerr << "Assertion failed in makeMove: Black castling rights are active but king is not on initial square\n";
+                std::cerr << "FEN: " << toFenString() << "\n";
+                std::cerr << "Move: " << move.toString() << "\n";
+                assert(false);
+            }
+        }
+        
         assert(computeFullZobristKey() == state_info->zobristKey);
 #endif
     return nnueuChanges;
@@ -2252,20 +2246,12 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     m_all_pieces_bit &= ~origin_bit;
     m_all_pieces_bit |= destination_bit;
     m_pieces_bit[not m_turn] ^= (origin_bit | destination_bit);
-
     m_pieces_bit[m_turn] &= ~destination_bit;
 
     if (m_turn) // White's move
     {
         m_moved_piece = m_white_board[state_info->lastOriginSquare];
         captured_piece = m_black_board[destination_square];
-#ifndef NDEBUG // DEBUG
-    // If we moved White king from e1 -> clear White's bits, or black king from e8
-    if (m_moved_piece == 5) // a king
-    {
-        state_info->castlingRights &= ~(WHITE_KS | WHITE_QS);
-    }
-#endif
         assert(m_moved_piece != 7); // DEBUG: Moved piece must be a piece (not empty square or own piece)
 
         // Promotions
@@ -2330,13 +2316,6 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     {
         m_moved_piece = m_black_board[state_info->lastOriginSquare];
         captured_piece = m_white_board[destination_square];
-#ifndef NDEBUG // DEBUG
-        // If we moved White king from e1 -> clear White's bits, or black king from e8
-        if (m_moved_piece == 5) // a king
-        {
-            state_info->castlingRights &= ~(BLACK_KS | BLACK_QS);
-        }
-#endif
         assert(m_moved_piece != 7); // Moved piece must be a piece (not empty square or own piece)
 
         // Promotions
@@ -2399,7 +2378,8 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
         }
     }
 #ifndef NDEBUG // DEBUG
-    // Clear bits if moving from or moving to a rook corner square
+    // Clear bits if moving from or moving to a rook corner square (we dont need to do this in release mode since in quiescence search
+    // we dont care about castling rights)
     {
         uint8_t mask = castlingMask[destination_square] | castlingMask[state_info->lastOriginSquare];
         if (mask)
