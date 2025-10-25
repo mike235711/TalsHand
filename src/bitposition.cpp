@@ -1767,9 +1767,7 @@ void BitPosition::unmakeMove(T move)
     m_all_pieces_bit &= ~destination_bit;
     m_all_pieces_bit |= origin_bit;
     m_pieces_bit[m_turn] ^= (origin_bit | destination_bit);
-    if (m_turn) // Last move was black
-    {
-        int moved_piece = m_board[1][destination_square];
+    int moved_piece = m_board[m_turn][destination_square];
         // Castling, Passant and promotions
         if (move.isSpecial())
         {
@@ -1777,228 +1775,130 @@ void BitPosition::unmakeMove(T move)
             if (move.getData() == 20412)
             {
                 // Rook
-                m_pieces[1][3] |= (1ULL << 63);
+            m_pieces[m_turn][3] |= (1ULL << 63);
                 m_all_pieces_bit |= (1ULL << 63);
-                m_pieces_bit[1] |= (1ULL << 63);
-                m_pieces[1][3] &= ~(1ULL << 61);
+            m_pieces_bit[m_turn] |= (1ULL << 63);
+            m_pieces[m_turn][3] &= ~(1ULL << 61);
                 m_all_pieces_bit &= ~(1ULL << 61);
-                m_pieces_bit[1] &= ~(1ULL << 61);
+            m_pieces_bit[m_turn] &= ~(1ULL << 61);
 
                 // King
-                m_pieces[1][5] = (1ULL << 60);
-                m_king_position[1] = 60;
+            m_pieces[m_turn][5] = (1ULL << 60);
+            m_king_position[m_turn] = 60;
 
-                m_board[1][63] = 3;
-                m_board[1][61] = 7;
-                m_board[0][destination_square] = previous_captured_piece;
+            m_board[m_turn][63] = 3;
+            m_board[m_turn][61] = 7;
             }
 
             // Unmake queenside castling
             else if (move.getData() == 20156)
             {
                 // Rook
-                m_pieces[1][3] |= (1ULL << 56);
+            m_pieces[m_turn][3] |= (1ULL << 56);
                 m_all_pieces_bit |= (1ULL << 56);
-                m_pieces_bit[1] |= (1ULL << 56);
-                m_pieces[1][3] &= ~(1ULL << 59);
+            m_pieces_bit[m_turn] |= (1ULL << 56);
+            m_pieces[m_turn][3] &= ~(1ULL << 59);
                 m_all_pieces_bit &= ~(1ULL << 59);
-                m_pieces_bit[1] &= ~(1ULL << 59);
+            m_pieces_bit[m_turn] &= ~(1ULL << 59);
 
                 // King
-                m_pieces[1][5] = (1ULL << 60);
-                m_king_position[1] = 60;
+            m_pieces[m_turn][5] = (1ULL << 60);
+            m_king_position[m_turn] = 60;
 
-                m_board[1][56] = 3;
-                m_board[1][59] = 7;
-                m_board[0][destination_square] = previous_captured_piece;
-            }
-
-            // Unmaking black promotions
-            else if (destination_bit & FIRST_ROW_BITBOARD)
-            {
-                moved_piece = 0;
-                uint16_t promoting_piece{static_cast<uint16_t>(move.getData() & 12288)};
-
-                m_pieces[1][0] |= origin_bit;
-
-                if (promoting_piece == 12288) // Unpromote queen
-                {
-                    m_pieces[1][4] &= ~destination_bit;
-                }
-                else if (promoting_piece == 8192) // Unpromote rook
-                {
-                    m_pieces[1][3] &= ~destination_bit;
-                }
-                else if (promoting_piece == 4096) // Unpromote bishop
-                {
-                    m_pieces[1][2] &= ~destination_bit;
-                }
-                else // Unpromote knight
-                {
-                    m_pieces[1][1] &= ~destination_bit;
-                }
-                // Unmaking captures in promotions
-                if (previous_captured_piece != 7)
-                {
-                    m_pieces[0][previous_captured_piece] |= destination_bit;
-                    m_pieces_bit[0] |= destination_bit;
-                    m_all_pieces_bit |= destination_bit;
-                }
-                m_board[0][destination_square] = previous_captured_piece;
-            }
-            else // Passant
-            {
-                m_pieces[1][0] |= origin_bit;
-                m_pieces[1][0] &= ~destination_bit;
-                m_pieces[0][0] |= shift_up(destination_bit);
-                m_pieces_bit[0] |= shift_up(destination_bit);
-                m_all_pieces_bit |= shift_up(destination_bit);
-                m_board[0][destination_square + 8] = 0;
-            }
+            m_board[m_turn][56] = 3;
+            m_board[m_turn][59] = 7;
         }
-
-        // Non special moves
-        else
-        {
-            if (moved_piece == 5) // Unmove king
-            {
-                m_pieces[1][5] = origin_bit;
-                m_king_position[1] = origin_square;
-                // moveBlackKingNNUEInput();
-            }
-            else // Unmove any other piece
-            {
-                m_pieces[1][moved_piece] |= origin_bit;
-                m_pieces[1][moved_piece] &= ~destination_bit;
-            }
-            // Unmaking captures
-            if (previous_captured_piece != 7)
-            {
-                m_pieces[0][previous_captured_piece] |= destination_bit;
-                m_pieces_bit[0] |= destination_bit;
-                m_all_pieces_bit |= destination_bit;
-            }
-            m_board[0][destination_square] = previous_captured_piece;
-        }
-        m_board[1][destination_square] = 7;
-        m_board[1][origin_square] = moved_piece;
-    }
-    else // Last move was white
-    {
-        int moved_piece = m_board[0][destination_square];
-        // Special moves
-        if (move.isSpecial())
-        {
             // Unmake kingside castling
-            if (move.getData() == 16772)
+        else if (move.getData() == 16772)
             {
                 // Rook
-                m_pieces[0][3] |= (1ULL << 7);
-                m_pieces_bit[0] |= (1ULL << 7);
+            m_pieces[m_turn][3] |= (1ULL << 7);
+            m_pieces_bit[m_turn] |= (1ULL << 7);
                 m_all_pieces_bit |= (1ULL << 7);
-                m_pieces[0][3] &= ~(1ULL << 5);
-                m_pieces_bit[0] &= ~(1ULL << 5);
+            m_pieces[m_turn][3] &= ~(1ULL << 5);
+            m_pieces_bit[m_turn] &= ~(1ULL << 5);
                 m_all_pieces_bit &= ~(1ULL << 5);
 
                 // King
-                m_pieces[0][5] = (1ULL << 4);
-                m_king_position[0] = 4;
+            m_pieces[m_turn][5] = (1ULL << 4);
+            m_king_position[m_turn] = 4;
 
-                m_board[0][7] = 3;
-                m_board[0][5] = 7;
-                m_board[1][destination_square] = previous_captured_piece;
+            m_board[m_turn][7] = 3;
+            m_board[m_turn][5] = 7;
             }
-
             // Unmake queenside castling
             else if (move.getData() == 16516)
             {
                 // Rook
-                m_pieces[0][3] |= 1ULL;
-                m_pieces_bit[0] |= 1ULL;
+            m_pieces[m_turn][3] |= 1ULL;
+            m_pieces_bit[m_turn] |= 1ULL;
                 m_all_pieces_bit |= 1ULL;
-                m_pieces[0][3] &= ~(1ULL << 3);
-                m_pieces_bit[0] &= ~(1ULL << 3);
+            m_pieces[m_turn][3] &= ~(1ULL << 3);
+            m_pieces_bit[m_turn] &= ~(1ULL << 3);
                 m_all_pieces_bit &= ~(1ULL << 3);
 
                 // King
-                m_pieces[0][5] = (1ULL << 4);
-                m_king_position[0] = 4;
+            m_pieces[m_turn][5] = (1ULL << 4);
+            m_king_position[m_turn] = 4;
 
-                m_board[0][0] = 3;
-                m_board[0][3] = 7;
-                m_board[1][destination_square] = previous_captured_piece;
+            m_board[m_turn][0] = 3;
+            m_board[m_turn][3] = 7;
             }
 
             // Unmaking promotions
-            else if ((destination_bit & EIGHT_ROW_BITBOARD))
+        else if (destination_bit & promotion_ranks[m_turn])
             {
                 moved_piece = 0;
-                uint16_t promoting_piece{static_cast<uint16_t>(move.getData() & 12288)};
 
-                m_pieces[0][0] |= origin_bit;
+            m_pieces[m_turn][0] |= origin_bit;
+            m_pieces[m_turn][move.getPromotingPiece() + 1] &= ~destination_bit;
 
-                if (promoting_piece == 12288) // Unpromote queen
-                {
-                    m_pieces[0][4] &= ~destination_bit;
-                }
-                else if (promoting_piece == 8192) // Unpromote rook
-                {
-                    m_pieces[0][3] &= ~destination_bit;
-                }
-                else if (promoting_piece == 4096) // Unpromote bishop
-                {
-                    m_pieces[0][2] &= ~destination_bit;
-                }
-                else // Unpromote knight
-                {
-                    m_pieces[0][1] &= ~destination_bit;
-                }
                 // Unmaking captures in promotions
                 if (previous_captured_piece != 7)
                 {
-                    m_pieces[1][previous_captured_piece] |= destination_bit;
-                    m_pieces_bit[1] |= destination_bit;
+                m_pieces[not m_turn][previous_captured_piece] |= destination_bit;
+                m_pieces_bit[not m_turn] |= destination_bit;
                     m_all_pieces_bit |= destination_bit;
                 }
-                m_board[1][destination_square] = previous_captured_piece;
+            m_board[not m_turn][destination_square] = previous_captured_piece;
             }
             else // Passant
             {
-                m_pieces[0][0] |= origin_bit;
-                m_pieces[0][0] &= ~destination_bit;
-                m_pieces[1][0] |= shift_down(destination_bit);
-                m_pieces_bit[1] |= shift_down(destination_bit);
-                m_all_pieces_bit |= shift_down(destination_bit);
-                m_board[1][destination_square - 8] = 0;
+            m_pieces[m_turn][0] |= origin_bit;
+            m_pieces[m_turn][0] &= ~destination_bit;
+
+            // Restore captured pawn
+            m_pieces[not m_turn][0] |= shift_forward[not m_turn](destination_bit);
+            m_pieces_bit[not m_turn] |= shift_forward[not m_turn](destination_bit);
+            m_all_pieces_bit |= shift_forward[not m_turn](destination_bit);
+            m_board[not m_turn][destination_square + pawn_move_offsets[m_turn]] = 0;
             }
         }
-
         // Non special moves
         else
         {
             if (moved_piece == 5) // Unmove king
             {
-                m_pieces[0][5] = origin_bit;
-                m_king_position[0] = origin_square;
-                // moveWhiteKingNNUEInput();
+            m_pieces[m_turn][5] = origin_bit;
+            m_king_position[m_turn] = origin_square;
+            // moveBlackKingNNUEInput();
             }
-            else
+        else // Unmove any other piece
             {
-                m_pieces[0][moved_piece] |= origin_bit;
-                m_pieces[0][moved_piece] &= ~destination_bit;
+            m_pieces[m_turn][moved_piece] |= origin_bit;
+            m_pieces[m_turn][moved_piece] &= ~destination_bit;
             }
             // Unmaking captures
             if (previous_captured_piece != 7)
             {
-                m_pieces[1][previous_captured_piece] |= destination_bit;
-                m_pieces_bit[1] |= destination_bit;
+            m_pieces[not m_turn][previous_captured_piece] |= destination_bit;
+            m_pieces_bit[not m_turn] |= destination_bit;
                 m_all_pieces_bit |= destination_bit;
             }
-            m_board[1][destination_square] = previous_captured_piece;
+        m_board[not m_turn][destination_square] = previous_captured_piece;
         }
-        m_board[0][destination_square] = 7;
-        m_board[0][origin_square] = moved_piece;
-    }
+    m_board[m_turn][destination_square] = 7;
+    m_board[m_turn][origin_square] = moved_piece;
 
     m_turn = not m_turn;
 
