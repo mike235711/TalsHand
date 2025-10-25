@@ -166,6 +166,12 @@ Move castling_moves[2][2]{{Move(16772), Move(16516)}, {Move(20412), Move(20156)}
 static constexpr int kingside_castling_check_squares[2][2] = {{5, 6}, {61, 62}};   // [white][sq1, sq2], [black][sq1, sq2]
 static constexpr int queenside_castling_check_squares[2][2] = {{2, 3}, {58, 59}}; // [white][sq1, sq2], [black][sq1, sq2]
 
+static constexpr uint8_t castling_rights_masks[2][2] = {{WHITE_KS, WHITE_QS}, {BLACK_KS, BLACK_QS}};
+static constexpr uint64_t castling_empty_squares_masks[2][2] = {
+    {96, 14},                                           // White: KS, QS
+    {6917529027641081856ULL, 1008806316530991104ULL}    // Black: KS, QS
+};
+
 constexpr uint64_t NON_LEFT_BITBOARD = 0b1111111011111110111111101111111011111110111111101111111011111110;
 constexpr uint64_t NON_RIGHT_BITBOARD = 0b0111111101111111011111110111111101111111011111110111111101111111;
 constexpr uint64_t FIRST_ROW_BITBOARD = 0b0000000000000000000000000000000000000000000000000000000011111111;
@@ -1116,26 +1122,17 @@ ScoredMove *BitPosition::kingAllMoves(ScoredMove *&move_list) const
     uint64_t destinations{precomputed_moves::king_moves[m_king_position[not m_turn]] & ~m_pieces_bit[not m_turn]};
     while (destinations)
         *move_list++ = Move(m_king_position[not m_turn], popLeastSignificantBit(destinations));
-    if (m_turn) // White to move
-    {
-        // White kingside castling
-        if ((state_info->castlingRights & WHITE_KS) && ((m_all_pieces_bit & 96) == 0))
-            *move_list++ = castling_moves[0][0];
 
-        // White queenside castling
-        if ((state_info->castlingRights & WHITE_QS) && ((m_all_pieces_bit & 14) == 0))
-            *move_list++ = castling_moves[0][1];
-    }
-    else // Black to move
-    {
-        // Black kingside castling
-        if ((state_info->castlingRights & BLACK_KS) && ((m_all_pieces_bit & 6917529027641081856ULL) == 0))
-            *move_list++ = castling_moves[1][0];
+    const int side = not m_turn;
 
-        // Black queenside castling
-        if ((state_info->castlingRights & BLACK_QS) && ((m_all_pieces_bit & 1008806316530991104ULL) == 0))
-            *move_list++ = castling_moves[1][1];
-    }
+    // Kingside castling
+    if ((state_info->castlingRights & castling_rights_masks[side][0]) && ((m_all_pieces_bit & castling_empty_squares_masks[side][0]) == 0))
+        *move_list++ = castling_moves[side][0];
+
+    // Queenside castling
+    if ((state_info->castlingRights & castling_rights_masks[side][1]) && ((m_all_pieces_bit & castling_empty_squares_masks[side][1]) == 0))
+        *move_list++ = castling_moves[side][1];
+
     return move_list;
 }
 
