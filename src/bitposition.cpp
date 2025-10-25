@@ -1038,62 +1038,38 @@ Move *BitPosition::inCheckPawnBlocks(Move *&move_list) const
 // Only called if m_num_checks = 1 and m_check_rays != 0
 // Non captures
 {
-    if (m_turn)
+    const uint64_t pawns = m_pieces[not m_turn][0];
+    const uint64_t promotion_rank = promotion_ranks[not m_turn];
+
+    // Single moves
+    uint64_t single_moves = shift_forward[not m_turn](pawns & ~state_info->diagonalPinnedPieces) & ~m_all_pieces_bit;
+    uint64_t pawn_blocks = single_moves & m_check_rays;
+
+    uint64_t non_promotions = pawn_blocks & ~promotion_rank;
+    while (non_promotions)
     {
-        // Single moves
-        uint64_t single_pawn_moves_bit{shift_up(m_pieces[0][0] & ~(state_info->diagonalPinnedPieces)) & ~m_all_pieces_bit};
-        uint64_t pawn_blocks{single_pawn_moves_bit & m_check_rays};
-        while (pawn_blocks)
-        {
-            int destination{popLeastSignificantBit(pawn_blocks)};
-            if (destination < 56) // Non promotions
-            {
-                *move_list++ = Move(destination - 8, destination);
-            }
-            else // Promotions
-            {
-                *move_list++ = Move(destination - 8, destination, 0);
-                *move_list++ = Move(destination - 8, destination, 1);
-                *move_list++ = Move(destination - 8, destination, 2);
-                *move_list++ = Move(destination - 8, destination, 3);
-            }
-        }
-        // Double moves
-        pawn_blocks = shift_up(single_pawn_moves_bit & THIRD_ROW_BITBOARD) & ~m_all_pieces_bit & m_check_rays;
-        while (pawn_blocks)
-        {
-            int destination{popLeastSignificantBit(pawn_blocks)};
-            *move_list++ = Move(destination - 16, destination);
-        }
+        int destination = popLeastSignificantBit(non_promotions);
+        *move_list++ = Move(destination + pawn_move_offsets[not m_turn], destination);
     }
-    else
+
+    uint64_t promotions = pawn_blocks & promotion_rank;
+    while (promotions)
     {
-        // Single moves
-        uint64_t single_pawn_moves_bit{shift_down(m_pieces[1][0] & ~(state_info->diagonalPinnedPieces)) & ~m_all_pieces_bit};
-        uint64_t pawn_blocks{single_pawn_moves_bit & m_check_rays};
-        while (pawn_blocks)
-        {
-            int destination{popLeastSignificantBit(pawn_blocks)};
-            if (destination > 7) // Non promotions
-            {
-                *move_list++ = Move(destination + 8, destination);
-            }
-            else // Promotions
-            {
-                *move_list++ = Move(destination + 8, destination, 0);
-                *move_list++ = Move(destination + 8, destination, 1);
-                *move_list++ = Move(destination + 8, destination, 2);
-                *move_list++ = Move(destination + 8, destination, 3);
-            }
-        }
-        // Double moves
-        pawn_blocks = shift_down(single_pawn_moves_bit & SIXTH_ROW_BITBOARD) & ~m_all_pieces_bit & m_check_rays;
-        while (pawn_blocks)
-        {
-            int destination{popLeastSignificantBit(pawn_blocks)};
-            *move_list++ = Move(destination + 16, destination);
-        }
+        int destination = popLeastSignificantBit(promotions);
+        *move_list++ = Move(destination + pawn_move_offsets[not m_turn], destination, 0);
+        *move_list++ = Move(destination + pawn_move_offsets[not m_turn], destination, 1);
+        *move_list++ = Move(destination + pawn_move_offsets[not m_turn], destination, 2);
+        *move_list++ = Move(destination + pawn_move_offsets[not m_turn], destination, 3);
     }
+
+    // Double moves
+    pawn_blocks = shift_forward[not m_turn](single_moves & double_move_boards[not m_turn]) & ~m_all_pieces_bit & m_check_rays;
+    while (pawn_blocks)
+    {
+        int destination = popLeastSignificantBit(pawn_blocks);
+        *move_list++ = Move(destination + 2 * pawn_move_offsets[not m_turn], destination);
+    }
+
     return move_list;
 }
 Move *BitPosition::inCheckKnightBlocks(Move *&move_list) const
