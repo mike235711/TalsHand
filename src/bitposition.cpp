@@ -2243,90 +2243,46 @@ void BitPosition::unmakeCapture(T move)
     m_pieces_bit[m_turn] ^= (origin_bit | destination_bit);
     m_pieces_bit[not m_turn] |= destination_bit;
 
-    if (m_turn) // Last move was black
-    {
-        int moved_piece = m_board[1][destination_square];
-        // Promotions
-        if (move.getData() & 0b0100000000000000)
-        {
-            moved_piece = 0;
-            m_pieces[1][0] |= origin_bit;
-            m_pieces[1][4] &= ~destination_bit;
 
-            // Unmaking captures in promotions
-            if (previous_captured_piece != 7)
-            {
-                m_pieces[0][previous_captured_piece] |= destination_bit;
-            }
-            else
-            {
-                m_pieces_bit[0] &= ~destination_bit;
-                m_all_pieces_bit &= ~destination_bit;
-            }
+    int moved_piece = m_board[m_turn][destination_square];
+    // Promotions
+    if (move.getData() & 0b0100000000000000)
+    {
+        moved_piece = 0;
+        m_pieces[m_turn][0] |= origin_bit;
+        m_pieces[m_turn][4] &= ~destination_bit;
+
+        // Unmaking captures in promotions
+        if (previous_captured_piece != 7)
+        {
+            m_pieces[not m_turn][previous_captured_piece] |= destination_bit;
         }
-        // Non promotions
         else
         {
-            if (moved_piece == 5) // Unmove king
-            {
-                m_pieces[1][5] = origin_bit;
-                m_king_position[1] = origin_square;
-            }
-            else
-            {
-                m_pieces[1][moved_piece] |= origin_bit;
-                m_pieces[1][moved_piece] &= ~destination_bit;
-            }
-            // Unmaking captures
-            m_pieces[0][previous_captured_piece] |= destination_bit;
+            m_pieces_bit[not m_turn] &= ~destination_bit;
+            m_all_pieces_bit &= ~destination_bit;
         }
-        m_board[1][destination_square] = 7;
-        m_board[1][origin_square] = moved_piece;
-        m_board[0][destination_square] = previous_captured_piece;
     }
-    else // Last move was white
+    // Non promotions
+    else
     {
-        int moved_piece = m_board[0][destination_square];
-        // Promotions
-        if (move.getData() & 0b0100000000000000)
+        if (moved_piece == 5) // Unmove king
         {
-            moved_piece = 0;
-            m_pieces[0][0] |= origin_bit;
-            m_pieces[0][4] &= ~destination_bit;
-
-            // Unmaking captures in promotions
-            if (previous_captured_piece != 7)
-            {
-                m_pieces[1][previous_captured_piece] |= destination_bit;
-            }
-            else
-            {
-                m_pieces_bit[1] &= ~destination_bit;
-                m_all_pieces_bit &= ~destination_bit;
-            }
+            m_pieces[m_turn][5] = origin_bit;
+            m_king_position[m_turn] = origin_square;
         }
-        // Non promotions
         else
         {
-            if (moved_piece == 5) // Unmove king
-            {
-                m_pieces[0][5] = origin_bit;
-                m_king_position[0] = origin_square;
-            }
-            else
-            {
-                m_pieces[0][moved_piece] |= origin_bit;
-                m_pieces[0][moved_piece] &= ~destination_bit;
-            }
-
-            // Unmaking captures
-            m_pieces[1][previous_captured_piece] |= destination_bit;
+            m_pieces[m_turn][moved_piece] |= origin_bit;
+            m_pieces[m_turn][moved_piece] &= ~destination_bit;
         }
-        m_board[0][destination_square] = 7;
-        m_board[0][origin_square] = moved_piece;
-        m_board[1][destination_square] = previous_captured_piece;
+        // Unmaking captures
+        m_pieces[not m_turn][previous_captured_piece] |= destination_bit;
     }
-
+    m_board[m_turn][destination_square] = 7;
+    m_board[m_turn][origin_square] = moved_piece;
+    m_board[not m_turn][destination_square] = previous_captured_piece;
+    
     m_turn = not m_turn;
 #ifndef NDEBUG // DEBUG
     if (!posIsFine()) // DEBUG
