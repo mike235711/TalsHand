@@ -163,6 +163,9 @@ template bool BitPosition::isCaptureLegal<ScoredMove>(const ScoredMove *move) co
 
 Move castling_moves[2][2]{{Move(16772), Move(16516)}, {Move(20412), Move(20156)}}; // [[WKS, WQS], [BKS, BQS]] (origin = origin of king, destination = destination of king)
 
+static constexpr int kingside_castling_check_squares[2][2] = {{5, 6}, {61, 62}};   // [white][sq1, sq2], [black][sq1, sq2]
+static constexpr int queenside_castling_check_squares[2][2] = {{2, 3}, {58, 59}}; // [white][sq1, sq2], [black][sq1, sq2]
+
 constexpr uint64_t NON_LEFT_BITBOARD = 0b1111111011111110111111101111111011111110111111101111111011111110;
 constexpr uint64_t NON_RIGHT_BITBOARD = 0b0111111101111111011111110111111101111111011111110111111101111111;
 constexpr uint64_t FIRST_ROW_BITBOARD = 0b0000000000000000000000000000000000000000000000000000000011111111;
@@ -535,17 +538,11 @@ bool BitPosition::isLegal(const T *move) const
     // Move is legal if piece is not pinned, otherwise if origin, destination and king position are aligned
     if (move->getData() == castling_moves[not m_turn][0].getData()) // Kingside castling
     {
-        if (m_turn)
-            return newKingSquareIsSafe(5) && newKingSquareIsSafe(6);
-        else
-            return newKingSquareIsSafe(61) && newKingSquareIsSafe(62);
+        return newKingSquareIsSafe(kingside_castling_check_squares[not m_turn][0]) && newKingSquareIsSafe(kingside_castling_check_squares[not m_turn][1]);
     }
     else if (move->getData() == castling_moves[not m_turn][1].getData()) // Queenside castling
     {
-        if (m_turn)
-            return newKingSquareIsSafe(2) && newKingSquareIsSafe(3);
-        else
-            return newKingSquareIsSafe(58) && newKingSquareIsSafe(59);
+        return newKingSquareIsSafe(queenside_castling_check_squares[not m_turn][0]) && newKingSquareIsSafe(queenside_castling_check_squares[not m_turn][1]);
     }
     else
     {
@@ -2364,12 +2361,12 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
                 if (not state_info->isCheck)
                     state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
 
-                // Set NNUE input
+                // Set NNUEU input
                 nnueuChanges.add(64 * (5 + m_moved_piece) + destination_square, 64 * (5 + m_moved_piece) + state_info->lastOriginSquare);
             }
             // Captures (Non passant)
             m_pieces[0][captured_piece] &= ~destination_bit;
-            // Set NNUE input
+            // Set NNUEU input
             nnueuChanges.addlast(64 * captured_piece + destination_square);
 
             m_black_board[state_info->lastOriginSquare] = 7;
