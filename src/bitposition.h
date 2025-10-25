@@ -53,8 +53,7 @@ class BitPosition
 {
 private:
     // Board of color pieces 7s where no pieces
-    int m_white_board[64];
-    int m_black_board[64];
+    int m_board[2][64];
 
     // 64-bit to represent pieces on board for each piece type and color
     uint64_t m_pieces[2][6];
@@ -88,8 +87,8 @@ private:
 
     void clear()
     {
-        std::fill(std::begin(m_white_board), std::end(m_white_board), 7);
-        std::fill(std::begin(m_black_board), std::end(m_black_board), 7);
+        std::fill(std::begin(m_board[0]), std::end(m_board[0]), 7);
+        std::fill(std::begin(m_board[1]), std::end(m_board[1]), 7);
         std::memset(m_pieces, 0ULL, sizeof(m_pieces));
         m_pieces_bit[0] = m_pieces_bit[1] = m_all_pieces_bit = 0ULL;
         m_turn = false;
@@ -132,7 +131,7 @@ public:
             auto push = [&](int side, int piece)
             {
                 m_pieces[side][piece] |= bit;
-                (side ? m_black_board : m_white_board)[sq] = piece;
+                (side ? m_board[1] : m_board[0])[sq] = piece;
             };
 
             switch (c)
@@ -289,8 +288,8 @@ public:
 
     inline int qsScore(int dst) const
     {
-        return m_turn ? m_black_board[dst] 
-                      : m_white_board[dst];
+        return m_turn ? m_board[1][dst] 
+                      : m_board[0][dst];
     }
 
     int qSMoveValue(Move move) const
@@ -303,11 +302,11 @@ public:
         // Non promotions
         if (m_turn)
         {
-            return m_black_board[move.getDestinationSquare()];
+            return m_board[1][move.getDestinationSquare()];
         }
         else
         {
-            return m_white_board[move.getDestinationSquare()];
+            return m_board[0][move.getDestinationSquare()];
         }
     }
     int aBMoveValue(Move move) const
@@ -317,9 +316,9 @@ public:
         if (move.getData() & 0b0100000000000000)
         {
             // Promotions
-            if (m_turn && m_white_board[move.getOriginSquare()] == 0)
+            if (m_turn && m_board[0][move.getOriginSquare()] == 0)
                 return 30;
-            else if (not m_turn && m_black_board[move.getOriginSquare()] == 0)
+            else if (not m_turn && m_board[1][move.getOriginSquare()] == 0)
                 return 30;
             // Castling
             return 2;
@@ -328,13 +327,13 @@ public:
         int score = 0;
         if (m_turn)
         {
-            int piece_at = m_black_board[move.getDestinationSquare()];
+            int piece_at = m_board[1][move.getDestinationSquare()];
             if (piece_at != 7)
                 score += piece_at + 1;
         }
         else
         {
-            int piece_at = m_white_board[move.getDestinationSquare()];
+            int piece_at = m_board[0][move.getDestinationSquare()];
             if (piece_at != 7)
                 score += piece_at + 1;
         }
@@ -477,8 +476,8 @@ public:
 
     void debugBoardState()
     {
-        printBoard(m_white_board, "White Board");
-        printBoard(m_black_board, "Black Board");
+        printBoard(m_board[0], "White Board");
+        printBoard(m_board[1], "Black Board");
 
         std::cout << "\nBitboards:\n";
         for (int color = 0; color < 2; ++color)
@@ -626,7 +625,7 @@ public:
         // Check white board
         for (int sq = 0; sq < 64; ++sq)
         {
-            int piece = m_white_board[sq];
+            int piece = m_board[0][sq];
             if (piece < 6)
             { // valid piece
                 recalculated_pieces[0][piece] |= (1ULL << sq);
@@ -643,7 +642,7 @@ public:
         // Check black board
         for (int sq = 0; sq < 64; ++sq)
         {
-            int piece = m_black_board[sq];
+            int piece = m_board[1][sq];
             if (piece < 6)
             {
                 recalculated_pieces[1][piece] |= (1ULL << sq);
@@ -705,10 +704,10 @@ public:
         if (m_turn)
         {
             // Check that the origin square has a piece of the current player
-            int moving_piece = m_white_board[origin];
+            int moving_piece = m_board[0][origin];
             if (moving_piece == 7)
             {
-                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in m_white_board \n";
+                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in m_board[0] \n";
                 return false;
             }
             if (!(m_pieces[0][moving_piece] & origin_bit))
@@ -717,7 +716,7 @@ public:
                 return false;
             }
             // Check that the destination square does NOT contain a piece of the current player
-            if (m_white_board[destination] != 7)
+            if (m_board[0][destination] != 7)
             {
                 std::cerr << "[moveIsFine] Destination square " << destination << " already occupied by same side\n";
                 return false;
@@ -726,10 +725,10 @@ public:
         else
         {
             // Check that the origin square has a piece of the current player
-            int moving_piece = m_black_board[origin];
-            if (m_black_board[origin] == 7)
+            int moving_piece = m_board[1][origin];
+            if (m_board[1][origin] == 7)
             {
-                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in m_black_board\n";
+                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in m_board[1]\n";
                 return false;
             }
             if (!(m_pieces[1][moving_piece] & origin_bit))
@@ -738,7 +737,7 @@ public:
                 return false;
             }
             // Check that the destination square does NOT contain a piece of the current player
-            if (m_black_board[destination] != 7)
+            if (m_board[1][destination] != 7)
             {
                 std::cerr << "[moveIsFine] Destination square " << destination << " already occupied by same side\n";
                 return false;
