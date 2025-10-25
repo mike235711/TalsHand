@@ -182,10 +182,10 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
         // We are not in a PV-Node
         else
         {
-            // At a non principal node the ttEntry stores an upper bound
-            // If we have a deeper depth in the ttable and the upper bound
-            // is higher by a margin than beta we can return beta
-            // To explain beta: Suppose it is our opponents move,
+            // At a non principal node the ttEntry stores an lower bound
+            // If we have a deeper depth in the ttable and the lower bound
+            // is higher than beta, we can return beta.
+            // What is beta: Suppose it is our opponents move,
             // beta represents the value which we can at this point garantee from the 
             // search for the opponent to find, the lower the beta the better for us).
             tt_move = ttEntry->getMove();
