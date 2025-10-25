@@ -1143,72 +1143,42 @@ Move *BitPosition::inCheckOrderedCapturesAndKingMoves(Move *&move_list) const
     uint64_t piece_moves = precomputed_moves::king_moves[m_king_position[not m_turn]] & m_pieces_bit[m_turn];
     while (piece_moves)
         *move_list++ = Move(m_king_position[not m_turn], popLeastSignificantBit(piece_moves));
-    if (m_turn)
+
+    const uint64_t pawns = m_pieces[not m_turn][0];
+    const uint64_t promotion_rank = promotion_ranks[not m_turn];
+
+    // Pawn captures of the checking piece
+    piece_moves = precomputed_moves::pawn_attacks[m_turn][m_check_square] & pawns;
+    while (piece_moves)
     {
-        // Pawn captures from checking position
-        piece_moves = precomputed_moves::pawn_attacks[m_turn][m_check_square] & m_pieces[0][0];
+        int origin = popLeastSignificantBit(piece_moves);
+        if (!((1ULL << m_check_square) & promotion_rank)) // Non-promotion capture
+        {
+            *move_list++ = Move(origin, m_check_square);
+        }
+        else // Promotion capture
+        {
+            *move_list++ = Move(origin, m_check_square, 0);
+            *move_list++ = Move(origin, m_check_square, 1);
+            *move_list++ = Move(origin, m_check_square, 2);
+            *move_list++ = Move(origin, m_check_square, 3);
+        }
+    }
+
+    // En passant capture
+    if (state_info->pSquare != 0)
+    {
+        piece_moves = precomputed_moves::pawn_attacks[m_turn][state_info->pSquare] & pawns;
         while (piece_moves)
         {
-            int origin{popLeastSignificantBit(piece_moves)};
-            if (m_check_square < 56) // Non promotions
+            int origin = popLeastSignificantBit(piece_moves);
+            if (kingIsSafeAfterPassant(origin, state_info->pSquare + pawn_move_offsets[not m_turn]))
             {
-                *move_list++ = Move(origin, m_check_square);
-            }
-            else // Promotions
-            {
-                *move_list++ = Move(origin, m_check_square, 0);
-                *move_list++ = Move(origin, m_check_square, 1);
-                *move_list++ = Move(origin, m_check_square, 2);
-                *move_list++ = Move(origin, m_check_square, 3);
-            }
-        }
-        // Passant block or capture
-        if ((state_info->pSquare) != 0)
-        {
-            piece_moves = precomputed_moves::pawn_attacks[m_turn][(state_info->pSquare)] & m_pieces[0][0];
-            while (piece_moves)
-            {
-                int origin{popLeastSignificantBit(piece_moves)};
-                if (kingIsSafeAfterPassant(origin, (state_info->pSquare) - 8)) // Legal
-                {
-                    *move_list++ = Move(origin, (state_info->pSquare), 0);
-                }
+                *move_list++ = Move(origin, state_info->pSquare, 0);
             }
         }
     }
-    else
-    {
-        // Pawn captures from checking position
-        piece_moves = precomputed_moves::pawn_attacks[m_turn][m_check_square] & m_pieces[1][0];
-        while (piece_moves)
-        {
-            int origin{popLeastSignificantBit(piece_moves)};
-            if (m_check_square > 7) // Non promotions
-            {
-                *move_list++ = Move(origin, m_check_square);
-            }
-            else // Promotions
-            {
-                *move_list++ = Move(origin, m_check_square, 0);
-                *move_list++ = Move(origin, m_check_square, 1);
-                *move_list++ = Move(origin, m_check_square, 2);
-                *move_list++ = Move(origin, m_check_square, 3);
-            }
-        }
-        // Passant block or capture
-        if ((state_info->pSquare) != 0)
-        {
-            piece_moves = precomputed_moves::pawn_attacks[m_turn][(state_info->pSquare)] & m_pieces[1][0];
-            while (piece_moves)
-            {
-                int origin{popLeastSignificantBit(piece_moves)};
-                if (kingIsSafeAfterPassant(origin, (state_info->pSquare) + 8)) // Legal
-                {
-                    *move_list++ = Move(origin, (state_info->pSquare), 0);
-                }
-            }
-        }
-    }
+
     // Knight captures from checking position
     piece_moves = precomputed_moves::knight_moves[m_check_square] & m_pieces[not m_turn][1] & ~state_info->pinnedPieces;
     while (piece_moves)
@@ -1259,34 +1229,16 @@ Move *BitPosition::inCheckOrderedCaptures(Move *&move_list) const
         *move_list++ = Move(m_king_position[not m_turn], popLeastSignificantBit(piece_moves));
     }
     // Pawn captures from checking position
-    if (m_turn)
+    piece_moves = precomputed_moves::pawn_attacks[m_turn][m_check_square] & m_pieces[not m_turn][0];
+    while (piece_moves)
     {
-        piece_moves = precomputed_moves::pawn_attacks[m_turn][m_check_square] & m_pieces[0][0];
-        while (piece_moves)
+        if (!((1ULL << m_check_square) & promotion_ranks[not m_turn])) // Non promotions
         {
-            if (m_check_square < 56) // Non promotions
-            {
-                *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
-            }
-            else // Promotions
-            {
-                *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square, 3);
-            }
+            *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
         }
-    }
-    else
-    {
-        piece_moves = precomputed_moves::pawn_attacks[m_turn][m_check_square] & m_pieces[1][0];
-        while (piece_moves)
+        else // Promotions
         {
-            if (m_check_square > 7) // Non promotions
-            {
-                *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
-            }
-            else // Promotions
-            {
-                *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square, 3);
-            }
+            *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square, 3);
         }
     }
     // Knight captures from checking position
