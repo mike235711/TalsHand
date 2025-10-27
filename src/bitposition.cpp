@@ -487,7 +487,6 @@ void BitPosition::setBlockersPinsAndCheckBitsInQS()
 {
     state_info->blockersForKing = 0;
     state_info->pinnedPieces = 0;
-    m_blockers_set = true;
 
     // Blockers of own bishops, rooks and queens
     uint64_t snipers_bits = ((m_pieces[not m_turn][2] | m_pieces[not m_turn][4]) & precomputed_moves::bishop_full_rays[m_king_position[m_turn]]) | ((m_pieces[not m_turn][3] | m_pieces[not m_turn][4]) & precomputed_moves::rook_full_rays[m_king_position[m_turn]]);
@@ -518,7 +517,6 @@ void BitPosition::setBlockersAndPinsInAB()
     state_info->blockersForKing = 0;
     state_info->straightPinnedPieces = 0;
     state_info->diagonalPinnedPieces = 0;
-    m_blockers_set = true;
 
     // Blockers of own bishops, rooks and queens
     uint64_t snipers_bits = ((m_pieces[not m_turn][2] | m_pieces[not m_turn][4]) & precomputed_moves::bishop_full_rays[m_king_position[m_turn]]) | ((m_pieces[not m_turn][3] | m_pieces[not m_turn][4]) & precomputed_moves::rook_full_rays[m_king_position[m_turn]]);
@@ -1354,8 +1352,6 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     state_info->next = &new_state_info;
     state_info = &new_state_info;
 
-    m_blockers_set = false;
-
     int origin_square = move.getOriginSquare();
     uint64_t origin_bit = (1ULL << origin_square);
     int destination_square = move.getDestinationSquare();
@@ -1651,7 +1647,6 @@ void BitPosition::unmakeMove(T move)
     #endif
 #endif
     // If a move was made before, that means previous position had blockers set (which we restore from ply info)
-    m_blockers_set = true;
 
     m_ply--;
     int previous_captured_piece{state_info->capturedPiece};
@@ -1854,8 +1849,6 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 
     state_info->pSquare = 0;
 
-    m_blockers_set = false;
-
     int origin_square = move.getOriginSquare();
     uint64_t origin_bit = 1ULL << origin_square;
     int destination_square = move.getDestinationSquare();
@@ -1959,7 +1952,6 @@ void BitPosition::unmakeCapture(T move)
     #endif
 #endif
     // If a move was made before, that means previous position had blockers set (which we restore from ply info)
-    m_blockers_set = true;
 
     m_ply--;
 

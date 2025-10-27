@@ -32,11 +32,12 @@ void QSMoveSelectorNotCheck::score()
 // This never returns the TT move, as it was emitted before.
 Move QSMoveSelectorCheck::select_legal()
 {
+    if (cur == endMoves)
+        return Move(0);
+
+    pos.setBlockersPinsAndCheckBitsInQS();
     for (; cur < endMoves; ++cur)
     {
-        // We only set blockers once if there is a legal move
-        if (pos.hasBlockersUnset())
-            pos.setBlockersPinsAndCheckBitsInQS();
         // If move is not legal we skip it
         if (pos.isCaptureLegal(cur))
         {
@@ -48,6 +49,11 @@ Move QSMoveSelectorCheck::select_legal()
 }
 Move QSMoveSelectorNotCheck::select_legal()
 {
+    if (cur == endMoves)
+        return Move(0);
+
+    pos.setBlockersPinsAndCheckBitsInQS();
+    
     while (cur < endMoves)
     {
         // Find best remaining move in [cur, endMoves) 
@@ -59,10 +65,6 @@ Move QSMoveSelectorNotCheck::select_legal()
         // move it to the front (stable O(1) for already-best case)
         if (best != cur)
             std::swap(*best, *cur);
-
-        // Set blockers and pins if not already set
-        if (pos.hasBlockersUnset())
-            pos.setBlockersPinsAndCheckBitsInQS();
 
         if (pos.isCaptureLegal(cur))
             return *cur++; // success → advance and return

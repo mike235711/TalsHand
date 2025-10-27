@@ -70,9 +70,6 @@ private:
     // int representing kings' positions
     int m_king_position[2];
 
-    // For discovered checks
-    bool m_blockers_set{false};
-
     // Bits representing check info
     int m_check_square{65};
     uint64_t m_check_rays{0};
@@ -93,7 +90,6 @@ private:
         m_moved_piece = m_promoted_piece = 7;
         m_check_rays = m_num_checks = 0;
         m_king_position[0] = m_king_position[1] = 64;
-        m_blockers_set = false;
         m_ply = 0;
     }
 
@@ -383,8 +379,6 @@ public:
     {
         return m_pieces[color][pieceType];
     }
-
-    inline bool hasBlockersUnset() const { return not m_blockers_set; }
 
     inline bool getIsCheck() const
     {
