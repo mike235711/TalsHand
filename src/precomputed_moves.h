@@ -142,26 +142,6 @@ namespace precomputed_moves
         return a;
     }();
 
-    /* bishop / rook rays ---------------------------------------*/
-
-    inline constexpr auto bishop_unfull_rays = []
-    {
-        std::array<uint64_t, 64> a{};
-        for (int s1 = 0; s1 < 64; ++s1)
-            for (int s2 = 0; s2 < 64; ++s2)
-                a[s1] |= calc_diagonal_between(s1, s2, false);
-        return a;
-    }();
-
-    inline constexpr auto rook_unfull_rays = []
-    {
-        std::array<uint64_t, 64> a{};
-        for (int s1 = 0; s1 < 64; ++s1)
-            for (int s2 = 0; s2 < 64; ++s2)
-                a[s1] |= calc_straight_between(s1, s2, false);
-        return a;
-    }();
-
     /* “full” rays ----------------------------------------------*/
 
     inline constexpr auto bishop_full_rays = []

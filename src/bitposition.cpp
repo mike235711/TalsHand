@@ -279,15 +279,15 @@ void BitPosition::setIsCheckOnInitialization()
         state_info->isCheck = true;
 
     // Queen
-    if (((RmagicNOMASK(m_king_position[not m_turn], precomputed_moves::rook_unfull_rays[m_king_position[not m_turn]] & m_all_pieces_bit) | BmagicNOMASK(m_king_position[not m_turn], precomputed_moves::bishop_unfull_rays[m_king_position[not m_turn]] & m_all_pieces_bit)) & m_pieces[m_turn][4]) != 0)
+    if (((RmagicNOMASK(m_king_position[not m_turn], m_all_pieces_bit) | BmagicNOMASK(m_king_position[not m_turn], m_all_pieces_bit)) & m_pieces[m_turn][4]) != 0)
         state_info->isCheck = true;
 
     // Rook
-    if ((RmagicNOMASK(m_king_position[not m_turn], precomputed_moves::rook_unfull_rays[m_king_position[not m_turn]] & m_all_pieces_bit) & m_pieces[m_turn][3]))
+    if ((RmagicNOMASK(m_king_position[not m_turn], m_all_pieces_bit) & m_pieces[m_turn][3]))
         state_info->isCheck = true;
 
     // Bishop
-    if ((BmagicNOMASK(m_king_position[not m_turn], precomputed_moves::bishop_unfull_rays[m_king_position[not m_turn]] & m_all_pieces_bit) & m_pieces[m_turn][2]))
+    if ((BmagicNOMASK(m_king_position[not m_turn], m_all_pieces_bit) & m_pieces[m_turn][2]))
         state_info->isCheck = true;
 
     // King
@@ -306,15 +306,15 @@ bool BitPosition::getIsCheckOnInitialization(bool turn)
         return true;
 
     // Queen
-    if (((RmagicNOMASK(m_king_position[not turn], precomputed_moves::rook_unfull_rays[m_king_position[not turn]] & m_all_pieces_bit) | BmagicNOMASK(m_king_position[not turn], precomputed_moves::bishop_unfull_rays[m_king_position[not turn]] & m_all_pieces_bit)) & m_pieces[turn][4]) != 0)
+    if (((RmagicNOMASK(m_king_position[not turn], m_all_pieces_bit) | BmagicNOMASK(m_king_position[not turn], m_all_pieces_bit)) & m_pieces[turn][4]) != 0)
         return true;
 
     // Rook
-    if ((RmagicNOMASK(m_king_position[not turn], precomputed_moves::rook_unfull_rays[m_king_position[not turn]] & m_all_pieces_bit) & m_pieces[turn][3]))
+    if ((RmagicNOMASK(m_king_position[not turn], m_all_pieces_bit) & m_pieces[turn][3]))
         return true;
 
     // Bishop
-    if ((BmagicNOMASK(m_king_position[not turn], precomputed_moves::bishop_unfull_rays[m_king_position[not turn]] & m_all_pieces_bit) & m_pieces[turn][2]))
+    if ((BmagicNOMASK(m_king_position[not turn], m_all_pieces_bit) & m_pieces[turn][2]))
         return true;
 
     // King
@@ -847,11 +847,10 @@ ScoredMove *BitPosition::queenCaptures(ScoredMove *&move_list) const
 // All queen captures except capturing unsafe pieces
 {
     uint64_t moveable_queens{m_pieces[not m_turn][4]};
-    uint64_t enemy = m_pieces_bit[m_turn];
     while (moveable_queens)
     {
         int origin{popLeastSignificantBit(moveable_queens)};
-        uint64_t destinations{(BmagicNOMASK(origin, m_all_pieces_bit) | RmagicNOMASK(origin, m_all_pieces_bit)) & enemy};
+        uint64_t destinations{QmagicNOMASK(origin, m_all_pieces_bit) & m_pieces_bit[m_turn]};
         while (destinations)
         {
             int dest = popLeastSignificantBit(destinations);
@@ -1008,7 +1007,7 @@ ScoredMove *BitPosition::queenAllMoves(ScoredMove *&move_list) const
     while (moveable_queens)
     {
         int origin{popLeastSignificantBit(moveable_queens)};
-        uint64_t destinations{(BmagicNOMASK(origin, m_all_pieces_bit) | RmagicNOMASK(origin, m_all_pieces_bit)) & ~m_pieces_bit[not m_turn]};
+        uint64_t destinations{QmagicNOMASK(origin, m_all_pieces_bit) & ~m_pieces_bit[not m_turn]};
         while (destinations)
             *move_list++ = Move(origin, popLeastSignificantBit(destinations));
     }
@@ -1128,7 +1127,7 @@ Move *BitPosition::inCheckQueenBlocks(Move *&move_list) const
     while (pieces)
     {
         int origin{popLeastSignificantBit(pieces)};
-        uint64_t destinations{(BmagicNOMASK(origin, m_all_pieces_bit) | RmagicNOMASK(origin, m_all_pieces_bit)) & m_check_rays};
+        uint64_t destinations{QmagicNOMASK(origin, m_all_pieces_bit) & m_check_rays};
         while (destinations)
         {
             *move_list++ = Move(origin, popLeastSignificantBit(destinations));
@@ -1198,7 +1197,7 @@ Move *BitPosition::inCheckOrderedCapturesAndKingMoves(Move *&move_list) const
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
     }
     // Queen captures from checking position
-    piece_moves = (BmagicNOMASK(m_check_square, m_all_pieces_bit) | RmagicNOMASK(m_check_square, m_all_pieces_bit)) & m_pieces[not m_turn][4];
+    piece_moves = QmagicNOMASK(m_check_square, m_all_pieces_bit) & m_pieces[not m_turn][4];
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
@@ -1260,7 +1259,7 @@ Move *BitPosition::inCheckOrderedCaptures(Move *&move_list) const
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
     }
     // Queen captures from checking position
-    piece_moves = (BmagicNOMASK(m_check_square, m_all_pieces_bit) | RmagicNOMASK(m_check_square, m_all_pieces_bit)) & m_pieces[not m_turn][4];
+    piece_moves = QmagicNOMASK(m_check_square, m_all_pieces_bit) & m_pieces[not m_turn][4];
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
@@ -2372,7 +2371,7 @@ Move *BitPosition::bishopNonCaptures(Move *&move_list) const
     while (piece_bits)
     {
         int origin = popLeastSignificantBit(piece_bits);
-        uint64_t destinations = BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & m_all_pieces_bit) & ~m_all_pieces_bit;
+        uint64_t destinations = BmagicNOMASK(origin, m_all_pieces_bit) & ~m_all_pieces_bit;
         while (destinations)
         {
             int destination = popLeastSignificantBit(destinations);
@@ -2387,7 +2386,7 @@ Move *BitPosition::rookNonCaptures(Move *&move_list) const
     while (piece_bits)
     {
         int origin = popLeastSignificantBit(piece_bits);
-        uint64_t destinations = RmagicNOMASK(origin, precomputed_moves::rook_unfull_rays[origin] & m_all_pieces_bit) & ~m_all_pieces_bit;
+        uint64_t destinations = RmagicNOMASK(origin, m_all_pieces_bit) & ~m_all_pieces_bit;
         while (destinations)
         {
             int destination = popLeastSignificantBit(destinations);
@@ -2402,7 +2401,7 @@ Move *BitPosition::queenNonCaptures(Move *&move_list) const
     while (piece_bits)
     {
         int origin = popLeastSignificantBit(piece_bits);
-        uint64_t destinations = (BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & m_all_pieces_bit) | RmagicNOMASK(origin, precomputed_moves::rook_unfull_rays[origin] & m_all_pieces_bit)) & ~m_all_pieces_bit;
+        uint64_t destinations = QmagicNOMASK(origin, m_all_pieces_bit) & ~m_all_pieces_bit;
         while (destinations)
         {
             int destination = popLeastSignificantBit(destinations);
