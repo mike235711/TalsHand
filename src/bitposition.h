@@ -52,8 +52,8 @@ struct StateInfo
 class BitPosition
 {
 private:
-    // Board of color pieces 7s where no pieces
-    int m_board[2][64];
+    // Board of color pieces 0=WP, 1 =WN, 2=WB, 3=WR, 4=WQ, 5 = BP, 6=BN, 7=BB, 8=BR, 9=BQ, 10=empty
+    int m_board[64];
 
     // 64-bit to represent pieces on board for each piece type and color
     uint64_t m_pieces[2][6];
@@ -87,8 +87,7 @@ private:
 
     void clear()
     {
-        std::fill(std::begin(m_board[0]), std::end(m_board[0]), 7);
-        std::fill(std::begin(m_board[1]), std::end(m_board[1]), 7);
+        std::fill(std::begin(m_board), std::end(m_board), 10);
         std::memset(m_pieces, 0ULL, sizeof(m_pieces));
         m_pieces_bit[0] = m_pieces_bit[1] = m_all_pieces_bit = 0ULL;
         m_turn = false;
@@ -128,10 +127,16 @@ public:
             }
 
             const uint64_t bit = 1ULL << sq;
-            auto push = [&](int side, int piece)
+            auto push = [&](int side, int piece, bool isKing = false)
             {
                 m_pieces[side][piece] |= bit;
-                (side ? m_board[1] : m_board[0])[sq] = piece;
+                if (!isKing)
+                {
+                    if (side == 0)
+                        m_board[sq] = piece;
+                    else
+                        m_board[sq] = piece + 5;
+                }
             };
 
             switch (c)
@@ -152,7 +157,7 @@ public:
                 push(0, 4);
                 break;
             case 'K':
-                push(0, 5);
+                push(0, 5, true);
                 break;
             case 'p':
                 push(1, 0);
@@ -170,7 +175,7 @@ public:
                 push(1, 4);
                 break;
             case 'k':
-                push(1, 5);
+                push(1, 5, true);
                 break;
             }
             ++sq;
@@ -288,8 +293,7 @@ public:
 
     inline int qsScore(int dst) const
     {
-        return m_turn ? m_board[1][dst] 
-                      : m_board[0][dst];
+        return m_board[dst];
     }
 
     int qSMoveValue(Move move) const
@@ -302,7 +306,7 @@ public:
         // Non promotions
         else
         {
-            return m_board[m_turn][move.getDestinationSquare()];
+            return m_board[move.getDestinationSquare()];
         }
     }
     int aBMoveValue(Move move) const
@@ -312,14 +316,16 @@ public:
         if (move.getData() & 0b0100000000000000)
         {
             // Promotions
-            if (m_board[not m_turn][move.getOriginSquare()] == 0)
+            if (m_turn && m_board[move.getOriginSquare()] == 0)
                 return 30;
-            // Castling
-            return 2;
+            else if (!m_turn && m_board[move.getOriginSquare()] == 5)
+                return 30;
+            else
+                return 2; // Castling
         }
         // Non promotions
-        int piece_at = m_board[m_turn][move.getDestinationSquare()];
-        if (piece_at != 7)
+        int piece_at = m_board[move.getDestinationSquare()];
+        if (piece_at != 10)
             return piece_at + 1;
             
         return 0;
@@ -461,8 +467,7 @@ public:
 
     void debugBoardState()
     {
-        printBoard(m_board[0], "White Board");
-        printBoard(m_board[1], "Black Board");
+        printBoard(m_board, "Board");
 
         std::cout << "\nBitboards:\n";
         for (int color = 0; color < 2; ++color)
@@ -610,41 +615,38 @@ public:
         // Check white board
         for (int sq = 0; sq < 64; ++sq)
         {
-            int piece = m_board[0][sq];
-            if (piece < 6)
+            int piece = m_board[sq];
+            if (piece >= 0 && piece < 5)
             { // valid piece
                 recalculated_pieces[0][piece] |= (1ULL << sq);
                 recalculated_pieces_bit[0] |= (1ULL << sq);
                 recalculated_all_pieces |= (1ULL << sq);
-            }
-            else if (piece != 7)
-            {
-                std::cerr << "[posIsFine] Invalid white piece index at " << sq << ": " << piece << "\n";
-                return false;
             }
         }
 
         // Check black board
         for (int sq = 0; sq < 64; ++sq)
         {
-            int piece = m_board[1][sq];
-            if (piece < 6)
-            {
+            int piece = m_board[sq];
+            if (piece >= 5 && piece < 10)
+            { // valid piece
+                piece -= 5;
                 recalculated_pieces[1][piece] |= (1ULL << sq);
                 recalculated_pieces_bit[1] |= (1ULL << sq);
                 recalculated_all_pieces |= (1ULL << sq);
             }
-            else if (piece != 7)
-            {
-                std::cerr << "[posIsFine] Invalid black piece index at " << sq << ": " << piece << "\n";
-                return false;
-            }
         }
+        recalculated_pieces[1][5] = 1ULL << m_king_position[1];
+        recalculated_pieces[0][5] = 1ULL << m_king_position[0];
+        recalculated_pieces_bit[1] |= (1ULL << m_king_position[1]);
+        recalculated_pieces_bit[0] |= (1ULL << m_king_position[0]);
+        recalculated_all_pieces |= (1ULL << m_king_position[0]);
+        recalculated_all_pieces |= (1ULL << m_king_position[1]);
 
         // Compare bitboards
         for (int color = 0; color < 2; ++color)
         {
-            for (int pt = 0; pt < 6; ++pt)
+            for (int pt = 0; pt < 5; ++pt)
             {
                 if (recalculated_pieces[color][pt] != m_pieces[color][pt])
                 {
@@ -689,19 +691,19 @@ public:
         if (m_turn)
         {
             // Check that the origin square has a piece of the current player
-            int moving_piece = m_board[0][origin];
-            if (moving_piece == 7)
+            int moving_piece = m_board[origin];
+            if (moving_piece >= 5 && origin != m_king_position[0])
             {
-                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in m_board[0] \n";
+                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in m_board \n";
                 return false;
             }
-            if (!(m_pieces[0][moving_piece] & origin_bit))
+            if (!(m_pieces[0][moving_piece] & origin_bit) && !(origin == m_king_position[0]))
             {
                 std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in array of piece bits\n";
                 return false;
             }
             // Check that the destination square does NOT contain a piece of the current player
-            if (m_board[0][destination] != 7)
+            if (m_board[destination] < 5)
             {
                 std::cerr << "[moveIsFine] Destination square " << destination << " already occupied by same side\n";
                 return false;
@@ -710,19 +712,19 @@ public:
         else
         {
             // Check that the origin square has a piece of the current player
-            int moving_piece = m_board[1][origin];
-            if (m_board[1][origin] == 7)
+            int moving_piece = m_board[origin];
+            if (moving_piece < 5 || (origin != m_king_position[1] && moving_piece == 10))
             {
-                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in m_board[1]\n";
+                std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in m_board\n";
                 return false;
             }
-            if (!(m_pieces[1][moving_piece] & origin_bit))
+            if (!(m_pieces[1][moving_piece - 5] & origin_bit) && !(origin == m_king_position[1]))
             {
                 std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in array of piece bits\n";
                 return false;
             }
             // Check that the destination square does NOT contain a piece of the current player
-            if (m_board[1][destination] != 7)
+            if (m_board[destination] >= 5 && m_board[destination] < 10)
             {
                 std::cerr << "[moveIsFine] Destination square " << destination << " already occupied by same side\n";
                 return false;

@@ -85,8 +85,8 @@ This project follows [Semantic Versioning](https://semver.org/). The release pro
 
 ## TODO
 - Simplify further `src/bitposition.cpp` code with m_turn logic
-- Change m_board[2][64] to m_board[64] where we include all pieces for both colors except kings: 0 WPAWN, 1WKNIGHT, ..., 5BPAWN, ..., 9BQUEEN. This will aid faster nnueuChange construction. Also less updates will be required inside makeMove, makeCapture, unmakeMove and unmakeCapture.
 - Are stateInfo->lastOriginSquare and stateInfo->lastDestinationSquare needed?
+- Improve see_gee
 - Build tests for the nnueu loading and accumulation
 - Include the final test for version release which is to play several games on different positions and time controls against last oldest version and see the score.
 - Try to see if including zobrist key updates and ttable lookup in quiesence is worth it.
