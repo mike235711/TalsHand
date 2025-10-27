@@ -161,6 +161,12 @@ template bool BitPosition::isLegal<ScoredMove>(const ScoredMove *move) const;
 template bool BitPosition::isCaptureLegal<Move>(const Move *move) const;
 template bool BitPosition::isCaptureLegal<ScoredMove>(const ScoredMove *move) const;
 
+// Precomputed NNUE base indices: side in {0,1}, piece in {0..4}
+static constexpr int NNUE_BASE[2][5] = {
+    { 64 * 0,  64 * 1,  64 * 2,  64 * 3,  64 * 4}, // side = 0
+    { 64 * 5,  64 * 6,  64 * 7,  64 * 8,  64 * 9}  // side = 1
+};
+
 Move castling_moves[2][2]{{Move(16772), Move(16516)}, {Move(20412), Move(20156)}}; // [[WKS, WQS], [BKS, BQS]] (origin = origin of king, destination = destination of king)
 
 static constexpr int kingside_castling_check_squares[2][2] = {{5, 6}, {61, 62}};   // [white][sq1, sq2], [black][sq1, sq2]
@@ -1474,7 +1480,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
         state_info->reversibleMovesMade = 0; // Move is irreversible
 
         // Set NNUEU input
-        nnueuChanges.add(64 * (5 * not m_turn) + destination_square, 64 * (5 * not m_turn) + state_info->lastOriginSquare);
+        nnueuChanges.add(NNUE_BASE[not m_turn][0] + destination_square,
+                         NNUE_BASE[not m_turn][0] + state_info->lastOriginSquare);
 
         if (destination_bit & promotion_ranks[not m_turn]) // Promotions
         {
@@ -1488,7 +1495,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             if (not state_info->isCheck)
                 state_info->isCheck = state_info->previous->checkBits[m_promoted_piece] & destination_bit || isPromotionCheck(m_promoted_piece, destination_square);
             // Set NNUEU input
-            nnueuChanges.add(64 * (m_promoted_piece + 5 * not m_turn) + destination_square, 64 * (5 * not m_turn) + state_info->lastOriginSquare);
+            nnueuChanges.add(NNUE_BASE[not m_turn][m_promoted_piece] + destination_square,
+                             NNUE_BASE[not m_turn][0] + state_info->lastOriginSquare);
 
             state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][destination_square] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_promoted_piece][destination_square];
         }
@@ -1505,7 +1513,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 state_info->isCheck = isDiscoverCheckAfterPassant();
 
             // Set NNUEU input
-            nnueuChanges.addlast(64 * (5 * m_turn) + destination_square + pawn_move_offsets[not m_turn]);
+            nnueuChanges.addlast(NNUE_BASE[m_turn][0] + destination_square + pawn_move_offsets[not m_turn]);
             isPassant = true;
 
             state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][0][destination_square + pawn_move_offsets[not m_turn]];
@@ -1523,7 +1531,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
 
         // Set NNUEU input
-        nnueuChanges.add(64 * (5 * not m_turn + m_moved_piece) + destination_square, 64 * (5 * not m_turn + m_moved_piece) + state_info->lastOriginSquare);
+        nnueuChanges.add(NNUE_BASE[not m_turn][m_moved_piece] + destination_square,
+                         NNUE_BASE[not m_turn][m_moved_piece] + state_info->lastOriginSquare);
     }
     // Captures (Non passant)
     if (captured_piece != 7 && not isPassant)
@@ -1532,7 +1541,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
         m_pieces_bit[m_turn] &= ~destination_bit;
         state_info->reversibleMovesMade = 0; // Move is irreversible
         // Set NNUEU input
-        nnueuChanges.addlast(64 * (5 * m_turn + captured_piece) + destination_square);
+        nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
 
         state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][captured_piece][destination_square];
 
@@ -1864,14 +1873,15 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
         m_pieces[not m_turn][4] |= destination_bit;
 
         // Set NNUE input
-        nnueuChanges.add(64 * (5 * !m_turn + 4) + destination_square, 64 * (5 * !m_turn) + state_info->lastOriginSquare);
+        nnueuChanges.add(NNUE_BASE[not m_turn][4] + destination_square,
+                         NNUE_BASE[not m_turn][0] + state_info->lastOriginSquare);
 
         // Captures (Non passant)
         if (captured_piece != 7)
         {
             m_pieces[m_turn][captured_piece] &= ~destination_bit;
             // Set NNUE input
-            nnueuChanges.addlast(64 * (5 * m_turn + captured_piece) + destination_square);
+            nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
             m_board[m_turn][destination_square] = 7;
         }
         m_board[not m_turn][state_info->lastOriginSquare] = 7;
@@ -1903,12 +1913,13 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
                 state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
 
             // Set NNUE input
-            nnueuChanges.add(64 * (5 * !m_turn + m_moved_piece) + destination_square, 64 * (5 * !m_turn + m_moved_piece) + state_info->lastOriginSquare);
+            nnueuChanges.add(NNUE_BASE[not m_turn][m_moved_piece] + destination_square,
+                             NNUE_BASE[not m_turn][m_moved_piece] + state_info->lastOriginSquare);
         }
         // Captures (Non passant)
         m_pieces[m_turn][captured_piece] &= ~destination_bit;
         // Set NNUE input
-        nnueuChanges.addlast(64 * (5 * m_turn + captured_piece) + destination_square);
+        nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
 
         m_board[not m_turn][state_info->lastOriginSquare] = 7;
         m_board[not m_turn][destination_square] = m_moved_piece;
