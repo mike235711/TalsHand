@@ -1354,10 +1354,9 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 
     m_blockers_set = false;
 
-    state_info->lastOriginSquare = move.getOriginSquare();
-    uint64_t origin_bit = (1ULL << state_info->lastOriginSquare);
+    int origin_square = move.getOriginSquare();
+    uint64_t origin_bit = (1ULL << origin_square);
     int destination_square = move.getDestinationSquare();
-    state_info->lastDestinationSquare = destination_square;
     uint64_t destination_bit = 1ULL << destination_square;
     int captured_piece;
     m_promoted_piece = 7; // Representing no promotion (Used for updating check info)
@@ -1368,12 +1367,12 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     m_all_pieces_bit |= destination_bit;
     m_pieces_bit[not m_turn] ^= (origin_bit | destination_bit);
 
-    m_moved_piece = m_board[not m_turn][state_info->lastOriginSquare];
+    m_moved_piece = m_board[not m_turn][origin_square];
     captured_piece = m_board[m_turn][destination_square];
 
     assert(m_moved_piece != 7);
 
-    m_board[not m_turn][state_info->lastOriginSquare] = 7;
+    m_board[not m_turn][origin_square] = 7;
     m_board[not m_turn][destination_square] = m_moved_piece;
     m_board[m_turn][destination_square] = 7;
 
@@ -1383,7 +1382,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
         m_pieces[not m_turn][5] = destination_bit;
         m_king_position[not m_turn] = destination_square;
 
-        state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
+        state_info->isCheck = isDiscoverCheck(origin_square, destination_square);
 
         // Castling
         if (move.getData() == 16772) // White kingside castling
@@ -1475,13 +1474,13 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
         state_info->isCheck = state_info->previous->checkBits[0] & destination_bit;
         // Discover checks
         if (not state_info->isCheck)
-            state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
+            state_info->isCheck = isDiscoverCheck(origin_square, destination_square);
 
         state_info->reversibleMovesMade = 0; // Move is irreversible
 
         // Set NNUEU input
         nnueuChanges.add(NNUE_BASE[not m_turn][0] + destination_square,
-                         NNUE_BASE[not m_turn][0] + state_info->lastOriginSquare);
+                         NNUE_BASE[not m_turn][0] + origin_square);
 
         if (destination_bit & promotion_ranks[not m_turn]) // Promotions
         {
@@ -1496,7 +1495,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 state_info->isCheck = state_info->previous->checkBits[m_promoted_piece] & destination_bit || isPromotionCheck(m_promoted_piece, destination_square);
             // Set NNUEU input
             nnueuChanges.add(NNUE_BASE[not m_turn][m_promoted_piece] + destination_square,
-                             NNUE_BASE[not m_turn][0] + state_info->lastOriginSquare);
+                             NNUE_BASE[not m_turn][0] + origin_square);
 
             state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][destination_square] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_promoted_piece][destination_square];
         }
@@ -1528,11 +1527,11 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
         state_info->isCheck = state_info->previous->checkBits[m_moved_piece] & destination_bit;
         // Discover checks
         if (not state_info->isCheck)
-            state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
+            state_info->isCheck = isDiscoverCheck(origin_square, destination_square);
 
         // Set NNUEU input
         nnueuChanges.add(NNUE_BASE[not m_turn][m_moved_piece] + destination_square,
-                         NNUE_BASE[not m_turn][m_moved_piece] + state_info->lastOriginSquare);
+                         NNUE_BASE[not m_turn][m_moved_piece] + origin_square);
     }
     // Captures (Non passant)
     if (captured_piece != 7 && not isPassant)
@@ -1557,8 +1556,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->previous->pSquare];
 
     // Updating passant square
-    if (m_moved_piece == 0 && (destination_square - state_info->lastOriginSquare) == double_pawn_move_offsets[m_turn])
-        state_info->pSquare = state_info->lastOriginSquare + pawn_move_offsets[m_turn];
+    if (m_moved_piece == 0 && (destination_square - origin_square) == double_pawn_move_offsets[m_turn])
+        state_info->pSquare = origin_square + pawn_move_offsets[m_turn];
     else
         state_info->pSquare = 0;
 
@@ -1566,10 +1565,10 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     
     state_info->capturedPiece = captured_piece;
 
-    state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][state_info->lastOriginSquare] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][destination_square];
+    state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][origin_square] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][destination_square];
     state_info->zobristKey ^= zobrist_keys::blackToMoveZobristNumber;
     // Update castling rights
-    uint8_t mask = castlingMask[state_info->lastOriginSquare];
+    uint8_t mask = castlingMask[origin_square];
     if (mask != 0)
     {
         state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
@@ -1849,10 +1848,9 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 
     m_blockers_set = false;
 
-    state_info->lastOriginSquare = move.getOriginSquare();
-    uint64_t origin_bit = 1ULL << state_info->lastOriginSquare;
+    int origin_square = move.getOriginSquare();
+    uint64_t origin_bit = 1ULL << origin_square;
     int destination_square = move.getDestinationSquare();
-    state_info->lastDestinationSquare = destination_square;
     uint64_t destination_bit = 1ULL << destination_square;
     int captured_piece;
 
@@ -1862,7 +1860,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     m_pieces_bit[m_turn] &= ~destination_bit;
 
 
-    m_moved_piece = m_board[not m_turn][state_info->lastOriginSquare];
+    m_moved_piece = m_board[not m_turn][origin_square];
     captured_piece = m_board[m_turn][destination_square];
     assert(m_moved_piece != 7); // DEBUG: Moved piece must be a piece (not empty square or own piece)
 
@@ -1874,7 +1872,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 
         // Set NNUE input
         nnueuChanges.add(NNUE_BASE[not m_turn][4] + destination_square,
-                         NNUE_BASE[not m_turn][0] + state_info->lastOriginSquare);
+                         NNUE_BASE[not m_turn][0] + origin_square);
 
         // Captures (Non passant)
         if (captured_piece != 7)
@@ -1884,11 +1882,11 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
             m_board[m_turn][destination_square] = 7;
         }
-        m_board[not m_turn][state_info->lastOriginSquare] = 7;
+        m_board[not m_turn][origin_square] = 7;
         m_board[not m_turn][destination_square] = 4;
 
         // Direct or discover checks
-        state_info->isCheck = isQueenCheck(destination_square) or isDiscoverCheck(state_info->lastOriginSquare, destination_square);
+        state_info->isCheck = isQueenCheck(destination_square) or isDiscoverCheck(origin_square, destination_square);
     }
     else // Normal captures
     {
@@ -1900,7 +1898,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             m_king_position[not m_turn] = destination_square;
 
             // Discover checks
-            state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
+            state_info->isCheck = isDiscoverCheck(origin_square, destination_square);
         }
         // Moving any piece except king
         else
@@ -1910,18 +1908,18 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             // Checks
             state_info->isCheck = state_info->previous->checkBits[m_moved_piece] & destination_bit;
             if (not state_info->isCheck)
-                state_info->isCheck = isDiscoverCheck(state_info->lastOriginSquare, destination_square);
+                state_info->isCheck = isDiscoverCheck(origin_square, destination_square);
 
             // Set NNUE input
             nnueuChanges.add(NNUE_BASE[not m_turn][m_moved_piece] + destination_square,
-                             NNUE_BASE[not m_turn][m_moved_piece] + state_info->lastOriginSquare);
+                             NNUE_BASE[not m_turn][m_moved_piece] + origin_square);
         }
         // Captures (Non passant)
         m_pieces[m_turn][captured_piece] &= ~destination_bit;
         // Set NNUE input
         nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
 
-        m_board[not m_turn][state_info->lastOriginSquare] = 7;
+        m_board[not m_turn][origin_square] = 7;
         m_board[not m_turn][destination_square] = m_moved_piece;
         m_board[m_turn][destination_square] = 7;
     }
@@ -1930,7 +1928,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     // Clear bits if moving from or moving to a rook corner square (we dont need to do this in release mode since in quiescence search
     // we dont care about castling rights)
     {
-        uint8_t mask = castlingMask[destination_square] | castlingMask[state_info->lastOriginSquare];
+        uint8_t mask = castlingMask[destination_square] | castlingMask[origin_square];
         if (mask)
             state_info->castlingRights &= ~mask;
     }

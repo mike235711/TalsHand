@@ -37,8 +37,6 @@ struct StateInfo
     uint64_t diagonalPinnedPieces;
     uint64_t pinnedPieces;
     uint64_t blockersForKing;
-    int lastOriginSquare;      // For when calling setCheckInfo()
-    int lastDestinationSquare; // For refutation moves after unmaking a Ttmove
     int capturedPiece; // For unmaking moves and captures
     bool isCheck;
     uint64_t checkBits[5];
