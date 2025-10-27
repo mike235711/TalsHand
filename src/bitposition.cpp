@@ -30,9 +30,9 @@ bool BitPosition::see_ge(Move m, int threshold) const
         return (precomputed_moves::pawn_attacks[1][sq] & m_pieces[0][0]) | // white pawns
                (precomputed_moves::pawn_attacks[0][sq] & m_pieces[1][0]) | // black pawns
                (precomputed_moves::knight_moves[sq] & (m_pieces[0][1] | m_pieces[1][1])) |
-               (BmagicNOMASK(sq, precomputed_moves::bishop_unfull_rays[sq] & occ) &
+               (BmagicNOMASK(sq, occ) &
                 (m_pieces[0][2] | m_pieces[1][2] | m_pieces[0][4] | m_pieces[1][4])) |
-               (RmagicNOMASK(sq, precomputed_moves::rook_unfull_rays[sq] & occ) &
+               (RmagicNOMASK(sq, occ) &
                 (m_pieces[0][3] | m_pieces[1][3] | m_pieces[0][4] | m_pieces[1][4])) |
                (precomputed_moves::king_moves[sq] & (m_pieces[0][5] | m_pieces[1][5]));
     };
@@ -336,16 +336,12 @@ bool BitPosition::isKingInCheck(bool side) const
 
     // Bishop/Queen check
     uint64_t bishopsQueens = (m_pieces[not side][2] | m_pieces[not side][4]);
-    if (BmagicNOMASK(kingSquare,
-                     precomputed_moves::bishop_unfull_rays[kingSquare] & m_all_pieces_bit) &
-        bishopsQueens)
+    if (BmagicNOMASK(kingSquare, m_all_pieces_bit) & bishopsQueens)
         return true;
 
     // Rook/Queen check
     uint64_t rooksQueens = (m_pieces[not side][3] | m_pieces[not side][4]);
-    if (RmagicNOMASK(kingSquare,
-                     precomputed_moves::rook_unfull_rays[kingSquare] & m_all_pieces_bit) &
-        rooksQueens)
+    if (RmagicNOMASK(kingSquare, m_all_pieces_bit) & rooksQueens)
         return true;
 
     // King check (only relevant if kings are adjacent, but good to be consistent)
@@ -446,7 +442,7 @@ void BitPosition::setCheckInfo()
         m_check_square = check_square;
     }
     // Bishop and queen
-    uint64_t checks{BmagicNOMASK(m_king_position[not m_turn], precomputed_moves::bishop_unfull_rays[m_king_position[not m_turn]] & m_all_pieces_bit) & (m_pieces[m_turn][2] | m_pieces[m_turn][4])};
+    uint64_t checks{BmagicNOMASK(m_king_position[not m_turn], m_all_pieces_bit) & (m_pieces[m_turn][2] | m_pieces[m_turn][4])};
     while (checks)
     {
         check_square = popLeastSignificantBit(checks);
@@ -456,7 +452,7 @@ void BitPosition::setCheckInfo()
         m_check_square = check_square;
     }
     // Rook and queen
-    checks = RmagicNOMASK(m_king_position[not m_turn], precomputed_moves::rook_unfull_rays[m_king_position[not m_turn]] & m_all_pieces_bit) & (m_pieces[m_turn][3] | m_pieces[m_turn][4]);
+    checks = RmagicNOMASK(m_king_position[not m_turn], m_all_pieces_bit) & (m_pieces[m_turn][3] | m_pieces[m_turn][4]);
     while (checks)
     {
         check_square = popLeastSignificantBit(checks);
@@ -474,12 +470,12 @@ void BitPosition::setCheckBits()
     // Knight checking bits
     state_info->checkBits[1] = precomputed_moves::knight_moves[m_king_position[m_turn]];
     // Bishop and queen checking bits
-    uint64_t diagonalChecks = BmagicNOMASK(m_king_position[m_turn], precomputed_moves::bishop_unfull_rays[m_king_position[m_turn]] & m_all_pieces_bit);
+    uint64_t diagonalChecks = BmagicNOMASK(m_king_position[m_turn], m_all_pieces_bit);
     state_info->checkBits[2] = diagonalChecks;
     state_info->checkBits[4] = diagonalChecks;
 
     // Rook and queen checking bits
-    uint64_t straightChecks = RmagicNOMASK(m_king_position[m_turn], precomputed_moves::rook_unfull_rays[m_king_position[m_turn]] & m_all_pieces_bit);
+    uint64_t straightChecks = RmagicNOMASK(m_king_position[m_turn], m_all_pieces_bit);
     state_info->checkBits[3] = straightChecks;
     state_info->checkBits[4] |= straightChecks;
 }
@@ -638,11 +634,11 @@ bool BitPosition::newKingSquareIsSafe(int new_position) const
         return false;
 
     // Rook and queen
-    if (RmagicNOMASK(new_position, precomputed_moves::rook_unfull_rays[new_position] & m_all_pieces_bit & ~m_pieces[not m_turn][5]) & (m_pieces[m_turn][3] | m_pieces[m_turn][4]))
+    if (RmagicNOMASK(new_position, m_all_pieces_bit & ~m_pieces[not m_turn][5]) & (m_pieces[m_turn][3] | m_pieces[m_turn][4]))
         return false;
 
     // Bishop and queen
-    if (BmagicNOMASK(new_position, precomputed_moves::bishop_unfull_rays[new_position] & m_all_pieces_bit & ~m_pieces[not m_turn][5]) & (m_pieces[m_turn][2] | m_pieces[m_turn][4]))
+    if (BmagicNOMASK(new_position, m_all_pieces_bit & ~m_pieces[not m_turn][5]) & (m_pieces[m_turn][2] | m_pieces[m_turn][4]))
         return false;
 
     // King
@@ -655,11 +651,11 @@ bool BitPosition::newKingSquareIsSafe(int new_position) const
 bool BitPosition::kingIsSafeAfterPassant(int removed_square_1, int removed_square_2) const // See if the king is in check or not (from kings position). For when moving the king.
 {
     // Black bishops and queens
-    if ((BmagicNOMASK(m_king_position[not m_turn], precomputed_moves::bishop_unfull_rays[m_king_position[not m_turn]] & (m_all_pieces_bit & ~((1ULL << removed_square_1) | (1ULL << removed_square_2)))) & (m_pieces[m_turn][2] | m_pieces[m_turn][4])) != 0)
+    if ((BmagicNOMASK(m_king_position[not m_turn], (m_all_pieces_bit & ~((1ULL << removed_square_1) | (1ULL << removed_square_2)))) & (m_pieces[m_turn][2] | m_pieces[m_turn][4])) != 0)
         return false;
 
     // Black rooks and queens
-    if ((RmagicNOMASK(m_king_position[not m_turn], precomputed_moves::rook_unfull_rays[m_king_position[not m_turn]] & (m_all_pieces_bit & ~((1ULL << removed_square_1) | (1ULL << removed_square_2)))) & (m_pieces[m_turn][3] | m_pieces[m_turn][4])) != 0)
+    if ((RmagicNOMASK(m_king_position[not m_turn], (m_all_pieces_bit & ~((1ULL << removed_square_1) | (1ULL << removed_square_2)))) & (m_pieces[m_turn][3] | m_pieces[m_turn][4])) != 0)
         return false;
     return true;
 }
@@ -670,7 +666,7 @@ bool BitPosition::isDiscoverCheckAfterPassant() const
 // We just check if removing the pawn captured leads to check, since check after removing and placing our pawn is already checked using isDiscoverCheck
 {
     // If captured pawn is not blocking or after removing captured pawn we are not in check
-    if ((BmagicNOMASK(m_king_position[m_turn], precomputed_moves::bishop_unfull_rays[m_king_position[m_turn]] & m_all_pieces_bit) & (m_pieces[not m_turn][2] | m_pieces[not m_turn][4])) || (RmagicNOMASK(m_king_position[m_turn], precomputed_moves::rook_unfull_rays[m_king_position[m_turn]] & m_all_pieces_bit) & (m_pieces[not m_turn][3] | m_pieces[not m_turn][4])))
+    if ((BmagicNOMASK(m_king_position[m_turn], m_all_pieces_bit) & (m_pieces[not m_turn][2] | m_pieces[not m_turn][4])) || (RmagicNOMASK(m_king_position[m_turn], m_all_pieces_bit) & (m_pieces[not m_turn][3] | m_pieces[not m_turn][4])))
         return true;
     return false;
 }
@@ -731,7 +727,7 @@ std::pair<std::vector<Move>, std::vector<int16_t>> BitPosition::orderAllMovesOnF
     return std::pair<std::vector<Move>, std::vector<int16_t>>{sortedMoves, sortedScores}; // Return the sorted moves
 }
 
-// Capture move generations (for Quiesence) assuming pins are not set (we set them if we find a pseudo legal move)
+// Capture move generations (for Quiesence)
 ScoredMove *BitPosition::pawnCapturesAndQueenProms(ScoredMove *&move_list) const
 {
     uint64_t pawns = m_pieces[not m_turn][0];
@@ -742,7 +738,7 @@ ScoredMove *BitPosition::pawnCapturesAndQueenProms(ScoredMove *&move_list) const
     {
         int destination = popLeastSignificantBit(destination_bitboard);
         *move_list = Move(destination + pawn_capture_offsets_right[not m_turn], destination);
-        move_list->score = 10;
+        move_list->score = m_board[m_turn][destination];
         move_list++;
     }
 
@@ -752,7 +748,7 @@ ScoredMove *BitPosition::pawnCapturesAndQueenProms(ScoredMove *&move_list) const
     {
         int destination = popLeastSignificantBit(destination_bitboard);
         *move_list = Move(destination + pawn_capture_offsets_left[not m_turn], destination);
-        move_list->score = 10;
+        move_list->score = m_board[m_turn][destination];
         move_list++;
     }
 
@@ -811,13 +807,12 @@ ScoredMove *BitPosition::bishopCaptures(ScoredMove *&move_list) const
 // All bishop captures
 {
     uint64_t moveable_bishops{m_pieces[not m_turn][2]};
-    uint64_t occ = m_all_pieces_bit;
     uint64_t enemy = m_pieces_bit[m_turn];
 
     while (moveable_bishops)
     {
         int origin{popLeastSignificantBit(moveable_bishops)};
-        uint64_t destinations{BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & occ) & enemy};
+        uint64_t destinations{BmagicNOMASK(origin, m_all_pieces_bit) & enemy};
         while (destinations)
         {
             int dest = popLeastSignificantBit(destinations);
@@ -833,12 +828,11 @@ ScoredMove *BitPosition::rookCaptures(ScoredMove *&move_list) const
 // All rook captures except capturing unsafe pawns, knights or rooks
 {
     uint64_t moveable_rooks{m_pieces[not m_turn][3]};
-    uint64_t occ = m_all_pieces_bit;
     uint64_t enemy = m_pieces_bit[m_turn];
     while (moveable_rooks)
     {
         int origin{popLeastSignificantBit(moveable_rooks)};
-        uint64_t destinations{RmagicNOMASK(origin, precomputed_moves::rook_unfull_rays[origin] & occ) & enemy};
+        uint64_t destinations{RmagicNOMASK(origin, m_all_pieces_bit) & enemy};
         while (destinations)
         {
             int dest = popLeastSignificantBit(destinations);
@@ -853,12 +847,11 @@ ScoredMove *BitPosition::queenCaptures(ScoredMove *&move_list) const
 // All queen captures except capturing unsafe pieces
 {
     uint64_t moveable_queens{m_pieces[not m_turn][4]};
-    uint64_t occ = m_all_pieces_bit;
     uint64_t enemy = m_pieces_bit[m_turn];
     while (moveable_queens)
     {
         int origin{popLeastSignificantBit(moveable_queens)};
-        uint64_t destinations{(BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & occ) | RmagicNOMASK(origin, precomputed_moves::rook_unfull_rays[origin] & occ)) & enemy};
+        uint64_t destinations{(BmagicNOMASK(origin, m_all_pieces_bit) | RmagicNOMASK(origin, m_all_pieces_bit)) & enemy};
         while (destinations)
         {
             int dest = popLeastSignificantBit(destinations);
@@ -991,7 +984,7 @@ ScoredMove *BitPosition::bishopAllMoves(ScoredMove *&move_list) const
     while (moveable_bishops)
     {
         int origin{popLeastSignificantBit(moveable_bishops)};
-        uint64_t destinations{BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & m_all_pieces_bit) & ~m_pieces_bit[not m_turn]};
+        uint64_t destinations{BmagicNOMASK(origin, m_all_pieces_bit) & ~m_pieces_bit[not m_turn]};
         while (destinations)
             *move_list++ = Move(origin, popLeastSignificantBit(destinations));
     }
@@ -1003,7 +996,7 @@ ScoredMove *BitPosition::rookAllMoves(ScoredMove *&move_list) const
     while (moveable_rooks)
     {
         int origin{popLeastSignificantBit(moveable_rooks)};
-        uint64_t destinations{RmagicNOMASK(origin, precomputed_moves::rook_unfull_rays[origin] & m_all_pieces_bit) & ~m_pieces_bit[not m_turn]};
+        uint64_t destinations{RmagicNOMASK(origin, m_all_pieces_bit) & ~m_pieces_bit[not m_turn]};
         while (destinations)
             *move_list++ = Move(origin, popLeastSignificantBit(destinations));
     }
@@ -1015,7 +1008,7 @@ ScoredMove *BitPosition::queenAllMoves(ScoredMove *&move_list) const
     while (moveable_queens)
     {
         int origin{popLeastSignificantBit(moveable_queens)};
-        uint64_t destinations{(BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & m_all_pieces_bit) | RmagicNOMASK(origin, precomputed_moves::rook_unfull_rays[origin] & m_all_pieces_bit)) & ~m_pieces_bit[not m_turn]};
+        uint64_t destinations{(BmagicNOMASK(origin, m_all_pieces_bit) | RmagicNOMASK(origin, m_all_pieces_bit)) & ~m_pieces_bit[not m_turn]};
         while (destinations)
             *move_list++ = Move(origin, popLeastSignificantBit(destinations));
     }
@@ -1103,7 +1096,7 @@ Move *BitPosition::inCheckBishopBlocks(Move *&move_list) const
     while (pieces)
     {
         int origin{popLeastSignificantBit(pieces)};
-        uint64_t destiantions{BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & m_all_pieces_bit) & m_check_rays};
+        uint64_t destiantions{BmagicNOMASK(origin, m_all_pieces_bit) & m_check_rays};
         while (destiantions)
         {
             *move_list++ = Move(origin, popLeastSignificantBit(destiantions));
@@ -1119,7 +1112,7 @@ Move *BitPosition::inCheckRookBlocks(Move *&move_list) const
     while (pieces)
     {
         int origin{popLeastSignificantBit(pieces)};
-        uint64_t destinations{RmagicNOMASK(origin, precomputed_moves::rook_unfull_rays[origin] & m_all_pieces_bit) & m_check_rays};
+        uint64_t destinations{RmagicNOMASK(origin, m_all_pieces_bit) & m_check_rays};
         while (destinations)
         {
             *move_list++ = Move(origin, popLeastSignificantBit(destinations));
@@ -1135,7 +1128,7 @@ Move *BitPosition::inCheckQueenBlocks(Move *&move_list) const
     while (pieces)
     {
         int origin{popLeastSignificantBit(pieces)};
-        uint64_t destinations{(BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & m_all_pieces_bit) | RmagicNOMASK(origin, precomputed_moves::rook_unfull_rays[origin] & m_all_pieces_bit)) & m_check_rays};
+        uint64_t destinations{(BmagicNOMASK(origin, m_all_pieces_bit) | RmagicNOMASK(origin, m_all_pieces_bit)) & m_check_rays};
         while (destinations)
         {
             *move_list++ = Move(origin, popLeastSignificantBit(destinations));
@@ -1193,19 +1186,19 @@ Move *BitPosition::inCheckOrderedCapturesAndKingMoves(Move *&move_list) const
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
     }
     // Bishop captures from checking position
-    piece_moves = BmagicNOMASK(m_check_square, precomputed_moves::bishop_unfull_rays[m_check_square] & m_all_pieces_bit) & m_pieces[not m_turn][2] & ~(state_info->straightPinnedPieces);
+    piece_moves = BmagicNOMASK(m_check_square, m_all_pieces_bit) & m_pieces[not m_turn][2] & ~(state_info->straightPinnedPieces);
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
     }
     // Rook captures from checking position
-    piece_moves = RmagicNOMASK(m_check_square, precomputed_moves::rook_unfull_rays[m_check_square] & m_all_pieces_bit) & m_pieces[not m_turn][3] & ~(state_info->diagonalPinnedPieces);
+    piece_moves = RmagicNOMASK(m_check_square, m_all_pieces_bit) & m_pieces[not m_turn][3] & ~(state_info->diagonalPinnedPieces);
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
     }
     // Queen captures from checking position
-    piece_moves = (BmagicNOMASK(m_check_square, precomputed_moves::bishop_unfull_rays[m_check_square] & m_all_pieces_bit) | RmagicNOMASK(m_check_square, precomputed_moves::rook_unfull_rays[m_check_square] & m_all_pieces_bit)) & m_pieces[not m_turn][4];
+    piece_moves = (BmagicNOMASK(m_check_square, m_all_pieces_bit) | RmagicNOMASK(m_check_square, m_all_pieces_bit)) & m_pieces[not m_turn][4];
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
@@ -1255,19 +1248,19 @@ Move *BitPosition::inCheckOrderedCaptures(Move *&move_list) const
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
     }
     // Bishop captures from checking position
-    piece_moves = BmagicNOMASK(m_check_square, precomputed_moves::bishop_unfull_rays[m_check_square] & m_all_pieces_bit) & m_pieces[not m_turn][2];
+    piece_moves = BmagicNOMASK(m_check_square, m_all_pieces_bit) & m_pieces[not m_turn][2];
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
     }
     // Rook captures from checking position
-    piece_moves = RmagicNOMASK(m_check_square, precomputed_moves::rook_unfull_rays[m_check_square] & m_all_pieces_bit) & m_pieces[not m_turn][3];
+    piece_moves = RmagicNOMASK(m_check_square, m_all_pieces_bit) & m_pieces[not m_turn][3];
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
     }
     // Queen captures from checking position
-    piece_moves = (BmagicNOMASK(m_check_square, precomputed_moves::bishop_unfull_rays[m_check_square] & m_all_pieces_bit) | RmagicNOMASK(m_check_square, precomputed_moves::rook_unfull_rays[m_check_square] & m_all_pieces_bit)) & m_pieces[not m_turn][4];
+    piece_moves = (BmagicNOMASK(m_check_square, m_all_pieces_bit) | RmagicNOMASK(m_check_square, m_all_pieces_bit)) & m_pieces[not m_turn][4];
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
@@ -2074,7 +2067,7 @@ bool BitPosition::isMate() const
         while (piece_moves)
         {
             int origin{popLeastSignificantBit(piece_moves)};
-            uint64_t piece_destinations{RmagicNOMASK(origin, precomputed_moves::rook_unfull_rays[origin] & m_all_pieces_bit) & m_check_rays};
+            uint64_t piece_destinations{RmagicNOMASK(origin, m_all_pieces_bit) & m_check_rays};
             while (piece_destinations)
             {
                 if (isNormalMoveLegal(origin, popLeastSignificantBit(piece_destinations)))
@@ -2086,7 +2079,7 @@ bool BitPosition::isMate() const
         while (piece_moves)
         {
             int origin{popLeastSignificantBit(piece_moves)};
-            uint64_t piece_destinations{BmagicNOMASK(origin, precomputed_moves::bishop_unfull_rays[origin] & m_all_pieces_bit) & m_check_rays};
+            uint64_t piece_destinations{BmagicNOMASK(origin, m_all_pieces_bit) & m_check_rays};
             while (piece_destinations)
             {
                 if (isNormalMoveLegal(origin, popLeastSignificantBit(piece_destinations)))

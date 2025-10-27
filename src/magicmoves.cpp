@@ -1,464 +1,199 @@
-/**
- *magicmoves.h
- *
- *Source file for magic move bitboard generation.
- *
- *See header file for instructions on usage.
- *
- *The magic keys are not optimal for all squares but they are very close
- *to optimal.
- *
- *Copyright (C) 2006 Pradyumna Kannan.
- *
- *This code is provided 'as-is', without any express or implied warranty.
- *In no event will the authors be held liable for any damages arising from
- *the use of this code. Permission is granted to anyone to use this
- *code for any purpose, including commercial applications, and to alter
- *it and redistribute it freely, subject to the following restrictions:
- *
- *1. The origin of this code must not be misrepresented; you must not
- *claim that you wrote the original code. If you use this code in a
- *product, an acknowledgment in the product documentation would be
- *appreciated but is not required.
- *
- *2. Altered source versions must be plainly marked as such, and must not be
- *misrepresented as being the original code.
- *
- *3. This notice may not be removed or altered from any source distribution.
- */
-
 #include "magicmoves.h"
+#include "bit_utils.h"
 
-#ifdef _MSC_VER
-#pragma message("MSC compatible compiler detected -- turning off warning 4312,4146")
-#pragma warning(disable : 4312)
-#pragma warning(disable : 4146)
-#endif
+#include <algorithm>
+#include <bitset>
+#include <initializer_list>
 
-// For rooks
+class PRNG {
 
-// original 12 bit keys
-// C64(0x0000002040810402 - H8 12 bit
-// C64(0x0000102040800101 - A8 12 bit
-// C64(0x0000102040008101 - B8 11 bit
-// C64(0x0000081020004101 - C8 11 bit
+    uint64_t s;
 
-// Adapted Grant Osborne's keys
-// C64(0x0001FFFAABFAD1A2 - H8 11 bit
-// C64(0x00FFFCDDFCED714A - A8 11 bit
-// C64(0x007FFCDDFCED714A - B8 10 bit
-// C64(0x003FFFCDFFD88096 - C8 10 bit
+    uint64_t rand64() {
 
-alignas(32) const unsigned int magicmoves_r_shift[64] =
-	{
-		52, 53, 53, 53, 53, 53, 53, 52,
-		53, 54, 54, 54, 54, 54, 54, 53,
-		53, 54, 54, 54, 54, 54, 54, 53,
-		53, 54, 54, 54, 54, 54, 54, 53,
-		53, 54, 54, 54, 54, 54, 54, 53,
-		53, 54, 54, 54, 54, 54, 54, 53,
-		53, 54, 54, 54, 54, 54, 54, 53,
-		53, 54, 54, 53, 53, 53, 53, 53};
+        s ^= s >> 12, s ^= s << 25, s ^= s >> 27;
+        return s * 2685821657736338717LL;
+    }
 
-alignas(32) const U64 magicmoves_r_magics[64] =
-	{
-		C64(0x0080001020400080), C64(0x0040001000200040), C64(0x0080081000200080), C64(0x0080040800100080),
-		C64(0x0080020400080080), C64(0x0080010200040080), C64(0x0080008001000200), C64(0x0080002040800100),
-		C64(0x0000800020400080), C64(0x0000400020005000), C64(0x0000801000200080), C64(0x0000800800100080),
-		C64(0x0000800400080080), C64(0x0000800200040080), C64(0x0000800100020080), C64(0x0000800040800100),
-		C64(0x0000208000400080), C64(0x0000404000201000), C64(0x0000808010002000), C64(0x0000808008001000),
-		C64(0x0000808004000800), C64(0x0000808002000400), C64(0x0000010100020004), C64(0x0000020000408104),
-		C64(0x0000208080004000), C64(0x0000200040005000), C64(0x0000100080200080), C64(0x0000080080100080),
-		C64(0x0000040080080080), C64(0x0000020080040080), C64(0x0000010080800200), C64(0x0000800080004100),
-		C64(0x0000204000800080), C64(0x0000200040401000), C64(0x0000100080802000), C64(0x0000080080801000),
-		C64(0x0000040080800800), C64(0x0000020080800400), C64(0x0000020001010004), C64(0x0000800040800100),
-		C64(0x0000204000808000), C64(0x0000200040008080), C64(0x0000100020008080), C64(0x0000080010008080),
-		C64(0x0000040008008080), C64(0x0000020004008080), C64(0x0000010002008080), C64(0x0000004081020004),
-		C64(0x0000204000800080), C64(0x0000200040008080), C64(0x0000100020008080), C64(0x0000080010008080),
-		C64(0x0000040008008080), C64(0x0000020004008080), C64(0x0000800100020080), C64(0x0000800041000080),
-		C64(0x00FFFCDDFCED714A), C64(0x007FFCDDFCED714A), C64(0x003FFFCDFFD88096), C64(0x0000040810002101),
-		C64(0x0001000204080011), C64(0x0001000204000801), C64(0x0001000082000401), C64(0x0001FFFAABFAD1A2)};
-const U64 magicmoves_r_mask[64] =
-	{
-		C64(0x000101010101017E), C64(0x000202020202027C), C64(0x000404040404047A), C64(0x0008080808080876),
-		C64(0x001010101010106E), C64(0x002020202020205E), C64(0x004040404040403E), C64(0x008080808080807E),
-		C64(0x0001010101017E00), C64(0x0002020202027C00), C64(0x0004040404047A00), C64(0x0008080808087600),
-		C64(0x0010101010106E00), C64(0x0020202020205E00), C64(0x0040404040403E00), C64(0x0080808080807E00),
-		C64(0x00010101017E0100), C64(0x00020202027C0200), C64(0x00040404047A0400), C64(0x0008080808760800),
-		C64(0x00101010106E1000), C64(0x00202020205E2000), C64(0x00404040403E4000), C64(0x00808080807E8000),
-		C64(0x000101017E010100), C64(0x000202027C020200), C64(0x000404047A040400), C64(0x0008080876080800),
-		C64(0x001010106E101000), C64(0x002020205E202000), C64(0x004040403E404000), C64(0x008080807E808000),
-		C64(0x0001017E01010100), C64(0x0002027C02020200), C64(0x0004047A04040400), C64(0x0008087608080800),
-		C64(0x0010106E10101000), C64(0x0020205E20202000), C64(0x0040403E40404000), C64(0x0080807E80808000),
-		C64(0x00017E0101010100), C64(0x00027C0202020200), C64(0x00047A0404040400), C64(0x0008760808080800),
-		C64(0x00106E1010101000), C64(0x00205E2020202000), C64(0x00403E4040404000), C64(0x00807E8080808000),
-		C64(0x007E010101010100), C64(0x007C020202020200), C64(0x007A040404040400), C64(0x0076080808080800),
-		C64(0x006E101010101000), C64(0x005E202020202000), C64(0x003E404040404000), C64(0x007E808080808000),
-		C64(0x7E01010101010100), C64(0x7C02020202020200), C64(0x7A04040404040400), C64(0x7608080808080800),
-		C64(0x6E10101010101000), C64(0x5E20202020202000), C64(0x3E40404040404000), C64(0x7E80808080808000)};
+   public:
+    PRNG(uint64_t seed) :
+        s(seed) {
+        assert(seed);
+    }
 
-// my original tables for bishops
-alignas(32) const unsigned int magicmoves_b_shift[64] =
-	{
-		58, 59, 59, 59, 59, 59, 59, 58,
-		59, 59, 59, 59, 59, 59, 59, 59,
-		59, 59, 57, 57, 57, 57, 59, 59,
-		59, 59, 57, 55, 55, 57, 59, 59,
-		59, 59, 57, 55, 55, 57, 59, 59,
-		59, 59, 57, 57, 57, 57, 59, 59,
-		59, 59, 59, 59, 59, 59, 59, 59,
-		58, 59, 59, 59, 59, 59, 59, 58};
+    template<typename T>
+    T rand() {
+        return T(rand64());
+    }
 
-alignas(32) const U64 magicmoves_b_magics[64] =
-	{
-		C64(0x0002020202020200), C64(0x0002020202020000), C64(0x0004010202000000), C64(0x0004040080000000),
-		C64(0x0001104000000000), C64(0x0000821040000000), C64(0x0000410410400000), C64(0x0000104104104000),
-		C64(0x0000040404040400), C64(0x0000020202020200), C64(0x0000040102020000), C64(0x0000040400800000),
-		C64(0x0000011040000000), C64(0x0000008210400000), C64(0x0000004104104000), C64(0x0000002082082000),
-		C64(0x0004000808080800), C64(0x0002000404040400), C64(0x0001000202020200), C64(0x0000800802004000),
-		C64(0x0000800400A00000), C64(0x0000200100884000), C64(0x0000400082082000), C64(0x0000200041041000),
-		C64(0x0002080010101000), C64(0x0001040008080800), C64(0x0000208004010400), C64(0x0000404004010200),
-		C64(0x0000840000802000), C64(0x0000404002011000), C64(0x0000808001041000), C64(0x0000404000820800),
-		C64(0x0001041000202000), C64(0x0000820800101000), C64(0x0000104400080800), C64(0x0000020080080080),
-		C64(0x0000404040040100), C64(0x0000808100020100), C64(0x0001010100020800), C64(0x0000808080010400),
-		C64(0x0000820820004000), C64(0x0000410410002000), C64(0x0000082088001000), C64(0x0000002011000800),
-		C64(0x0000080100400400), C64(0x0001010101000200), C64(0x0002020202000400), C64(0x0001010101000200),
-		C64(0x0000410410400000), C64(0x0000208208200000), C64(0x0000002084100000), C64(0x0000000020880000),
-		C64(0x0000001002020000), C64(0x0000040408020000), C64(0x0004040404040000), C64(0x0002020202020000),
-		C64(0x0000104104104000), C64(0x0000002082082000), C64(0x0000000020841000), C64(0x0000000000208800),
-		C64(0x0000000010020200), C64(0x0000000404080200), C64(0x0000040404040400), C64(0x0002020202020200)};
+    // Special generator used to fast init magic numbers.
+    // Output values only have 1/8th of their bits set on average.
+    template<typename T>
+    T sparse_rand() {
+        return T(rand64() & rand64() & rand64());
+    }
+};
 
-const U64 magicmoves_b_mask[64] =
-	{
-		C64(0x0040201008040200), C64(0x0000402010080400), C64(0x0000004020100A00), C64(0x0000000040221400),
-		C64(0x0000000002442800), C64(0x0000000204085000), C64(0x0000020408102000), C64(0x0002040810204000),
-		C64(0x0020100804020000), C64(0x0040201008040000), C64(0x00004020100A0000), C64(0x0000004022140000),
-		C64(0x0000000244280000), C64(0x0000020408500000), C64(0x0002040810200000), C64(0x0004081020400000),
-		C64(0x0010080402000200), C64(0x0020100804000400), C64(0x004020100A000A00), C64(0x0000402214001400),
-		C64(0x0000024428002800), C64(0x0002040850005000), C64(0x0004081020002000), C64(0x0008102040004000),
-		C64(0x0008040200020400), C64(0x0010080400040800), C64(0x0020100A000A1000), C64(0x0040221400142200),
-		C64(0x0002442800284400), C64(0x0004085000500800), C64(0x0008102000201000), C64(0x0010204000402000),
-		C64(0x0004020002040800), C64(0x0008040004081000), C64(0x00100A000A102000), C64(0x0022140014224000),
-		C64(0x0044280028440200), C64(0x0008500050080400), C64(0x0010200020100800), C64(0x0020400040201000),
-		C64(0x0002000204081000), C64(0x0004000408102000), C64(0x000A000A10204000), C64(0x0014001422400000),
-		C64(0x0028002844020000), C64(0x0050005008040200), C64(0x0020002010080400), C64(0x0040004020100800),
-		C64(0x0000020408102000), C64(0x0000040810204000), C64(0x00000A1020400000), C64(0x0000142240000000),
-		C64(0x0000284402000000), C64(0x0000500804020000), C64(0x0000201008040200), C64(0x0000402010080400),
-		C64(0x0002040810204000), C64(0x0004081020400000), C64(0x000A102040000000), C64(0x0014224000000000),
-		C64(0x0028440200000000), C64(0x0050080402000000), C64(0x0020100804020000), C64(0x0040201008040200)};
+uint8_t PopCnt16[1 << 16];
+uint8_t SquareDistance[64][64];
 
-#ifdef MINIMIZE_MAGIC
-U64 magicmovesbdb[5248];
-const U64 *magicmoves_b_indecies[64] =
-	{
-		magicmovesbdb + 4992, magicmovesbdb + 2624, magicmovesbdb + 256, magicmovesbdb + 896,
-		magicmovesbdb + 1280, magicmovesbdb + 1664, magicmovesbdb + 4800, magicmovesbdb + 5120,
-		magicmovesbdb + 2560, magicmovesbdb + 2656, magicmovesbdb + 288, magicmovesbdb + 928,
-		magicmovesbdb + 1312, magicmovesbdb + 1696, magicmovesbdb + 4832, magicmovesbdb + 4928,
-		magicmovesbdb + 0, magicmovesbdb + 128, magicmovesbdb + 320, magicmovesbdb + 960,
-		magicmovesbdb + 1344, magicmovesbdb + 1728, magicmovesbdb + 2304, magicmovesbdb + 2432,
-		magicmovesbdb + 32, magicmovesbdb + 160, magicmovesbdb + 448, magicmovesbdb + 2752,
-		magicmovesbdb + 3776, magicmovesbdb + 1856, magicmovesbdb + 2336, magicmovesbdb + 2464,
-		magicmovesbdb + 64, magicmovesbdb + 192, magicmovesbdb + 576, magicmovesbdb + 3264,
-		magicmovesbdb + 4288, magicmovesbdb + 1984, magicmovesbdb + 2368, magicmovesbdb + 2496,
-		magicmovesbdb + 96, magicmovesbdb + 224, magicmovesbdb + 704, magicmovesbdb + 1088,
-		magicmovesbdb + 1472, magicmovesbdb + 2112, magicmovesbdb + 2400, magicmovesbdb + 2528,
-		magicmovesbdb + 2592, magicmovesbdb + 2688, magicmovesbdb + 832, magicmovesbdb + 1216,
-		magicmovesbdb + 1600, magicmovesbdb + 2240, magicmovesbdb + 4864, magicmovesbdb + 4960,
-		magicmovesbdb + 5056, magicmovesbdb + 2720, magicmovesbdb + 864, magicmovesbdb + 1248,
-		magicmovesbdb + 1632, magicmovesbdb + 2272, magicmovesbdb + 4896, magicmovesbdb + 5184};
-#else
-#ifndef PERFECT_MAGIC_HASH
-U64 magicmovesbdb[64][1 << 9];
-#else
-U64 magicmovesbdb[1428];
-PERFECT_MAGIC_HASH magicmoves_b_indecies[64][1 << 9];
-#endif
-#endif
 
-#ifdef MINIMIZE_MAGIC
-U64 magicmovesrdb[102400];
-const U64 *magicmoves_r_indecies[64] =
-	{
-		magicmovesrdb + 86016, magicmovesrdb + 73728, magicmovesrdb + 36864, magicmovesrdb + 43008,
-		magicmovesrdb + 47104, magicmovesrdb + 51200, magicmovesrdb + 77824, magicmovesrdb + 94208,
-		magicmovesrdb + 69632, magicmovesrdb + 32768, magicmovesrdb + 38912, magicmovesrdb + 10240,
-		magicmovesrdb + 14336, magicmovesrdb + 53248, magicmovesrdb + 57344, magicmovesrdb + 81920,
-		magicmovesrdb + 24576, magicmovesrdb + 33792, magicmovesrdb + 6144, magicmovesrdb + 11264,
-		magicmovesrdb + 15360, magicmovesrdb + 18432, magicmovesrdb + 58368, magicmovesrdb + 61440,
-		magicmovesrdb + 26624, magicmovesrdb + 4096, magicmovesrdb + 7168, magicmovesrdb + 0,
-		magicmovesrdb + 2048, magicmovesrdb + 19456, magicmovesrdb + 22528, magicmovesrdb + 63488,
-		magicmovesrdb + 28672, magicmovesrdb + 5120, magicmovesrdb + 8192, magicmovesrdb + 1024,
-		magicmovesrdb + 3072, magicmovesrdb + 20480, magicmovesrdb + 23552, magicmovesrdb + 65536,
-		magicmovesrdb + 30720, magicmovesrdb + 34816, magicmovesrdb + 9216, magicmovesrdb + 12288,
-		magicmovesrdb + 16384, magicmovesrdb + 21504, magicmovesrdb + 59392, magicmovesrdb + 67584,
-		magicmovesrdb + 71680, magicmovesrdb + 35840, magicmovesrdb + 39936, magicmovesrdb + 13312,
-		magicmovesrdb + 17408, magicmovesrdb + 54272, magicmovesrdb + 60416, magicmovesrdb + 83968,
-		magicmovesrdb + 90112, magicmovesrdb + 75776, magicmovesrdb + 40960, magicmovesrdb + 45056,
-		magicmovesrdb + 49152, magicmovesrdb + 55296, magicmovesrdb + 79872, magicmovesrdb + 98304};
-#else
-#ifndef PERFECT_MAGIC_HASH
-U64 magicmovesrdb[64][1 << 12];
-#else
-U64 magicmovesrdb[4900];
-PERFECT_MAGIC_HASH magicmoves_r_indecies[64][1 << 12];
-#endif
-#endif
+alignas(64) Magic Magics[64][2];
 
-U64 initmagicmoves_occ(const int *squares, const int numSquares, const U64 linocc)
-{
-	int i;
-	U64 ret = 0;
-	for (i = 0; i < numSquares; i++)
-		if (linocc & (((U64)(1)) << i))
-			ret |= (((U64)(1)) << squares[i]);
-	return ret;
+namespace {
+
+uint64_t RookTable[0x19000];   // To store rook attacks
+uint64_t BishopTable[0x1480];  // To store bishop attacks
+
+void init_magics(int pt, uint64_t table[], Magic magics[][2]);
+constexpr bool is_ok(int s) { return s >= 0 && s <= 63; }
+constexpr int rank_of(int s) { return int(s >> 3); }
+constexpr int file_of(int s) { return int(s & 7); }
+
+constexpr uint64_t rank_bb1(int r) { return Rank1BB << (8 * r); }
+
+constexpr uint64_t rank_bb(int s) { return rank_bb1(rank_of(s)); }
+
+constexpr uint64_t file_bb1(int f) { return FileABB << f; }
+
+constexpr uint64_t file_bb(int s) { return file_bb1(file_of(s)); }
+
+inline int file_distance(int x, int y) {
+    return std::abs(file_of(x) - file_of(y));
 }
 
-U64 initmagicmoves_Rmoves(const int square, const U64 occ)
-{
-	U64 ret = 0;
-	U64 bit;
-	U64 rowbits = (((U64)0xFF) << (8 * (square / 8)));
-
-	bit = (((U64)(1)) << square);
-	do
-	{
-		bit <<= 8;
-		ret |= bit;
-	} while (bit && !(bit & occ));
-	bit = (((U64)(1)) << square);
-	do
-	{
-		bit >>= 8;
-		ret |= bit;
-	} while (bit && !(bit & occ));
-	bit = (((U64)(1)) << square);
-	do
-	{
-		bit <<= 1;
-		if (bit & rowbits)
-			ret |= bit;
-		else
-			break;
-	} while (!(bit & occ));
-	bit = (((U64)(1)) << square);
-	do
-	{
-		bit >>= 1;
-		if (bit & rowbits)
-			ret |= bit;
-		else
-			break;
-	} while (!(bit & occ));
-	return ret;
+inline int rank_distance(int x, int y) {
+    return std::abs(rank_of(x) - rank_of(y));
 }
 
-U64 initmagicmoves_Bmoves(const int square, const U64 occ)
-{
-	U64 ret = 0;
-	U64 bit;
-	U64 bit2;
-	U64 rowbits = (((U64)0xFF) << (8 * (square / 8)));
-
-	bit = (((U64)(1)) << square);
-	bit2 = bit;
-	do
-	{
-		bit <<= 8 - 1;
-		bit2 >>= 1;
-		if (bit2 & rowbits)
-			ret |= bit;
-		else
-			break;
-	} while (bit && !(bit & occ));
-	bit = (((U64)(1)) << square);
-	bit2 = bit;
-	do
-	{
-		bit <<= 8 + 1;
-		bit2 <<= 1;
-		if (bit2 & rowbits)
-			ret |= bit;
-		else
-			break;
-	} while (bit && !(bit & occ));
-	bit = (((U64)(1)) << square);
-	bit2 = bit;
-	do
-	{
-		bit >>= 8 - 1;
-		bit2 <<= 1;
-		if (bit2 & rowbits)
-			ret |= bit;
-		else
-			break;
-	} while (bit && !(bit & occ));
-	bit = (((U64)(1)) << square);
-	bit2 = bit;
-	do
-	{
-		bit >>= 8 + 1;
-		bit2 >>= 1;
-		if (bit2 & rowbits)
-			ret |= bit;
-		else
-			break;
-	} while (bit && !(bit & occ));
-	return ret;
+inline int square_distance(int x, int y) {
+    return SquareDistance[x][y];
 }
 
-// used so that the original indecies can be left as const so that the compiler can optimize better
+// Returns the bitboard of target square for the given step
+// from the given square. If the step is off the board, returns empty bitboard.
+uint64_t safe_destination(int s, int step) {
+    int to = int(s + step);
+    return is_ok(to) && square_distance(s, to) <= 2 ? (1ULL << to) : uint64_t(0);
+}
+}
 
-#ifndef PERFECT_MAGIC_HASH
-#ifdef MINIMIZE_MAGIC
-#define BmagicNOMASK2(square, occupancy) *(magicmoves_b_indecies2[square] + (((occupancy) * magicmoves_b_magics[square]) >> magicmoves_b_shift[square]))
-#define RmagicNOMASK2(square, occupancy) *(magicmoves_r_indecies2[square] + (((occupancy) * magicmoves_r_magics[square]) >> magicmoves_r_shift[square]))
-#else
-#define BmagicNOMASK2(square, occupancy) magicmovesbdb[square][((occupancy) * magicmoves_b_magics[square]) >> MINIMAL_B_BITS_SHIFT(square)]
-#define RmagicNOMASK2(square, occupancy) magicmovesrdb[square][((occupancy) * magicmoves_r_magics[square]) >> MINIMAL_R_BITS_SHIFT(square)]
-#endif
-/*#else
-	#define BmagicNOMASK2(square, occupancy) magicmovesbdb[magicmoves_b_indecies[square][((occupancy)*magicmoves_b_magics[square])>>MINIMAL_B_BITS_SHIFT]]
-	#define RmagicNOMASK2(square, occupancy) magicmovesrdb[magicmoves_r_indecies[square][((occupancy)*magicmoves_r_magics[square])>>MINIMAL_R_BITS_SHIFT]]
-*/
-#endif
+// Initializes various bitboard tables. It is called at
+// startup and relies on global objects to be already zero-initialized.
+void initmagicmoves() {
+    init_magics(3, RookTable, Magics);
+    init_magics(2, BishopTable, Magics);
+}
 
-void initmagicmoves(void)
-{
-	int i;
+namespace {
 
-	// for bitscans :
-	// initmagicmoves_bitpos64_database[(x*C64(0x07EDD5E59A4E28C2))>>58]
-	int initmagicmoves_bitpos64_database[64] = {
-		63, 0, 58, 1, 59, 47, 53, 2,
-		60, 39, 48, 27, 54, 33, 42, 3,
-		61, 51, 37, 40, 49, 18, 28, 20,
-		55, 30, 34, 11, 43, 14, 22, 4,
-		62, 57, 46, 52, 38, 26, 32, 41,
-		50, 36, 17, 19, 29, 10, 13, 21,
-		56, 45, 25, 31, 35, 16, 9, 12,
-		44, 24, 15, 8, 23, 7, 6, 5};
+uint64_t sliding_attack(int pt, int sq, uint64_t occupied) {
 
-#ifdef MINIMIZE_MAGIC
-	// identical to magicmove_x_indecies except without the const modifer
-	U64 *magicmoves_b_indecies2[64] =
+    uint64_t  attacks             = 0;
+    const int rookDirs[4] = {8, -8, 1, -1};
+    const int bishopDirs[4] = {9, -7, -9, 7};
+    const int* dirs = (pt == 3) ? rookDirs : bishopDirs;
+
+    for (int i = 0; i < 4; ++i)
+    {
+        int d = dirs[i];
+        int s = sq;
+        while (true)
 		{
-			magicmovesbdb + 4992, magicmovesbdb + 2624, magicmovesbdb + 256, magicmovesbdb + 896,
-			magicmovesbdb + 1280, magicmovesbdb + 1664, magicmovesbdb + 4800, magicmovesbdb + 5120,
-			magicmovesbdb + 2560, magicmovesbdb + 2656, magicmovesbdb + 288, magicmovesbdb + 928,
-			magicmovesbdb + 1312, magicmovesbdb + 1696, magicmovesbdb + 4832, magicmovesbdb + 4928,
-			magicmovesbdb + 0, magicmovesbdb + 128, magicmovesbdb + 320, magicmovesbdb + 960,
-			magicmovesbdb + 1344, magicmovesbdb + 1728, magicmovesbdb + 2304, magicmovesbdb + 2432,
-			magicmovesbdb + 32, magicmovesbdb + 160, magicmovesbdb + 448, magicmovesbdb + 2752,
-			magicmovesbdb + 3776, magicmovesbdb + 1856, magicmovesbdb + 2336, magicmovesbdb + 2464,
-			magicmovesbdb + 64, magicmovesbdb + 192, magicmovesbdb + 576, magicmovesbdb + 3264,
-			magicmovesbdb + 4288, magicmovesbdb + 1984, magicmovesbdb + 2368, magicmovesbdb + 2496,
-			magicmovesbdb + 96, magicmovesbdb + 224, magicmovesbdb + 704, magicmovesbdb + 1088,
-			magicmovesbdb + 1472, magicmovesbdb + 2112, magicmovesbdb + 2400, magicmovesbdb + 2528,
-			magicmovesbdb + 2592, magicmovesbdb + 2688, magicmovesbdb + 832, magicmovesbdb + 1216,
-			magicmovesbdb + 1600, magicmovesbdb + 2240, magicmovesbdb + 4864, magicmovesbdb + 4960,
-			magicmovesbdb + 5056, magicmovesbdb + 2720, magicmovesbdb + 864, magicmovesbdb + 1248,
-			magicmovesbdb + 1632, magicmovesbdb + 2272, magicmovesbdb + 4896, magicmovesbdb + 5184};
-	U64 *magicmoves_r_indecies2[64] =
-		{
-			magicmovesrdb + 86016, magicmovesrdb + 73728, magicmovesrdb + 36864, magicmovesrdb + 43008,
-			magicmovesrdb + 47104, magicmovesrdb + 51200, magicmovesrdb + 77824, magicmovesrdb + 94208,
-			magicmovesrdb + 69632, magicmovesrdb + 32768, magicmovesrdb + 38912, magicmovesrdb + 10240,
-			magicmovesrdb + 14336, magicmovesrdb + 53248, magicmovesrdb + 57344, magicmovesrdb + 81920,
-			magicmovesrdb + 24576, magicmovesrdb + 33792, magicmovesrdb + 6144, magicmovesrdb + 11264,
-			magicmovesrdb + 15360, magicmovesrdb + 18432, magicmovesrdb + 58368, magicmovesrdb + 61440,
-			magicmovesrdb + 26624, magicmovesrdb + 4096, magicmovesrdb + 7168, magicmovesrdb + 0,
-			magicmovesrdb + 2048, magicmovesrdb + 19456, magicmovesrdb + 22528, magicmovesrdb + 63488,
-			magicmovesrdb + 28672, magicmovesrdb + 5120, magicmovesrdb + 8192, magicmovesrdb + 1024,
-			magicmovesrdb + 3072, magicmovesrdb + 20480, magicmovesrdb + 23552, magicmovesrdb + 65536,
-			magicmovesrdb + 30720, magicmovesrdb + 34816, magicmovesrdb + 9216, magicmovesrdb + 12288,
-			magicmovesrdb + 16384, magicmovesrdb + 21504, magicmovesrdb + 59392, magicmovesrdb + 67584,
-			magicmovesrdb + 71680, magicmovesrdb + 35840, magicmovesrdb + 39936, magicmovesrdb + 13312,
-			magicmovesrdb + 17408, magicmovesrdb + 54272, magicmovesrdb + 60416, magicmovesrdb + 83968,
-			magicmovesrdb + 90112, magicmovesrdb + 75776, magicmovesrdb + 40960, magicmovesrdb + 45056,
-			magicmovesrdb + 49152, magicmovesrdb + 55296, magicmovesrdb + 79872, magicmovesrdb + 98304};
-#endif // MINIMIZE_MAGIC
-
-#ifdef PERFECT_MAGIC_HASH
-	for (i = 0; i < 1428; i++)
-		magicmovesbdb[i] = 0;
-	for (i = 0; i < 4900; i++)
-		magicmovesrdb[i] = 0;
-#endif
-
-	for (i = 0; i < 64; i++)
-	{
-		int squares[64];
-		int numsquares = 0;
-		U64 temp = magicmoves_b_mask[i];
-		while (temp)
-		{
-			U64 bit = temp & -temp;
-			squares[numsquares++] = initmagicmoves_bitpos64_database[(bit * C64(0x07EDD5E59A4E28C2)) >> 58];
-			temp ^= bit;
-		}
-		for (temp = 0; temp < (((U64)(1)) << numsquares); temp++)
-		{
-			U64 tempocc = initmagicmoves_occ(squares, numsquares, temp);
-#ifndef PERFECT_MAGIC_HASH
-			BmagicNOMASK2(i, tempocc) = initmagicmoves_Bmoves(i, tempocc);
-#else
-			U64 moves = initmagicmoves_Bmoves(i, tempocc);
-			U64 index = (((tempocc)*magicmoves_b_magics[i]) >> MINIMAL_B_BITS_SHIFT);
-			int j;
-			for (j = 0; j < 1428; j++)
-			{
-				if (!magicmovesbdb[j])
-				{
-					magicmovesbdb[j] = moves;
-					magicmoves_b_indecies[i][index] = j;
+            int to = s + d;
+            if (!is_ok(to) || square_distance(s, to) != 1)
 					break;
-				}
-				else if (magicmovesbdb[j] == moves)
-				{
-					magicmoves_b_indecies[i][index] = j;
+
+            s = to;
+            attacks |= (1ULL << s);
+
+            if (occupied & (1ULL << s))
 					break;
 				}
 			}
-#endif
-		}
-	}
-	for (i = 0; i < 64; i++)
-	{
-		int squares[64];
-		int numsquares = 0;
-		U64 temp = magicmoves_r_mask[i];
-		while (temp)
-		{
-			U64 bit = temp & -temp;
-			squares[numsquares++] = initmagicmoves_bitpos64_database[(bit * C64(0x07EDD5E59A4E28C2)) >> 58];
-			temp ^= bit;
-		}
-		for (temp = 0; temp < (((U64)(1)) << numsquares); temp++)
-		{
-			U64 tempocc = initmagicmoves_occ(squares, numsquares, temp);
-#ifndef PERFECT_MAGIC_HASH
-			RmagicNOMASK2(i, tempocc) = initmagicmoves_Rmoves(i, tempocc);
-#else
-			U64 moves = initmagicmoves_Rmoves(i, tempocc);
-			U64 index = (((tempocc)*magicmoves_r_magics[i]) >> MINIMAL_R_BITS_SHIFT);
-			int j;
-			for (j = 0; j < 4900; j++)
+
+    return attacks;
+}
+
+
+// Computes all rook and bishop attacks at startup. Magic
+// bitboards are used to look up attacks of sliding pieces. As a reference see
+// https://www.chessprogramming.org/Magic_Bitboards. In particular, here we use
+// the so called "fancy" approach.
+void init_magics(int pt, uint64_t table[], Magic magics[][2]) {
+    for (int s1 = 0; s1 <= 63; ++s1)
+        for (int s2 = 0; s2 <= 63; ++s2)
+            SquareDistance[s1][s2] = std::max(file_distance(s1, s2), rank_distance(s1, s2));
+
+    // Optimal PRNG seeds to pick the correct magics in the shortest time
+    int seeds[][8] = {{8977, 44560, 54343, 38998, 5731, 95205, 104912, 17020},
+                            {728, 10316, 55013, 32803, 12281, 15100, 16645, 255}};
+
+    uint64_t occupancy[4096];
+    int      epoch[4096] = {}, cnt = 0;
+
+    uint64_t reference[4096];
+    int      size = 0;
+
+    for (int s = 0; s <= 63; ++s)
+    {
+        // Board edges are not considered in the relevant occupancies
+        uint64_t edges = ((Rank1BB | Rank8BB) & ~rank_bb(s)) | ((FileABB | FileHBB) & ~file_bb(s));
+
+        // Given a square 's', the mask is the bitboard of sliding attacks from
+        // 's' computed on an empty board. The index must be big enough to contain
+        // all the attacks for each possible subset of the mask and so is 2 power
+        // the number of 1s of the mask. Hence we deduce the size of the shift to
+        // apply to the 64 or 32 bits word to get the index.
+        Magic& m = magics[s][pt - 2];
+        m.mask   = sliding_attack(pt, s, 0) & ~edges;
+        m.shift = 64 - countBits(m.mask);
+
+        // Set the offset for the attacks table of the square. We have individual
+        // table sizes for each square with "Fancy Magic Bitboards".
+        m.attacks = s == 0 ? table : magics[s - 1][pt - 2].attacks + size;
+        size      = 0;
+
+        // Use Carry-Rippler trick to enumerate all subsets of masks[s] and
+        // store the corresponding sliding attack bitboard in reference[].
+        uint64_t b = 0;
+        do
+        {
+            occupancy[size] = b;
+            reference[size] = sliding_attack(pt, s, b);
+
+            size++;
+            b = (b - m.mask) & m.mask;
+        } while (b);
+
+    PRNG rng(seeds[pt - 2][rank_of(s)]);
+
+        // Find a magic for square 's' picking up an (almost) random number
+        // until we find the one that passes the verification test.
+        for (int i = 0; i < size;)
 			{
-				if (!magicmovesrdb[j])
+            for (m.magic = 0; countBits((m.magic * m.mask) >> 56) < 6;)
+                m.magic = rng.sparse_rand<uint64_t>();
+
+            // A good magic must map every possible occupancy to an index that
+            // looks up the correct sliding attack in the attacks[s] database.
+            // Note that we build up the database for square 's' as a side
+            // effect of verifying the magic. Keep track of the attempt count
+            // and save it in epoch[], little speed-up trick to avoid resetting
+            // m.attacks[] after every failed attempt.
+            for (++cnt, i = 0; i < size; ++i)
 				{
-					magicmovesrdb[j] = moves;
-					magicmoves_r_indecies[i][index] = j;
-					break;
-				}
-				else if (magicmovesrdb[j] == moves)
-				{
-					magicmoves_r_indecies[i][index] = j;
+                unsigned idx = m.index(occupancy[i]);
+
+                if (epoch[idx] < cnt)
+                {
+                    epoch[idx]     = cnt;
+                    m.attacks[idx] = reference[i];
+                }
+                else if (m.attacks[idx] != reference[i])
 					break;
 				}
 			}
-#endif
 		}
 	}
 }
