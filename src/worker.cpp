@@ -170,6 +170,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
     // If position is stored in ttable
     if (ttEntry != nullptr)
     {
+        assert(tt_move.getData() == 0 || currentPos.ttMoveIsOk(tt_move));
         // We are in a PV-Node
         if (ttEntry->getIsExact())
         {
@@ -177,7 +178,6 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
                 return ttEntry->getValue();
 
             tt_move = ttEntry->getMove();
-            assert(tt_move.getData() == 0 || currentPos.ttMoveIsOk(tt_move));
         }
         // We are not in a PV-Node
         else
