@@ -84,6 +84,7 @@ This project follows [Semantic Versioning](https://semver.org/). The release pro
 5.  **Create GitHub Release**: Navigate to the "Releases" section of the GitHub repository. Draft a new release, select the tag you just pushed, and copy the release notes from `CHANGELOG.md` into the description.
 
 ## TODO
+- Try to improve the move generator and see if we can reach stockfish's nodes per second.
 - Build tests for the nnueu loading and accumulation
 - Include the final test for version release which is to play several games on different positions and time controls against last oldest version and see the score.
 - Try to see if including zobrist key updates and ttable lookup in quiesence is worth it.
