@@ -12,6 +12,7 @@
 #include <cstring>
 #include <algorithm>
 #include <cassert>
+#include "precomputed_moves.h"
 
 extern bool ENGINEISWHITE;
 
@@ -222,9 +223,6 @@ public:
     void setCheckInfo();
     void setCheckBits();
 
-    bool isQueenCheck(int destination_square);
-    bool isPromotionCheck(int piece, int destination_square);
-
     bool newKingSquareIsSafe(int new_position) const;
 
     bool kingIsSafeAfterPassant(int removed_square_1, int removed_square_2) const;
@@ -254,7 +252,9 @@ public:
 
     bool isDiscoverCheckAfterPassant() const;
 
-    bool isDiscoverCheck(int origin_square, int destination_square) const;
+    inline bool isDiscoverCheck(int origin_square, int destination_square) const;
+    inline bool isQueenCheck(int destination_square);
+    bool isPromotionCheck(int piece, int destination_square);
 
     Move *inCheckOrderedCapturesAndKingMoves(Move *&move_list) const;
     Move *inCheckOrderedCaptures(Move *&move_list) const;
@@ -279,6 +279,21 @@ public:
     void unmakeCapture(T move);
 
     bool isDraw() const;
+
+    inline bool givesCheck(int origin_square, int destination_square, int moved_piece) const
+    {   
+        // Direct check
+        if (state_info->previous->checkBits[moved_piece] & (1ULL << destination_square))
+            return true;
+        // Discover check if piece is not blocking or moving in blocking ray
+        if ((1ULL << origin_square) & (state_info->previous->blockersForKing))
+        {
+            if (m_moved_piece == 1) // Knight
+                return true;
+            return (precomputed_moves::OnLineBitboards[origin_square][destination_square] & m_pieces[m_turn][5]) == 0;
+        }
+        return false;
+    }
 
     inline int qsScore(int dst) const
     {

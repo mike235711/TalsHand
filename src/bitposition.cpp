@@ -671,18 +671,17 @@ bool BitPosition::isDiscoverCheckAfterPassant() const
     return false;
 }
 
-bool BitPosition::isDiscoverCheck(int origin_square, int destination_square) const
+inline bool BitPosition::isDiscoverCheck(int origin_square, int destination_square) const
 // Return if we are in check or not by sliders, for the case of discovered checks
 // For direct checks we know because of the move
 {
     // If piece is not blocking or moving in blocking ray
-    if (((1ULL << origin_square) & (state_info->previous->blockersForKing)) == 0 || (precomputed_moves::OnLineBitboards[origin_square][destination_square] & m_pieces[m_turn][5]) != 0)
-        return false;
-
-    return true;
+    if ((1ULL << origin_square) & (state_info->previous->blockersForKing))
+        return (precomputed_moves::OnLineBitboards[origin_square][destination_square] & m_pieces[m_turn][5]) == 0;
+    return false;
 }
 
-bool BitPosition::isQueenCheck(int destination_square)
+inline bool BitPosition::isQueenCheck(int destination_square)
 {
     if ((precomputed_moves::precomputedQueenMovesTableOneBlocker2[destination_square][m_king_position[m_turn]] & m_all_pieces_bit) == m_pieces[m_turn][5])
         return true;
@@ -1464,10 +1463,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
         m_pieces[not m_turn][0] ^= (origin_bit | destination_bit);
 
         // Checks
-        state_info->isCheck = state_info->previous->checkBits[0] & destination_bit;
-        // Discover checks
-        if (not state_info->isCheck)
-            state_info->isCheck = isDiscoverCheck(origin_square, destination_square);
+        state_info->isCheck = givesCheck(origin_square, destination_square, 0);
 
         state_info->reversibleMovesMade = 0; // Move is irreversible
 
@@ -1520,10 +1516,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
         m_pieces[not m_turn][m_moved_piece] ^= (origin_bit | destination_bit);
 
         // Checks
-        state_info->isCheck = state_info->previous->checkBits[m_moved_piece] & destination_bit;
-        // Discover checks
-        if (not state_info->isCheck)
-            state_info->isCheck = isDiscoverCheck(origin_square, destination_square);
+        state_info->isCheck = givesCheck(origin_square, destination_square, m_moved_piece);
 
         // Set NNUEU input
         nnueuChanges.add(NNUE_BASE[not m_turn][m_moved_piece] + destination_square,
@@ -1899,9 +1892,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             m_pieces[not m_turn][m_moved_piece] ^= (origin_bit | destination_bit);
 
             // Checks
-            state_info->isCheck = state_info->previous->checkBits[m_moved_piece] & destination_bit;
-            if (not state_info->isCheck)
-                state_info->isCheck = isDiscoverCheck(origin_square, destination_square);
+            state_info->isCheck = givesCheck(origin_square, destination_square, m_moved_piece);
 
             // Set NNUE input
             nnueuChanges.add(NNUE_BASE[not m_turn][m_moved_piece] + destination_square,
