@@ -58,8 +58,8 @@ private:
     uint64_t m_pieces[2][6];
 
     // Bits to represent all pieces of each player and all pieces of both players
-    uint64_t m_pieces_bit[2];
-    uint64_t m_all_pieces_bit{};
+    uint64_t m_bitboard_by_color[2];
+    uint64_t m_bitboard_all{};
 
     // True white's turn, False black's
     bool m_turn{};
@@ -82,7 +82,7 @@ private:
         std::fill(std::begin(m_board[0]), std::end(m_board[0]), 7);
         std::fill(std::begin(m_board[1]), std::end(m_board[1]), 7);
         std::memset(m_pieces, 0ULL, sizeof(m_pieces));
-        m_pieces_bit[0] = m_pieces_bit[1] = m_all_pieces_bit = 0ULL;
+        m_bitboard_by_color[0] = m_bitboard_by_color[1] = m_bitboard_all = 0ULL;
         m_turn = false;
         m_check_rays = m_num_checks = 0;
         m_king_position[0] = m_king_position[1] = 64;
@@ -370,9 +370,9 @@ public:
     void setAllPiecesBits()
     // Function that sets the own pieces, opponent pieces and all pieces bits.
     {
-        m_pieces_bit[0] = (m_pieces[0][0] | m_pieces[0][1] | m_pieces[0][2] | m_pieces[0][3] | m_pieces[0][4] | m_pieces[0][5]);
-        m_pieces_bit[1] = (m_pieces[1][0] | m_pieces[1][1] | m_pieces[1][2] | m_pieces[1][3] | m_pieces[1][4] | m_pieces[1][5]);
-        m_all_pieces_bit = (m_pieces_bit[0] | m_pieces_bit[1]);
+        m_bitboard_by_color[0] = (m_pieces[0][0] | m_pieces[0][1] | m_pieces[0][2] | m_pieces[0][3] | m_pieces[0][4] | m_pieces[0][5]);
+        m_bitboard_by_color[1] = (m_pieces[1][0] | m_pieces[1][1] | m_pieces[1][2] | m_pieces[1][3] | m_pieces[1][4] | m_pieces[1][5]);
+        m_bitboard_all = (m_bitboard_by_color[0] | m_bitboard_by_color[1]);
     }
 
     StateInfo *getState() { return state_info; }
@@ -492,7 +492,7 @@ public:
         std::cout << "Black queens " << m_pieces[1][4] << "\n";
         std::cout << "Black king " << m_pieces[1][5] << "\n";
 
-        std::cout << "All Pieces " << m_all_pieces_bit << "\n";
+        std::cout << "All Pieces " << m_bitboard_all << "\n";
 
         std::cout << "psquare " << state_info->pSquare << "\n";
 
@@ -652,16 +652,16 @@ public:
                     return false;
                 }
             }
-            if (recalculated_pieces_bit[color] != m_pieces_bit[color])
+            if (recalculated_pieces_bit[color] != m_bitboard_by_color[color])
             {
-                std::cerr << "[posIsFine] m_pieces_bit mismatch at color " << color << "\n";
+                std::cerr << "[posIsFine] m_bitboard_by_color mismatch at color " << color << "\n";
                 return false;
             }
         }
 
-        if (recalculated_all_pieces != m_all_pieces_bit)
+        if (recalculated_all_pieces != m_bitboard_all)
         {
-            std::cerr << "[posIsFine] m_all_pieces_bit mismatch\n";
+            std::cerr << "[posIsFine] m_bitboard_all mismatch\n";
             return false;
         }
 
