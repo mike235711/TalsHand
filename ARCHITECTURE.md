@@ -50,6 +50,50 @@ There are 3 build types (Release, Debug&Verbose and Debug). When running tests i
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_VERBOSE_DEBUG=OFF
 cmake --build build
 cd build && ctest --verbose
+
+### Perft Performance Benchmarking (Nodes / Second)
+
+To track raw move generation and search framework speed, a dedicated performance test suite is built only in the **Release** configuration. It measures the number of nodes per second (NPS) for the canonical perft FEN positions at depth 4 for:
+
+* Standard alpha-beta move generation (`Perft performance (AB)`)
+* Quiescence-only move generation (`Perft performance (QS)`)
+
+Each test prints lines like:
+```
+[Perft-AB] Position 1: depth=4, nodes=197281, time=0.0421s, nps=4688540
+```
+Where:
+* `nodes` is the total number of nodes visited at the specified depth.
+* `time` is elapsed wall-clock time in seconds.
+* `nps = nodes / time` (higher is better).
+
+#### Running the performance tests
+Build in Release mode:
+```
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DENABLE_VERBOSE_DEBUG=OFF
+cmake --build build
+```
+Run only the performance tests:
+```
+cd build
+ctest -R perft_perf --verbose
+```
+Or run all tests (includes tactics tests):
+```
+cd build
+ctest --verbose
+```
+
+#### Interpreting Results
+Use the printed NPS to compare across commits or hardware. Significant drops may indicate regressions in:
+* Move generation (`bitposition.cpp`, `move_selectors.h`)
+* Transposition table probing (`ttable.h`)
+* Zobrist or NNUEU incremental update overhead
+
+Minor fluctuations (<5%) can be due to background system load. For stable baselines, run multiple times and take the median.
+
+#### Extending
+To add more benchmark depths or positions, edit `tests/test_perft_perf.cpp`. Keep depths modest (≤5) to maintain fast CI runs.
 2) To build and test the Debug&Verbose version:
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_VERBOSE_DEBUG=ON
 cmake --build build

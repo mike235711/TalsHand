@@ -86,9 +86,108 @@ namespace
 {
     std::uint64_t perft_recursive(int depth, bool quiescent, BitPosition& pos, TranspositionTable& tt, std::ofstream* outfile, const std::string& prefix)
     {
+        // Base case: at depth 0 a single node is counted
         if (depth == 0)
-        {
             return 1;
+
+        // Fast path: at depth==1 each legal move contributes exactly one node.
+        // We can avoid make/unmake. If outfile is provided, write one line per move.
+        if (depth == 1)
+        {
+            std::uint64_t leaf_nodes = 0;
+            Move m;
+
+            if (quiescent)
+            {
+                pos.setBlockersPinsAndCheckBitsInQS();
+                if (pos.getIsCheck())
+                {
+                    pos.setCheckInfo();
+                    QSMoveSelectorCheck selC(pos);
+                    selC.init();
+                    while ((m = selC.select_legal()) != Move(0)) {
+                        if (outfile) {
+                            (*outfile) << prefix << m.toString() << ": 1" << std::endl;
+                        }
+                        ++leaf_nodes;
+                    }
+
+                    pos.setBlockersAndPinsInAB();
+                    pos.setCheckBits();
+                    QSMoveSelectorCheckNonCaptures selNC(pos);
+                    selNC.init();
+                    while ((m = selNC.select_legal()) != Move(0)) {
+                        if (outfile) {
+                            (*outfile) << prefix << m.toString() << ": 1" << std::endl;
+                        }
+                        ++leaf_nodes;
+                    }
+                }
+                else
+                {
+                    QSMoveSelectorNotCheck selC(pos);
+                    selC.init();
+                    while ((m = selC.select_legal()) != Move(0)) {
+                        if (outfile) {
+                            (*outfile) << prefix << m.toString() << ": 1" << std::endl;
+                        }
+                        ++leaf_nodes;
+                    }
+
+                    pos.setBlockersAndPinsInAB();
+                    pos.setCheckBits();
+                    QSMoveSelectorNotCheckNonCaptures selNC(pos, Move(0));
+                    selNC.init();
+                    while ((m = selNC.select_legal()) != Move(0)) {
+                        if (outfile) {
+                            (*outfile) << prefix << m.toString() << ": 1" << std::endl;
+                        }
+                        ++leaf_nodes;
+                    }
+                }
+            }
+            else // AB
+            {
+                pos.setBlockersAndPinsInAB();
+                pos.setCheckBits();
+                TTEntry *ttEntry = tt.probe(pos.getZobristKey());
+                Move tt_move{0};
+                if (ttEntry != nullptr) tt_move = ttEntry->getMove();
+                if (tt_move.getData() != 0) {
+                    if (outfile) {
+                        (*outfile) << prefix << tt_move.toString() << ": 1" << std::endl;
+                    }
+                    ++leaf_nodes;
+                }
+
+                if (not pos.getIsCheck())
+                {
+                    ABMoveSelectorNotCheck sel(pos, tt_move);
+                    sel.init_all();
+                    while ((m = sel.select_legal()) != Move(0)) {
+                        if (outfile) {
+                            (*outfile) << prefix << m.toString() << ": 1" << std::endl;
+                        }
+                        ++leaf_nodes;
+                    }
+                }
+                else
+                {
+                    pos.setCheckInfo();
+                    ABMoveSelectorCheck sel(pos, tt_move);
+                    sel.init();
+                    while ((m = sel.select_legal()) != Move(0)) {
+                        if (outfile) {
+                            (*outfile) << prefix << m.toString() << ": 1" << std::endl;
+                        }
+                        ++leaf_nodes;
+                    }
+                }
+            }
+
+            // Avoid TT writes for pure counting; harmless if left in but slower
+            // tt.save(pos.getZobristKey(), 0, depth, Move(0), true);
+            return leaf_nodes;
         }
 
         std::uint64_t total_nodes = 0;
@@ -107,9 +206,7 @@ namespace
                 {
                     pos.makeCapture(move, st);
 
-                    std::uint64_t child_nodes;
-
-                    child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
+                    std::uint64_t child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
                     
                     pos.unmakeCapture(move);
 
@@ -127,9 +224,7 @@ namespace
                 {
                     pos.makeMove(move, st);
 
-                    std::uint64_t child_nodes;
-
-                    child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
+                    std::uint64_t child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
                     
                     pos.unmakeMove(move);
 
@@ -148,9 +243,7 @@ namespace
                 {
                     pos.makeCapture(move, st);
 
-                    std::uint64_t child_nodes;
-
-                    child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
+                    std::uint64_t child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
                     
                     pos.unmakeCapture(move);
 
@@ -168,9 +261,7 @@ namespace
                 {
                     pos.makeMove(move, st);
 
-                    std::uint64_t child_nodes;
-
-                    child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
+                    std::uint64_t child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
                     
                     pos.unmakeMove(move);
 
@@ -193,9 +284,7 @@ namespace
             {
                 pos.makeMove(tt_move, st);
 
-                std::uint64_t child_nodes;
-
-                child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + tt_move.toString() + " ");
+                std::uint64_t child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + tt_move.toString() + " ");
                 
                 pos.unmakeMove(tt_move);
 
@@ -214,9 +303,7 @@ namespace
                 {
                     pos.makeMove(move, st);
 
-                    std::uint64_t child_nodes;
-
-                    child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
+                    std::uint64_t child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
                     
                     pos.unmakeMove(move);
 
@@ -236,9 +323,7 @@ namespace
                 {
                     pos.makeMove(move, st);
 
-                    std::uint64_t child_nodes;
-
-                    child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
+                    std::uint64_t child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
                     
                     pos.unmakeMove(move);
 

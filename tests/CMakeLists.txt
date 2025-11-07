@@ -55,4 +55,15 @@ if(CMAKE_BUILD_TYPE_UPPER STREQUAL "RELEASE")
     # Define the max depth for this build type
     
     catch_discover_tests(release_tactics_tests)
+
+    # Performance perft tests (nodes/sec) enabled in Release build only
+    message(STATUS "Registering perft performance tests (perft_perf_tests)")
+    add_executable(perft_perf_tests
+        test_perft_perf.cpp
+    )
+    target_link_libraries(perft_perf_tests PRIVATE
+        Catch2::Catch2WithMain
+        Talshand::lib
+    )
+    catch_discover_tests(perft_perf_tests)
 endif()
