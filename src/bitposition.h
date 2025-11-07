@@ -64,10 +64,6 @@ private:
     // True white's turn, False black's
     bool m_turn{};
 
-    // For updating stuff in makeMove, makeCapture and makeTTMove
-    int m_moved_piece{7};
-    int m_promoted_piece{7};
-
     // int representing kings' positions
     int m_king_position[2];
 
@@ -88,7 +84,6 @@ private:
         std::memset(m_pieces, 0ULL, sizeof(m_pieces));
         m_pieces_bit[0] = m_pieces_bit[1] = m_all_pieces_bit = 0ULL;
         m_turn = false;
-        m_moved_piece = m_promoted_piece = 7;
         m_check_rays = m_num_checks = 0;
         m_king_position[0] = m_king_position[1] = 64;
         m_ply = 0;
@@ -288,7 +283,7 @@ public:
         // Discover check if piece is not blocking or moving in blocking ray
         if ((1ULL << origin_square) & (state_info->previous->blockersForKing))
         {
-            if (m_moved_piece == 1) // Knight
+            if (moved_piece == 1) // Knight
                 return true;
             return (precomputed_moves::OnLineBitboards[origin_square][destination_square] & m_pieces[m_turn][5]) == 0;
         }
@@ -429,9 +424,7 @@ public:
     uint64_t getBlackQueensBits() const { return m_pieces[1][4]; }
     uint64_t getBlackKingBits() const { return m_pieces[1][5]; }
 
-    int getMovedPiece() const { return m_moved_piece; }
     int getCapturedPiece() const { return state_info->capturedPiece; }
-    int getPromotedPiece() const { return m_promoted_piece; }
     int getWhiteKingPosition() const { return m_king_position[0]; }
     int getBlackKingPosition() const { return m_king_position[1]; }
 

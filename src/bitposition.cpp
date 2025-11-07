@@ -1348,24 +1348,21 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     int destination_square = move.getDestinationSquare();
     uint64_t destination_bit = 1ULL << destination_square;
 
-    m_promoted_piece = 7; // Representing no promotion (Used for updating check info)
     state_info->reversibleMovesMade++;
     bool isPassant = false;
 
-    m_all_pieces_bit &= ~origin_bit;
-    m_all_pieces_bit |= destination_bit;
     m_pieces_bit[not m_turn] ^= (origin_bit | destination_bit);
 
-    m_moved_piece = m_board[not m_turn][origin_square];
+    int moved_piece = m_board[not m_turn][origin_square];
     int captured_piece = m_board[m_turn][destination_square];
 
-    assert(m_moved_piece != 7);
+    assert(moved_piece != 7);
 
     m_board[not m_turn][origin_square] = 7;
-    m_board[not m_turn][destination_square] = m_moved_piece;
+    m_board[not m_turn][destination_square] = moved_piece;
     m_board[m_turn][destination_square] = 7;
 
-    if (m_moved_piece == 5) // Moving king
+    if (moved_piece == 5) // Moving king
     {
         // Update king bit and king position
         m_pieces[not m_turn][5] = destination_bit;
@@ -1380,10 +1377,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             {
                 state_info->reversibleMovesMade = 0; // Move is irreversible
                 m_pieces[0][3] &= ~128;
-                m_all_pieces_bit &= ~128;
                 m_pieces_bit[0] &= ~128;
                 m_pieces[0][3] |= 32;
-                m_all_pieces_bit |= 32;
                 m_pieces_bit[0] |= 32;
 
                 m_board[0][7] = 7;
@@ -1400,10 +1395,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             {
                 state_info->reversibleMovesMade = 0; // Move is irreversible
                 m_pieces[0][3] &= ~1;
-                m_all_pieces_bit &= ~1;
                 m_pieces_bit[0] &= ~1;
                 m_pieces[0][3] |= 8;
-                m_all_pieces_bit |= 8;
                 m_pieces_bit[0] |= 8;
 
                 m_board[0][0] = 7;
@@ -1423,10 +1416,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 state_info->isCheck = state_info->previous->checkBits[3] & 2305843009213693952ULL;
 
                 m_pieces[1][3] &= ~9223372036854775808ULL;
-                m_all_pieces_bit &= ~9223372036854775808ULL;
                 m_pieces_bit[1] &= ~9223372036854775808ULL;
                 m_pieces[1][3] |= 2305843009213693952ULL;
-                m_all_pieces_bit |= 2305843009213693952ULL;
                 m_pieces_bit[1] |= 2305843009213693952ULL;
 
                 m_board[1][63] = 7;
@@ -1443,10 +1434,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 state_info->isCheck = state_info->previous->checkBits[3] & 576460752303423488ULL;
 
                 m_pieces[1][3] &= ~72057594037927936ULL;
-                m_all_pieces_bit &= ~72057594037927936ULL;
                 m_pieces_bit[1] &= ~72057594037927936ULL;
                 m_pieces[1][3] |= 576460752303423488ULL;
-                m_all_pieces_bit |= 576460752303423488ULL;
                 m_pieces_bit[1] |= 576460752303423488ULL;
 
                 m_board[1][56] = 7;
@@ -1458,7 +1447,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             }
         }
     }
-    else if (m_moved_piece == 0) // Moving Pawn
+    else if (moved_piece == 0) // Moving Pawn
     {
         m_pieces[not m_turn][0] ^= (origin_bit | destination_bit);
 
@@ -1477,23 +1466,22 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             {
                 m_pieces[not m_turn][0] &= ~destination_bit;
 
-                m_promoted_piece = move.getPromotingPiece() + 1;
-                m_pieces[not m_turn][m_promoted_piece] |= destination_bit;
+                int promoted_piece = move.getPromotingPiece() + 1;
+                m_pieces[not m_turn][promoted_piece] |= destination_bit;
 
-                m_board[not m_turn][destination_square] = m_promoted_piece;
+                m_board[not m_turn][destination_square] = promoted_piece;
                 // Direct check and discover check
                 if (not state_info->isCheck)
-                    state_info->isCheck = state_info->previous->checkBits[m_promoted_piece] & destination_bit || isPromotionCheck(m_promoted_piece, destination_square);
+                    state_info->isCheck = state_info->previous->checkBits[promoted_piece] & destination_bit || isPromotionCheck(promoted_piece, destination_square);
                 // Set NNUEU input
-                nnueuChanges.add(NNUE_BASE[not m_turn][m_promoted_piece] + destination_square,
+                nnueuChanges.add(NNUE_BASE[not m_turn][promoted_piece] + destination_square,
                                 NNUE_BASE[not m_turn][0] + origin_square);
 
-                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][destination_square] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_promoted_piece][destination_square];
+                state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][moved_piece][destination_square] ^ zobrist_keys::pieceZobristNumbers[not m_turn][promoted_piece][destination_square];
             }
             else // Passant
             {
                 m_pieces[m_turn][0] &= ~shift_forward[m_turn](destination_bit);
-                m_all_pieces_bit &= ~shift_forward[m_turn](destination_bit);
                 m_pieces_bit[m_turn] &= ~shift_forward[m_turn](destination_bit);
                 m_board[m_turn][destination_square + pawn_move_offsets[not m_turn]] = 7;
 
@@ -1513,14 +1501,14 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     // Moving any piece except king or pawn
     else
     {
-        m_pieces[not m_turn][m_moved_piece] ^= (origin_bit | destination_bit);
+        m_pieces[not m_turn][moved_piece] ^= (origin_bit | destination_bit);
 
         // Checks
-        state_info->isCheck = givesCheck(origin_square, destination_square, m_moved_piece);
+        state_info->isCheck = givesCheck(origin_square, destination_square, moved_piece);
 
         // Set NNUEU input
-        nnueuChanges.add(NNUE_BASE[not m_turn][m_moved_piece] + destination_square,
-                         NNUE_BASE[not m_turn][m_moved_piece] + origin_square);
+        nnueuChanges.add(NNUE_BASE[not m_turn][moved_piece] + destination_square,
+                         NNUE_BASE[not m_turn][moved_piece] + origin_square);
     }
     // Captures (Non passant)
     if (captured_piece != 7 && not isPassant)
@@ -1545,7 +1533,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->previous->pSquare];
 
     // Updating passant square
-    if (m_moved_piece == 0 && (destination_square - origin_square) == double_pawn_move_offsets[m_turn])
+    if (moved_piece == 0 && (destination_square - origin_square) == double_pawn_move_offsets[m_turn])
         state_info->pSquare = origin_square + pawn_move_offsets[m_turn];
     else
         state_info->pSquare = 0;
@@ -1554,7 +1542,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     
     state_info->capturedPiece = captured_piece;
 
-    state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][origin_square] ^ zobrist_keys::pieceZobristNumbers[not m_turn][m_moved_piece][destination_square];
+    state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[not m_turn][moved_piece][origin_square] ^ zobrist_keys::pieceZobristNumbers[not m_turn][moved_piece][destination_square];
     state_info->zobristKey ^= zobrist_keys::blackToMoveZobristNumber;
     // Update castling rights
     uint8_t mask = castlingMask[origin_square];
@@ -1564,6 +1552,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
         state_info->castlingRights &= ~mask;
         state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
     }
+
+    m_all_pieces_bit = m_pieces_bit[0] | m_pieces_bit[1];
     m_turn = not m_turn;
 
     // Note, we store the zobrist key in it's array when making the move. However the rest of the ply info
@@ -1644,8 +1634,6 @@ void BitPosition::unmakeMove(T move)
     int destination_square{move.getDestinationSquare()};
     uint64_t destination_bit{1ULL << destination_square};
 
-    m_all_pieces_bit &= ~destination_bit;
-    m_all_pieces_bit |= origin_bit;
     m_pieces_bit[m_turn] ^= (origin_bit | destination_bit);
     int moved_piece = m_board[m_turn][destination_square];
     // Castling, Passant and promotions
@@ -1656,10 +1644,8 @@ void BitPosition::unmakeMove(T move)
         {
             // Rook
             m_pieces[m_turn][3] |= (1ULL << 63);
-            m_all_pieces_bit |= (1ULL << 63);
             m_pieces_bit[m_turn] |= (1ULL << 63);
             m_pieces[m_turn][3] &= ~(1ULL << 61);
-            m_all_pieces_bit &= ~(1ULL << 61);
             m_pieces_bit[m_turn] &= ~(1ULL << 61);
 
             // King
@@ -1675,10 +1661,8 @@ void BitPosition::unmakeMove(T move)
         {
             // Rook
             m_pieces[m_turn][3] |= (1ULL << 56);
-            m_all_pieces_bit |= (1ULL << 56);
             m_pieces_bit[m_turn] |= (1ULL << 56);
             m_pieces[m_turn][3] &= ~(1ULL << 59);
-            m_all_pieces_bit &= ~(1ULL << 59);
             m_pieces_bit[m_turn] &= ~(1ULL << 59);
 
             // King
@@ -1694,10 +1678,8 @@ void BitPosition::unmakeMove(T move)
             // Rook
             m_pieces[m_turn][3] |= (1ULL << 7);
             m_pieces_bit[m_turn] |= (1ULL << 7);
-            m_all_pieces_bit |= (1ULL << 7);
             m_pieces[m_turn][3] &= ~(1ULL << 5);
             m_pieces_bit[m_turn] &= ~(1ULL << 5);
-            m_all_pieces_bit &= ~(1ULL << 5);
 
             // King
             m_pieces[m_turn][5] = (1ULL << 4);
@@ -1712,10 +1694,8 @@ void BitPosition::unmakeMove(T move)
             // Rook
             m_pieces[m_turn][3] |= 1ULL;
             m_pieces_bit[m_turn] |= 1ULL;
-            m_all_pieces_bit |= 1ULL;
             m_pieces[m_turn][3] &= ~(1ULL << 3);
             m_pieces_bit[m_turn] &= ~(1ULL << 3);
-            m_all_pieces_bit &= ~(1ULL << 3);
 
             // King
             m_pieces[m_turn][5] = (1ULL << 4);
@@ -1738,7 +1718,6 @@ void BitPosition::unmakeMove(T move)
             {
                 m_pieces[not m_turn][previous_captured_piece] |= destination_bit;
                 m_pieces_bit[not m_turn] |= destination_bit;
-                m_all_pieces_bit |= destination_bit;
             }
             m_board[not m_turn][destination_square] = previous_captured_piece;
         }
@@ -1750,7 +1729,6 @@ void BitPosition::unmakeMove(T move)
             // Restore captured pawn
             m_pieces[not m_turn][0] |= shift_forward[not m_turn](destination_bit);
             m_pieces_bit[not m_turn] |= shift_forward[not m_turn](destination_bit);
-            m_all_pieces_bit |= shift_forward[not m_turn](destination_bit);
             m_board[not m_turn][destination_square + pawn_move_offsets[m_turn]] = 0;
         }
     }
@@ -1773,12 +1751,13 @@ void BitPosition::unmakeMove(T move)
         {
             m_pieces[not m_turn][previous_captured_piece] |= destination_bit;
             m_pieces_bit[not m_turn] |= destination_bit;
-            m_all_pieces_bit |= destination_bit;
         }
         m_board[not m_turn][destination_square] = previous_captured_piece;
     }
     m_board[m_turn][destination_square] = 7;
     m_board[m_turn][origin_square] = moved_piece;
+
+    m_all_pieces_bit = m_pieces_bit[0] | m_pieces_bit[1];
 
     m_turn = not m_turn;
 
@@ -1838,7 +1817,6 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     uint64_t origin_bit = 1ULL << origin_square;
     int destination_square = move.getDestinationSquare();
     uint64_t destination_bit = 1ULL << destination_square;
-    int captured_piece;
 
     m_all_pieces_bit &= ~origin_bit;
     m_all_pieces_bit |= destination_bit;
@@ -1846,9 +1824,9 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     m_pieces_bit[m_turn] &= ~destination_bit;
 
 
-    m_moved_piece = m_board[not m_turn][origin_square];
-    captured_piece = m_board[m_turn][destination_square];
-    assert(m_moved_piece != 7); // DEBUG: Moved piece must be a piece (not empty square or own piece)
+    int moved_piece = m_board[not m_turn][origin_square];
+    int captured_piece = m_board[m_turn][destination_square];
+    assert(moved_piece != 7); // DEBUG: Moved piece must be a piece (not empty square or own piece)
 
     // Promotions (always to queen in captures)
     if (move.isSpecial())
@@ -1877,7 +1855,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     else // Normal captures
     {
         assert(captured_piece != 7); // Captured piece must be a piece (not empty square or own piece)
-        if (m_moved_piece == 5) // Moving king
+        if (moved_piece == 5) // Moving king
         {
             // Update king bit and king position
             m_pieces[not m_turn][5] = destination_bit;
@@ -1889,14 +1867,14 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
         // Moving any piece except king
         else
         {
-            m_pieces[not m_turn][m_moved_piece] ^= (origin_bit | destination_bit);
+            m_pieces[not m_turn][moved_piece] ^= (origin_bit | destination_bit);
 
             // Checks
-            state_info->isCheck = givesCheck(origin_square, destination_square, m_moved_piece);
+            state_info->isCheck = givesCheck(origin_square, destination_square, moved_piece);
 
             // Set NNUE input
-            nnueuChanges.add(NNUE_BASE[not m_turn][m_moved_piece] + destination_square,
-                             NNUE_BASE[not m_turn][m_moved_piece] + origin_square);
+            nnueuChanges.add(NNUE_BASE[not m_turn][moved_piece] + destination_square,
+                             NNUE_BASE[not m_turn][moved_piece] + origin_square);
         }
         // Captures (Non passant)
         m_pieces[m_turn][captured_piece] &= ~destination_bit;
@@ -1904,7 +1882,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
         nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
 
         m_board[not m_turn][origin_square] = 7;
-        m_board[not m_turn][destination_square] = m_moved_piece;
+        m_board[not m_turn][destination_square] = moved_piece;
         m_board[m_turn][destination_square] = 7;
     }
     
