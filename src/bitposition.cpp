@@ -1335,6 +1335,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     assert(not getIsCheckOnInitialization(not m_turn)); // DEBUG
 #endif
     NNUEU::NNUEUChange nnueuChanges;
+    state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->pSquare];
 
     // Save irreversible aspects of position and create a new state
     // Irreversible aspects include: castlingRights, reversibleMovesMade and zobristKey
@@ -1348,9 +1349,6 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     int destination_square = move.getDestinationSquare();
     uint64_t destination_bit = 1ULL << destination_square;
 
-    state_info->reversibleMovesMade++;
-    bool isPassant = false;
-
     m_bitboard_by_color[not m_turn] ^= (origin_bit | destination_bit);
 
     int moved_piece = m_board[origin_square];
@@ -1360,6 +1358,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 
     m_board[origin_square] = 7;
     m_board[destination_square] = moved_piece;
+
+    bool isPassant = false;
 
     if (moved_piece == 5) // Moving king
     {
@@ -1371,10 +1371,10 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 
         if (move.isSpecial()) 
         {
+            state_info->reversibleMovesMade = 0; // Move is irreversible
             // Castling
             if (move.getData() == 16772) // White kingside castling
             {
-                state_info->reversibleMovesMade = 0; // Move is irreversible
                 m_pieces[0][3] &= ~128;
                 m_bitboard_by_color[0] &= ~128;
                 m_pieces[0][3] |= 32;
@@ -1392,7 +1392,6 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             }
             else if (move.getData() == 16516) // White queenside castling
             {
-                state_info->reversibleMovesMade = 0; // Move is irreversible
                 m_pieces[0][3] &= ~1;
                 m_bitboard_by_color[0] &= ~1;
                 m_pieces[0][3] |= 8;
@@ -1410,7 +1409,6 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             }
             else if (move.getData() == 20412) // Black kingside castling
             {
-                state_info->reversibleMovesMade = 0; // Move is irreversible
                 // Direct check
                 state_info->isCheck = state_info->previous->checkBits[3] & 2305843009213693952ULL;
 
@@ -1428,7 +1426,6 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             }
             else // Black queenside castling
             {
-                state_info->reversibleMovesMade = 0; // Move is irreversible
                 // Direct check
                 state_info->isCheck = state_info->previous->checkBits[3] & 576460752303423488ULL;
 
@@ -1445,15 +1442,18 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 nnueuChanges.add(64 * 8 + 59, 64 * 8 + 56);
             }
         }
+        // Updating passant square
+        state_info->pSquare = 0;
+        state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->pSquare];  
     }
     else if (moved_piece == 0) // Moving Pawn
     {
+        state_info->reversibleMovesMade = 0; // Move is irreversible
+
         m_pieces[not m_turn][0] ^= (origin_bit | destination_bit);
 
         // Checks
         state_info->isCheck = givesCheck(origin_square, destination_square, 0);
-
-        state_info->reversibleMovesMade = 0; // Move is irreversible
 
         // Set NNUEU input
         nnueuChanges.add(NNUE_BASE[not m_turn][0] + destination_square,
@@ -1496,10 +1496,19 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][0][destination_square + pawn_move_offsets[not m_turn]];
             }
         }
+        // Updating passant square
+        if ((destination_square - origin_square) == double_pawn_move_offsets[m_turn])
+            state_info->pSquare = origin_square + pawn_move_offsets[m_turn];
+        else
+            state_info->pSquare = 0;
+
+        state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->pSquare];
     }
     // Moving any piece except king or pawn
     else
     {
+        state_info->reversibleMovesMade++; // Move is reversible
+
         m_pieces[not m_turn][moved_piece] ^= (origin_bit | destination_bit);
 
         // Checks
@@ -1508,13 +1517,20 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
         // Set NNUEU input
         nnueuChanges.add(NNUE_BASE[not m_turn][moved_piece] + destination_square,
                          NNUE_BASE[not m_turn][moved_piece] + origin_square);
+
+        // Updating passant square
+        state_info->pSquare = 0;
+        state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->pSquare];        
+    
     }
     // Captures (Non passant)
     if (captured_piece != 7 && not isPassant)
     {
+        state_info->reversibleMovesMade = 0; // Move is irreversible
+
         m_pieces[m_turn][captured_piece] &= ~destination_bit;
         m_bitboard_by_color[m_turn] &= ~destination_bit;
-        state_info->reversibleMovesMade = 0; // Move is irreversible
+
         // Set NNUEU input
         nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
 
@@ -1528,16 +1544,6 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
         }
     }
-
-    state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->previous->pSquare];
-
-    // Updating passant square
-    if (moved_piece == 0 && (destination_square - origin_square) == double_pawn_move_offsets[m_turn])
-        state_info->pSquare = origin_square + pawn_move_offsets[m_turn];
-    else
-        state_info->pSquare = 0;
-
-    state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->pSquare];
     
     state_info->capturedPiece = captured_piece;
 
@@ -1710,8 +1716,6 @@ void BitPosition::unmakeMove(T move)
         // Unmaking promotions
         else if (destination_bit & promotion_ranks[m_turn])
         {
-            moved_piece = 0;
-
             m_pieces[m_turn][0] |= origin_bit;
             m_pieces[m_turn][move.getPromotingPiece() + 1] &= ~destination_bit;
 
