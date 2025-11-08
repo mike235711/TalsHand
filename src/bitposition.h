@@ -93,7 +93,6 @@ private:
     void clear()
     {
         std::fill(std::begin(m_board), std::end(m_board), 7);
-        std::fill(std::begin(m_board), std::end(m_board), 7);
         std::memset(m_pieces, 0ULL, sizeof(m_pieces));
         m_bitboard_by_color[0] = m_bitboard_by_color[1] = m_bitboard_all = 0ULL;
         m_turn = false;
@@ -194,8 +193,12 @@ public:
 
         state_info->reversibleMovesMade = 0;
 
-        setAllPiecesBits();
-        setKingPosition();
+        m_bitboard_by_color[0] = (m_pieces[0][0] | m_pieces[0][1] | m_pieces[0][2] | m_pieces[0][3] | m_pieces[0][4] | m_pieces[0][5]);
+        m_bitboard_by_color[1] = (m_pieces[1][0] | m_pieces[1][1] | m_pieces[1][2] | m_pieces[1][3] | m_pieces[1][4] | m_pieces[1][5]);
+        m_bitboard_all = (m_bitboard_by_color[0] | m_bitboard_by_color[1]);
+        
+        m_king_position[0] = getLeastSignificantBitIndex(m_pieces[0][5]);
+        m_king_position[1] = getLeastSignificantBitIndex(m_pieces[1][5]);
         setIsCheckOnInitialization();
         if (getIsCheck())
             setCheckInfoOnInitialization();
@@ -312,14 +315,9 @@ public:
     {
         // Promotions and castling
         if (move.getData() & 0b0100000000000000)
-        {
             return 30;
-        }
         // Non promotions
-        else
-        {
-            return m_board[move.getDestinationSquare()];
-        }
+        return m_board[move.getDestinationSquare()];
     }
     int aBMoveValue(Move move) const
     // Captures and queen promotions
@@ -371,21 +369,6 @@ public:
     Move *kingNonCapturesInCheck(Move *&move_list) const;
 
     // Simple member function definitions
-
-    void setKingPosition()
-    // Set the index of the king in the board.
-    {
-        m_king_position[0] = getLeastSignificantBitIndex(m_pieces[0][5]);
-        m_king_position[1] = getLeastSignificantBitIndex(m_pieces[1][5]);
-    }
-
-    void setAllPiecesBits()
-    // Function that sets the own pieces, opponent pieces and all pieces bits.
-    {
-        m_bitboard_by_color[0] = (m_pieces[0][0] | m_pieces[0][1] | m_pieces[0][2] | m_pieces[0][3] | m_pieces[0][4] | m_pieces[0][5]);
-        m_bitboard_by_color[1] = (m_pieces[1][0] | m_pieces[1][1] | m_pieces[1][2] | m_pieces[1][3] | m_pieces[1][4] | m_pieces[1][5]);
-        m_bitboard_all = (m_bitboard_by_color[0] | m_bitboard_by_color[1]);
-    }
 
     StateInfo *getState() { return state_info; }
     const StateInfo *getState() const { return state_info; }
