@@ -89,10 +89,6 @@ TEST_CASE("Perft performance (AB) - nodes/sec per position") {
 // Optional: Measure quiescence-perft as well (captures/promotions only)
 TEST_CASE("Perft performance (QS) - nodes/sec per position") {
     const int PERF_DEPTH = get_perf_depth();
-    if (PERF_DEPTH > 5) {
-        SUCCEED("Skipping QS performance at depth > 5 (unstable path to be investigated)");
-        return;
-    }
     for (size_t i = 0; i < fens.size(); ++i) {
         SECTION("FEN #" + std::to_string(i+1) + " - " + sanitize_fen(fens[i])) {
             THEngine engine;
