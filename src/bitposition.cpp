@@ -1347,6 +1347,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     int destination_square = move.getDestinationSquare();
     uint64_t destination_bit = 1ULL << destination_square;
 
+    m_bitboard_all ^= origin_bit;
+    m_bitboard_all |= destination_bit;
     m_bitboard_by_color[not m_turn] ^= (origin_bit | destination_bit);
 
     int moved_piece = m_board[origin_square];
@@ -1374,6 +1376,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             // Castling
             if (move.getData() == 16772) // White kingside castling
             {
+                m_bitboard_all ^= (1ULL << 5) | (1ULL << 7);
                 m_pieces[3] &= ~128;
                 m_bitboard_by_color[0] &= ~128;
                 m_pieces[3] |= 32;
@@ -1391,6 +1394,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             }
             else if (move.getData() == 16516) // White queenside castling
             {
+                m_bitboard_all ^= (1ULL << 3) | (1ULL << 0);
                 m_pieces[3] &= ~1;
                 m_bitboard_by_color[0] &= ~1;
                 m_pieces[3] |= 8;
@@ -1408,6 +1412,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             }
             else if (move.getData() == 20412) // Black kingside castling
             {
+                m_bitboard_all ^= (9223372036854775808ULL) | (2305843009213693952ULL);
                 // Direct check
                 state_info->isCheck = state_info->previous->checkBits[3] & 2305843009213693952ULL;
 
@@ -1425,6 +1430,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             }
             else // Black queenside castling
             {
+                m_bitboard_all ^= (576460752303423488ULL) | (72057594037927936ULL);
                 // Direct check
                 state_info->isCheck = state_info->previous->checkBits[3] & 576460752303423488ULL;
 
@@ -1478,8 +1484,9 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             }
             else // Passant
             {
-                m_pieces[0] &= ~shift_forward[m_turn](destination_bit);
-                m_bitboard_by_color[m_turn] &= ~shift_forward[m_turn](destination_bit);
+                m_bitboard_all ^= shift_forward[m_turn](destination_bit);
+                m_pieces[0] ^= shift_forward[m_turn](destination_bit);
+                m_bitboard_by_color[m_turn] ^= shift_forward[m_turn](destination_bit);
                 m_board[destination_square + pawn_move_offsets[not m_turn]] = 7;
 
                 captured_piece = 0;
@@ -1553,8 +1560,6 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
         state_info->castlingRights &= ~mask;
         state_info->zobristKey ^= zobrist_keys::castlingRightsZobristNumbers[state_info->castlingRights];
     }
-
-    m_bitboard_all = m_bitboard_by_color[0] | m_bitboard_by_color[1];
     m_turn = not m_turn;
 
     // Note, we store the zobrist key in it's array when making the move. However the rest of the ply info
@@ -1820,6 +1825,8 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     // Promotions (always to queen in captures)
     if (move.isSpecial())
     {
+        assert(moved_piece == 0); // Moved piece must be a pawn in promotions
+
         m_pieces[0] ^= origin_bit;
         m_pieces[4] ^= destination_bit;
 
@@ -1855,9 +1862,6 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
         m_board[origin_square] = 7;
         m_board[destination_square] = moved_piece;
 
-        // Set NNUE input
-        nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
-
         if (moved_piece == 5) // Moving king
         {
             // Update king bit and king position
@@ -1865,6 +1869,9 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
 
             // Discover checks
             state_info->isCheck = isDiscoverCheck(origin_square, destination_square);
+            
+            // Set NNUE input (king moves are recorded with same source/dest to mark as king move)
+            nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
         }
         // Moving any piece except king
         else
@@ -1872,9 +1879,10 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             // Checks
             state_info->isCheck = givesCheck(origin_square, destination_square, moved_piece);
 
-            // Set NNUE input
+            // Set NNUE input - MUST call add() before addlast()
             nnueuChanges.add(NNUE_BASE[not m_turn][moved_piece] + destination_square,
                              NNUE_BASE[not m_turn][moved_piece] + origin_square);
+            nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
         }
     }
     m_turn = not m_turn;

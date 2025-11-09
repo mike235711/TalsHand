@@ -419,7 +419,7 @@ public:
 
     void print50MoveCount() { std::cout << state_info->reversibleMovesMade << "\n"; }
 
-    void printBoard(const int board[64], const std::string &label)
+    void printBoard(const int board[64], const std::string &label) const
     {
         std::cout << label << ":\n";
         for (int rank = 7; rank >= 0; --rank) // Start from the top rank (rank 8)
@@ -433,20 +433,11 @@ public:
         }
     }
 
-    void debugBoardState()
+    void debugBoardState() const
     {
         printBoard(m_board, "Board");
 
-        std::cout << "\nBitboards:\n";
-        for (int color = 0; color < 2; ++color)
-        {
-            std::cout << (color == 0 ? "White" : "Black") << " Pieces:\n";
-            for (int piece = 0; piece < 6; ++piece)
-            {
-                std::cout << "Piece " << piece << ": " << (m_pieces[piece] & m_bitboard_by_color[color]) << "\n";
-            }
-        }
-        std::cout << std::endl;
+        printBitboards();
     }
 
     void printBitboards() const
@@ -464,6 +455,9 @@ public:
         std::cout << "Black rooks " << (m_pieces[3] & m_bitboard_by_color[1]) << "\n";
         std::cout << "Black queens " << (m_pieces[4] & m_bitboard_by_color[1]) << "\n";
         std::cout << "Black king " << (m_pieces[5] & m_bitboard_by_color[1]) << "\n";
+
+        std::cout << "White pieces " << m_bitboard_by_color[0] << "\n";
+        std::cout << "Black pieces " << m_bitboard_by_color[1] << "\n";
 
         std::cout << "All Pieces " << m_bitboard_all << "\n";
 
