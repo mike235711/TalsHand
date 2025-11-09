@@ -67,8 +67,8 @@ private:
     // Board of color pieces 7s where no pieces
     int m_board[64];
 
-    // 64-bit to represent pieces on board for each piece type and color
-    uint64_t m_pieces[2][6];
+    // 64-bit to represent pieces on board for each piece type
+    uint64_t m_pieces[8]; 
 
     // Bits to represent all pieces of each player and all pieces of both players
     uint64_t m_bitboard_by_color[2];
@@ -132,7 +132,8 @@ public:
             const uint64_t bit = 1ULL << sq;
             auto push = [&](int side, int piece)
             {
-                m_pieces[side][piece] |= bit;
+                m_bitboard_by_color[side] |= bit;
+                m_pieces[piece] |= bit;
                 m_board[sq] = piece;
             };
 
@@ -193,12 +194,10 @@ public:
 
         state_info->reversibleMovesMade = 0;
 
-        m_bitboard_by_color[0] = (m_pieces[0][0] | m_pieces[0][1] | m_pieces[0][2] | m_pieces[0][3] | m_pieces[0][4] | m_pieces[0][5]);
-        m_bitboard_by_color[1] = (m_pieces[1][0] | m_pieces[1][1] | m_pieces[1][2] | m_pieces[1][3] | m_pieces[1][4] | m_pieces[1][5]);
         m_bitboard_all = (m_bitboard_by_color[0] | m_bitboard_by_color[1]);
-        
-        m_king_position[0] = getLeastSignificantBitIndex(m_pieces[0][5]);
-        m_king_position[1] = getLeastSignificantBitIndex(m_pieces[1][5]);
+
+        m_king_position[0] = getLeastSignificantBitIndex(m_pieces[5] & m_bitboard_by_color[0]);
+        m_king_position[1] = getLeastSignificantBitIndex(m_pieces[5] & m_bitboard_by_color[1]);
         setIsCheckOnInitialization();
         if (getIsCheck())
             setCheckInfoOnInitialization();
@@ -301,7 +300,7 @@ public:
         {
             if (moved_piece == 1) // Knight
                 return true;
-            return (precomputed_moves::OnLineBitboards[origin_square][destination_square] & m_pieces[m_turn][5]) == 0;
+            return (precomputed_moves::OnLineBitboards[origin_square][destination_square] & (m_pieces[5] & m_bitboard_by_color[m_turn])) == 0;
         }
         return false;
     }
@@ -342,14 +341,8 @@ public:
     bool isEndgame() const
     {
         // Count the number of set bits (pieces) for each piece type
-        int white_major_pieces = countBits(m_pieces[0][3]) + countBits(m_pieces[0][4]);
-        int white_minor_pieces = countBits(m_pieces[0][1]) + countBits(m_pieces[0][2]);
-        int black_major_pieces = countBits(m_pieces[1][3]) + countBits(m_pieces[1][4]);
-        int black_minor_pieces = countBits(m_pieces[1][1]) + countBits(m_pieces[1][2]);
-
-        // Total number of major and minor pieces
-        int total_major_pieces = white_major_pieces + black_major_pieces;
-        int total_minor_pieces = white_minor_pieces + black_minor_pieces;
+        int total_major_pieces = countBits(m_pieces[3]) + countBits(m_pieces[4]);
+        int total_minor_pieces = countBits(m_pieces[1]) + countBits(m_pieces[2]);
 
         return total_major_pieces <= 2 && total_minor_pieces <= 3;
     }
@@ -382,7 +375,7 @@ public:
     }
     uint64_t getPieces(int color, int pieceType) const
     {
-        return m_pieces[color][pieceType];
+        return m_pieces[pieceType] & m_bitboard_by_color[color];
     }
 
     inline bool getIsCheck() const
@@ -404,20 +397,6 @@ public:
     bool see_ge(Move m, int threshold) const;
     
     bool moreThanOneCheck() const { return m_num_checks > 1; }
-
-    uint64_t getWhitePawnsBits() const { return m_pieces[0][0]; }
-    uint64_t getWhiteKnightsBits() const { return m_pieces[0][1]; }
-    uint64_t getWhiteBishopsBits() const { return m_pieces[0][2]; }
-    uint64_t getWhiteRooksBits() const { return m_pieces[0][3]; }
-    uint64_t getWhiteQueensBits() const { return m_pieces[0][4]; }
-    uint64_t getWhiteKingBits() const { return m_pieces[0][5]; }
-
-    uint64_t getBlackPawnsBits() const { return m_pieces[1][0]; }
-    uint64_t getBlackKnightsBits() const { return m_pieces[1][1]; }
-    uint64_t getBlackBishopsBits() const { return m_pieces[1][2]; }
-    uint64_t getBlackRooksBits() const { return m_pieces[1][3]; }
-    uint64_t getBlackQueensBits() const { return m_pieces[1][4]; }
-    uint64_t getBlackKingBits() const { return m_pieces[1][5]; }
 
     int getCapturedPiece() const { return state_info->capturedPiece; }
     int getWhiteKingPosition() const { return m_king_position[0]; }
@@ -464,7 +443,7 @@ public:
             std::cout << (color == 0 ? "White" : "Black") << " Pieces:\n";
             for (int piece = 0; piece < 6; ++piece)
             {
-                std::cout << "Piece " << piece << ": " << m_pieces[color][piece] << "\n";
+                std::cout << "Piece " << piece << ": " << (m_pieces[piece] & m_bitboard_by_color[color]) << "\n";
             }
         }
         std::cout << std::endl;
@@ -472,19 +451,19 @@ public:
 
     void printBitboards() const
     {
-        std::cout << "White pawns " << m_pieces[0][0] << "\n";
-        std::cout << "White knights " << m_pieces[0][1] << "\n";
-        std::cout << "White bishops " << m_pieces[0][2] << "\n";
-        std::cout << "White rooks " << m_pieces[0][3] << "\n";
-        std::cout << "White queens " << m_pieces[0][4] << "\n";
-        std::cout << "White king " << m_pieces[0][5] << "\n";
+        std::cout << "White pawns " << (m_pieces[0] & m_bitboard_by_color[0]) << "\n";
+        std::cout << "White knights " << (m_pieces[1] & m_bitboard_by_color[0]) << "\n";
+        std::cout << "White bishops " << (m_pieces[2] & m_bitboard_by_color[0]) << "\n";
+        std::cout << "White rooks " << (m_pieces[3] & m_bitboard_by_color[0]) << "\n";
+        std::cout << "White queens " << (m_pieces[4] & m_bitboard_by_color[0]) << "\n";
+        std::cout << "White king " << (m_pieces[5] & m_bitboard_by_color[0]) << "\n";
 
-        std::cout << "Black pawns " << m_pieces[1][0] << "\n";
-        std::cout << "Black knights " << m_pieces[1][1] << "\n";
-        std::cout << "Black bishops " << m_pieces[1][2] << "\n";
-        std::cout << "Black rooks " << m_pieces[1][3] << "\n";
-        std::cout << "Black queens " << m_pieces[1][4] << "\n";
-        std::cout << "Black king " << m_pieces[1][5] << "\n";
+        std::cout << "Black pawns " << (m_pieces[0] & m_bitboard_by_color[1]) << "\n";
+        std::cout << "Black knights " << (m_pieces[1] & m_bitboard_by_color[1]) << "\n";
+        std::cout << "Black bishops " << (m_pieces[2] & m_bitboard_by_color[1]) << "\n";
+        std::cout << "Black rooks " << (m_pieces[3] & m_bitboard_by_color[1]) << "\n";
+        std::cout << "Black queens " << (m_pieces[4] & m_bitboard_by_color[1]) << "\n";
+        std::cout << "Black king " << (m_pieces[5] & m_bitboard_by_color[1]) << "\n";
 
         std::cout << "All Pieces " << m_bitboard_all << "\n";
 
@@ -518,29 +497,29 @@ public:
                 int square = row * 8 + col;
                 uint64_t bit = 1ULL << square;
                 char pieceChar = ' ';
-                if (m_pieces[0][0] & bit)
+                if (m_pieces[0] & m_bitboard_by_color[0] & bit)
                     pieceChar = 'P';
-                else if (m_pieces[0][1] & bit)
+                else if (m_pieces[1] & m_bitboard_by_color[0] & bit)
                     pieceChar = 'N';
-                else if (m_pieces[0][2] & bit)
+                else if (m_pieces[2] & m_bitboard_by_color[0] & bit)
                     pieceChar = 'B';
-                else if (m_pieces[0][3] & bit)
+                else if (m_pieces[3] & m_bitboard_by_color[0] & bit)
                     pieceChar = 'R';
-                else if (m_pieces[0][4] & bit)
+                else if (m_pieces[4] & m_bitboard_by_color[0] & bit)
                     pieceChar = 'Q';
-                else if (m_pieces[0][5] & bit)
+                else if (m_pieces[5] & m_bitboard_by_color[0] & bit)
                     pieceChar = 'K';
-                else if (m_pieces[1][0] & bit)
+                else if (m_pieces[0] & m_bitboard_by_color[1] & bit)
                     pieceChar = 'p';
-                else if (m_pieces[1][1] & bit)
+                else if (m_pieces[1] & m_bitboard_by_color[1] & bit)
                     pieceChar = 'n';
-                else if (m_pieces[1][2] & bit)
+                else if (m_pieces[2] & m_bitboard_by_color[1] & bit)
                     pieceChar = 'b';
-                else if (m_pieces[1][3] & bit)
+                else if (m_pieces[3] & m_bitboard_by_color[1] & bit)
                     pieceChar = 'r';
-                else if (m_pieces[1][4] & bit)
+                else if (m_pieces[4] & m_bitboard_by_color[1] & bit)
                     pieceChar = 'q';
-                else if (m_pieces[1][5] & bit)
+                else if (m_pieces[5] & m_bitboard_by_color[1] & bit)
                     pieceChar = 'k';
 
                 if (pieceChar != ' ')
@@ -597,23 +576,21 @@ public:
     }
     bool posIsFine() const
     {
-        // 1. Recompute by-color bitboards from m_pieces and validate integrity.
+        // 1. Here we check if m_pieces is missing any pieces from m_bitboard_by_color
         uint64_t recomputed_by_color[2] = {0,0};
-        for (int color = 0; color < 2; ++color)
+        for (int pt = 0; pt < 6; ++pt)
         {
-            for (int pt = 0; pt < 6; ++pt)
-            {
-                recomputed_by_color[color] |= m_pieces[color][pt];
-            }
+            recomputed_by_color[0] |= (m_pieces[pt] & m_bitboard_by_color[0]);
+            recomputed_by_color[1] |= (m_pieces[pt] & m_bitboard_by_color[1]);
         }
         if (recomputed_by_color[0] != m_bitboard_by_color[0])
         {
-            std::cerr << "[posIsFine] m_bitboard_by_color[0] mismatch\n";
+            std::cerr << "[posIsFine] m_pieces is missing pieces from m_bitboard_by_color[0]\n";
             return false;
         }
         if (recomputed_by_color[1] != m_bitboard_by_color[1])
         {
-            std::cerr << "[posIsFine] m_bitboard_by_color[1] mismatch\n";
+            std::cerr << "[posIsFine] m_pieces is missing pieces from m_bitboard_by_color[1]\n";
             return false;
         }
         // Overlap check: squares cannot belong to both colors
@@ -622,46 +599,62 @@ public:
             std::cerr << "[posIsFine] Overlapping pieces between colors\n";
             return false;
         }
+        // 2. Now we check if m_pieces has any extra pieces not in m_bitboard_by_color
+        uint64_t recomputed_by_pieces[6] = {0,0,0,0,0,0};
+        for (int pt = 0; pt < 6; pt++)
+        {
+            recomputed_by_pieces[pt] = m_pieces[pt] & (m_bitboard_by_color[0] | m_bitboard_by_color[1]);
+            if (recomputed_by_pieces[pt] != m_pieces[pt])
+            {
+                std::cerr << "[posIsFine] m_pieces[" << pt << "] has extra pieces not in m_bitboard_by_color\n";
+                return false;
+            }
+        }
 
-        // 2. Validate all pieces aggregate bitboard.
+        // 3. Validate all pieces aggregate bitboard.
         uint64_t recomputed_all = recomputed_by_color[0] | recomputed_by_color[1];
         if (recomputed_all != m_bitboard_all)
         {
-            std::cerr << "[posIsFine] m_bitboard_all mismatch\n";
+            std::cerr << "[posIsFine] m_bitboard_all mismatch from m_bitboard_by_color\n";
             return false;
         }
 
-        // 3. Validate king positions match king bitboards.
-        if (m_king_position[0] != getLeastSignificantBitIndex(m_pieces[0][5]))
+        recomputed_all = m_pieces[0] | m_pieces[1] | m_pieces[2] |
+                          m_pieces[3] | m_pieces[4] | m_pieces[5];
+        if (recomputed_all != m_bitboard_all)
+        {
+            std::cerr << "[posIsFine] m_bitboard_all mismatch from m_pieces\n";
+            return false;
+        }
+
+        // 4. Validate king positions match king bitboards.
+        if (m_king_position[0] != getLeastSignificantBitIndex(m_pieces[5] & m_bitboard_by_color[0]))
         {
             std::cerr << "[posIsFine] m_king_position[0] mismatch\n";
             return false;
         }
-        if (m_king_position[1] != getLeastSignificantBitIndex(m_pieces[1][5]))
+        if (m_king_position[1] != getLeastSignificantBitIndex(m_pieces[5] & m_bitboard_by_color[1]))
         {
             std::cerr << "[posIsFine] m_king_position[1] mismatch\n";
             return false;
         }
 
-        // 4. Reconstruct board from m_pieces and compare with m_board (which stores piece type only).
-        // For each square: determine if any piece exists; if so determine its piece type for either color.
+        // 5. Reconstruct board from m_pieces and compare with m_board (which stores piece type only).
+        // For each square: determine if any piece exists; if so determine its piece type.
         for (int sq = 0; sq < 64; ++sq)
         {
             uint64_t bit = 1ULL << sq;
             int derived_piece = 7; // 7 == empty sentinel in current convention
-            bool found = false;
-            for (int color = 0; color < 2 && !found; ++color)
+            
+            for (int pt = 0; pt < 6; ++pt)
             {
-                for (int pt = 0; pt < 6; ++pt)
+                if (m_pieces[pt] & bit)
                 {
-                    if (m_pieces[color][pt] & bit)
-                    {
-                        derived_piece = pt;
-                        found = true;
-                        break;
-                    }
+                    derived_piece = pt;
+                    break;
                 }
             }
+            
             int board_piece = m_board[sq];
             if (board_piece != derived_piece)
             {
@@ -690,7 +683,7 @@ public:
                 std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in m_board[0] \n";
                 return false;
             }
-            if (!(m_pieces[0][moving_piece] & origin_bit))
+            if (!(m_pieces[moving_piece] & m_bitboard_by_color[0] & origin_bit))
             {
                 std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in array of piece bits\n";
                 return false;
@@ -711,7 +704,7 @@ public:
                 std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in m_board[1]\n";
                 return false;
             }
-            if (!(m_pieces[1][moving_piece] & origin_bit))
+            if (!(m_pieces[moving_piece] & m_bitboard_by_color[1] & origin_bit))
             {
                 std::cerr << "[moveIsFine] No piece of current side at origin square " << origin << " in array of piece bits\n";
                 return false;

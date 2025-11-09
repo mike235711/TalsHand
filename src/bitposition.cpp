@@ -27,14 +27,14 @@ bool BitPosition::see_ge(Move m, int threshold) const
     // All direct attackers on OCC up‑to‑date occupancy
     auto attackers_to = [&](int sq, uint64_t occ) -> uint64_t
     {
-        return (precomputed_moves::pawn_attacks[1][sq] & m_pieces[0][0]) | // white pawns
-               (precomputed_moves::pawn_attacks[0][sq] & m_pieces[1][0]) | // black pawns
-               (precomputed_moves::knight_moves[sq] & (m_pieces[0][1] | m_pieces[1][1])) |
+        return (precomputed_moves::pawn_attacks[1][sq] & m_pieces[0] & m_bitboard_by_color[0]) | // white pawns
+               (precomputed_moves::pawn_attacks[0][sq] & m_pieces[1] & m_bitboard_by_color[1]) | // black pawns
+               (precomputed_moves::knight_moves[sq] & (m_pieces[0] & m_bitboard_by_color[0] | m_pieces[1] & m_bitboard_by_color[1])) |
                (BmagicNOMASK(sq, occ) &
-                (m_pieces[0][2] | m_pieces[1][2] | m_pieces[0][4] | m_pieces[1][4])) |
+                (m_pieces[0] & m_bitboard_by_color[0] | m_pieces[1] & m_bitboard_by_color[1])) |
                (RmagicNOMASK(sq, occ) &
-                (m_pieces[0][3] | m_pieces[1][3] | m_pieces[0][4] | m_pieces[1][4])) |
-               (precomputed_moves::king_moves[sq] & (m_pieces[0][5] | m_pieces[1][5]));
+                (m_pieces[0] & m_bitboard_by_color[0] | m_pieces[1] & m_bitboard_by_color[1])) |
+               (precomputed_moves::king_moves[sq] & (m_pieces[0] & m_bitboard_by_color[0] | m_pieces[1] & m_bitboard_by_color[1]));
     };
 
     // Pop least‑valuable attacker of colour c (0 = white, 1 = black)
@@ -42,7 +42,7 @@ bool BitPosition::see_ge(Move m, int threshold) const
     {
         for (int pt = 0; pt < 6; ++pt)
         { // P → K order
-            uint64_t subset = bb & m_pieces[c][pt];
+            uint64_t subset = bb & m_pieces[pt] & m_bitboard_by_color[c];
             if (subset)
             {
                 int sq = popLeastSignificantBit(subset);
@@ -72,8 +72,8 @@ bool BitPosition::see_ge(Move m, int threshold) const
     {
         stm ^= 1;   // opponent replies
         atk &= occ; // only remaining pieces
-        uint64_t stmAtk = atk & (m_pieces[stm][0] | m_pieces[stm][1] | m_pieces[stm][2] |
-                                 m_pieces[stm][3] | m_pieces[stm][4] | m_pieces[stm][5]);
+        uint64_t stmAtk = atk & (m_pieces[0] | m_pieces[1] | m_pieces[2] |
+                                 m_pieces[3] | m_pieces[4] | m_pieces[5]) & m_bitboard_by_color[stm];
         if (!stmAtk)
             break; // no more recaptures → previous side wins
 
@@ -103,12 +103,12 @@ int BitPosition::countStartPieces() const
     const uint64_t white_queen_start = 0x0000000000000008;
     const uint64_t white_king_start = 0x0000000000000010;
 
-    count += countBits(m_pieces[0][0] & white_pawn_start);
-    count += countBits(m_pieces[0][1] & white_knight_start);
-    count += countBits(m_pieces[0][2] & white_bishop_start);
-    count += countBits(m_pieces[0][3] & white_rook_start);
-    count += countBits(m_pieces[0][4] & white_queen_start);
-    count += countBits(m_pieces[0][5] & white_king_start);
+    count += countBits(m_pieces[0] & white_pawn_start & m_bitboard_by_color[0]);
+    count += countBits(m_pieces[1] & white_knight_start & m_bitboard_by_color[0]);
+    count += countBits(m_pieces[2] & white_bishop_start & m_bitboard_by_color[0]);
+    count += countBits(m_pieces[3] & white_rook_start & m_bitboard_by_color[0]);
+    count += countBits(m_pieces[4] & white_queen_start & m_bitboard_by_color[0]);
+    count += countBits(m_pieces[5] & white_king_start & m_bitboard_by_color[0]);
 
     // Black pieces
     const uint64_t black_pawn_start = 0x00FF000000000000;
@@ -118,12 +118,12 @@ int BitPosition::countStartPieces() const
     const uint64_t black_queen_start = 0x0800000000000000;
     const uint64_t black_king_start = 0x1000000000000000;
 
-    count += countBits(m_pieces[1][0] & black_pawn_start);
-    count += countBits(m_pieces[1][1] & black_knight_start);
-    count += countBits(m_pieces[1][2] & black_bishop_start);
-    count += countBits(m_pieces[1][3] & black_rook_start);
-    count += countBits(m_pieces[1][4] & black_queen_start);
-    count += countBits(m_pieces[1][5] & black_king_start);
+    count += countBits(m_pieces[0] & black_pawn_start & m_bitboard_by_color[1]);
+    count += countBits(m_pieces[1] & black_knight_start & m_bitboard_by_color[1]);
+    count += countBits(m_pieces[2] & black_bishop_start & m_bitboard_by_color[1]);
+    count += countBits(m_pieces[3] & black_rook_start & m_bitboard_by_color[1]);
+    count += countBits(m_pieces[4] & black_queen_start & m_bitboard_by_color[1]);
+    count += countBits(m_pieces[5] & black_king_start & m_bitboard_by_color[1]);
 
     return count;
 }
@@ -238,13 +238,13 @@ uint64_t BitPosition::computeFullZobristKey() const
 
     // white non-king pieces (piece types 0..4)
     for (int pt = 0; pt < 5; ++pt)
-        xor_piece_list(0, pt, m_pieces[0][pt]);
+        xor_piece_list(0, pt, m_pieces[pt] & m_bitboard_by_color[0]);
     // white king
     key ^= zobrist_keys::pieceZobristNumbers[0][5][m_king_position[0]];
 
     // black non-king pieces
     for (int pt = 0; pt < 5; ++pt)
-        xor_piece_list(1, pt, m_pieces[1][pt]);
+        xor_piece_list(1, pt, m_pieces[pt] & m_bitboard_by_color[1]);
     // black king
     key ^= zobrist_keys::pieceZobristNumbers[1][5][m_king_position[1]];
 
@@ -272,26 +272,26 @@ void BitPosition::setIsCheckOnInitialization()
 {
     state_info->isCheck = false;
     // Knights
-    if ((precomputed_moves::knight_moves[m_king_position[not m_turn]] & m_pieces[m_turn][1]))
+    if ((precomputed_moves::knight_moves[m_king_position[not m_turn]] & m_pieces[1] & m_bitboard_by_color[m_turn]))
         state_info->isCheck = true;
     // Pawns
-    if ((precomputed_moves::pawn_attacks[not m_turn][m_king_position[not m_turn]] & m_pieces[m_turn][0]))
+    if ((precomputed_moves::pawn_attacks[not m_turn][m_king_position[not m_turn]] & m_pieces[0] & m_bitboard_by_color[m_turn]))
         state_info->isCheck = true;
 
     // Queen
-    if (((RmagicNOMASK(m_king_position[not m_turn], m_bitboard_all) | BmagicNOMASK(m_king_position[not m_turn], m_bitboard_all)) & m_pieces[m_turn][4]) != 0)
+    if (((RmagicNOMASK(m_king_position[not m_turn], m_bitboard_all) | BmagicNOMASK(m_king_position[not m_turn], m_bitboard_all)) & m_pieces[4] & m_bitboard_by_color[m_turn]) != 0)
         state_info->isCheck = true;
 
     // Rook
-    if ((RmagicNOMASK(m_king_position[not m_turn], m_bitboard_all) & m_pieces[m_turn][3]))
+    if ((RmagicNOMASK(m_king_position[not m_turn], m_bitboard_all) & m_pieces[3] & m_bitboard_by_color[m_turn]))
         state_info->isCheck = true;
 
     // Bishop
-    if ((BmagicNOMASK(m_king_position[not m_turn], m_bitboard_all) & m_pieces[m_turn][2]))
+    if ((BmagicNOMASK(m_king_position[not m_turn], m_bitboard_all) & m_pieces[2] & m_bitboard_by_color[m_turn]))
         state_info->isCheck = true;
 
     // King
-    if ((precomputed_moves::king_moves[m_king_position[not m_turn]] & m_pieces[m_turn][5]) != 0)
+    if ((precomputed_moves::king_moves[m_king_position[not m_turn]] & m_pieces[5] & m_bitboard_by_color[m_turn]) != 0)
         state_info->isCheck = true;
 }
 
@@ -299,26 +299,26 @@ bool BitPosition::getIsCheckOnInitialization(bool turn)
 // For when moving the king
 {
     // Knights
-    if ((precomputed_moves::knight_moves[m_king_position[not turn]] & m_pieces[turn][1]))
+    if ((precomputed_moves::knight_moves[m_king_position[not turn]] & m_pieces[1] & m_bitboard_by_color[turn]))
         return true;
     // Pawns
-    if ((precomputed_moves::pawn_attacks[not turn][m_king_position[not turn]] & m_pieces[turn][0]))
+    if ((precomputed_moves::pawn_attacks[not turn][m_king_position[not turn]] & m_pieces[0] & m_bitboard_by_color[turn]))
         return true;
 
     // Queen
-    if (((RmagicNOMASK(m_king_position[not turn], m_bitboard_all) | BmagicNOMASK(m_king_position[not turn], m_bitboard_all)) & m_pieces[turn][4]) != 0)
+    if (((RmagicNOMASK(m_king_position[not turn], m_bitboard_all) | BmagicNOMASK(m_king_position[not turn], m_bitboard_all)) & m_pieces[4] & m_bitboard_by_color[turn]) != 0)
         return true;
 
     // Rook
-    if ((RmagicNOMASK(m_king_position[not turn], m_bitboard_all) & m_pieces[turn][3]))
+    if ((RmagicNOMASK(m_king_position[not turn], m_bitboard_all) & m_pieces[3] & m_bitboard_by_color[turn]))
         return true;
 
     // Bishop
-    if ((BmagicNOMASK(m_king_position[not turn], m_bitboard_all) & m_pieces[turn][2]))
+    if ((BmagicNOMASK(m_king_position[not turn], m_bitboard_all) & m_pieces[2] & m_bitboard_by_color[turn]))
         return true;
 
     // King
-    if ((precomputed_moves::king_moves[m_king_position[not turn]] & m_pieces[turn][5]) != 0)
+    if ((precomputed_moves::king_moves[m_king_position[not turn]] & m_pieces[5] & m_bitboard_by_color[turn]) != 0)
         return true;
     return false;
 }
@@ -327,25 +327,25 @@ bool BitPosition::isKingInCheck(bool side) const
     int kingSquare = m_king_position[side];
 
     // Pawn check
-    if (precomputed_moves::pawn_attacks[side][kingSquare] & m_pieces[not side][0])
+    if (precomputed_moves::pawn_attacks[side][kingSquare] & m_pieces[0] & m_bitboard_by_color[not side])
         return true;
 
     // Knight check
-    if (precomputed_moves::knight_moves[kingSquare] & m_pieces[not side][1])
+    if (precomputed_moves::knight_moves[kingSquare] & m_pieces[1] & m_bitboard_by_color[not side])
         return true;
 
     // Bishop/Queen check
-    uint64_t bishopsQueens = (m_pieces[not side][2] | m_pieces[not side][4]);
+    uint64_t bishopsQueens = (m_pieces[2] | m_pieces[4]) & m_bitboard_by_color[not side];
     if (BmagicNOMASK(kingSquare, m_bitboard_all) & bishopsQueens)
         return true;
 
     // Rook/Queen check
-    uint64_t rooksQueens = (m_pieces[not side][3] | m_pieces[not side][4]);
+    uint64_t rooksQueens = (m_pieces[3] | m_pieces[4]) & m_bitboard_by_color[not side];
     if (RmagicNOMASK(kingSquare, m_bitboard_all) & rooksQueens)
         return true;
 
     // King check (only relevant if kings are adjacent, but good to be consistent)
-    if (precomputed_moves::king_moves[kingSquare] & m_pieces[not side][5])
+    if (precomputed_moves::king_moves[kingSquare] & m_pieces[5] & m_bitboard_by_color[not side])
         return true;
 
     return false;
@@ -359,21 +359,21 @@ void BitPosition::setCheckInfoOnInitialization()
     m_check_square = 65;
 
     // Pawn check
-    int pawnCheck{getLeastSignificantBitIndex(precomputed_moves::pawn_attacks[not m_turn][m_king_position[not m_turn]] & m_pieces[m_turn][0])};
+    int pawnCheck{getLeastSignificantBitIndex(precomputed_moves::pawn_attacks[not m_turn][m_king_position[not m_turn]] & m_pieces[0] & m_bitboard_by_color[m_turn])};
     if (pawnCheck != 65)
     {
         m_num_checks++;
         m_check_square = pawnCheck;
     }
     // Knight check
-    int knightCheck{getLeastSignificantBitIndex(precomputed_moves::knight_moves[m_king_position[not m_turn]] & m_pieces[m_turn][1])};
+    int knightCheck{getLeastSignificantBitIndex(precomputed_moves::knight_moves[m_king_position[not m_turn]] & m_pieces[1] & m_bitboard_by_color[m_turn])};
     if (knightCheck != 65)
     {
         m_num_checks++;
         m_check_square = knightCheck;
     }
     // Bishop check
-    uint64_t piece_bits = m_pieces[m_turn][2];
+    uint64_t piece_bits = m_pieces[2] & m_bitboard_by_color[m_turn];
     while (piece_bits)
     {
         int bishopSquare = popLeastSignificantBit(piece_bits);
@@ -386,7 +386,7 @@ void BitPosition::setCheckInfoOnInitialization()
         }
     }
     // Rook check
-    piece_bits = m_pieces[m_turn][3];
+    piece_bits = m_pieces[3] & m_bitboard_by_color[m_turn];
     while (piece_bits)
     {
         int rookSquare = popLeastSignificantBit(piece_bits);
@@ -399,7 +399,7 @@ void BitPosition::setCheckInfoOnInitialization()
         }
     }
     // Queen check
-    piece_bits = m_pieces[m_turn][4];
+    piece_bits = m_pieces[4] & m_bitboard_by_color[m_turn];
     while (piece_bits)
     {
         int queenSquare = popLeastSignificantBit(piece_bits);
@@ -428,21 +428,21 @@ void BitPosition::setCheckInfo()
     m_check_rays = 0;    // Check ray if any
     m_check_square = 65; // Check square. If there is more than one, only one is stored
 
-    int check_square{getLeastSignificantBitIndex(precomputed_moves::pawn_attacks[not m_turn][m_king_position[not m_turn]] & m_pieces[m_turn][0])};
+    int check_square{getLeastSignificantBitIndex(precomputed_moves::pawn_attacks[not m_turn][m_king_position[not m_turn]] & m_pieces[0] & m_bitboard_by_color[m_turn])};
     if (check_square != 65)
     {
         m_num_checks++;
         m_check_square = check_square;
     }
     // Knight
-    check_square = getLeastSignificantBitIndex(precomputed_moves::knight_moves[m_king_position[not m_turn]] & m_pieces[m_turn][1]);
+    check_square = getLeastSignificantBitIndex(precomputed_moves::knight_moves[m_king_position[not m_turn]] & m_pieces[1] & m_bitboard_by_color[m_turn]);
     if (check_square != 65)
     {
         m_num_checks++;
         m_check_square = check_square;
     }
     // Bishop and queen
-    uint64_t checks{BmagicNOMASK(m_king_position[not m_turn], m_bitboard_all) & (m_pieces[m_turn][2] | m_pieces[m_turn][4])};
+    uint64_t checks{BmagicNOMASK(m_king_position[not m_turn], m_bitboard_all) & (m_pieces[2] | m_pieces[4]) & m_bitboard_by_color[m_turn]};
     while (checks)
     {
         check_square = popLeastSignificantBit(checks);
@@ -452,7 +452,7 @@ void BitPosition::setCheckInfo()
         m_check_square = check_square;
     }
     // Rook and queen
-    checks = RmagicNOMASK(m_king_position[not m_turn], m_bitboard_all) & (m_pieces[m_turn][3] | m_pieces[m_turn][4]);
+    checks = RmagicNOMASK(m_king_position[not m_turn], m_bitboard_all) & (m_pieces[3] | m_pieces[4]) & m_bitboard_by_color[m_turn];
     while (checks)
     {
         check_square = popLeastSignificantBit(checks);
@@ -485,7 +485,7 @@ void BitPosition::setBlockersPinsAndCheckBitsInQS()
     state_info->pinnedPieces = 0;
 
     // Blockers of own bishops, rooks and queens
-    uint64_t snipers_bits = ((m_pieces[not m_turn][2] | m_pieces[not m_turn][4]) & precomputed_moves::bishop_full_rays[m_king_position[m_turn]]) | ((m_pieces[not m_turn][3] | m_pieces[not m_turn][4]) & precomputed_moves::rook_full_rays[m_king_position[m_turn]]);
+    uint64_t snipers_bits = ((m_pieces[2] | m_pieces[4]) & m_bitboard_by_color[not m_turn] & precomputed_moves::bishop_full_rays[m_king_position[m_turn]]) | ((m_pieces[3] | m_pieces[4]) & m_bitboard_by_color[not m_turn] & precomputed_moves::rook_full_rays[m_king_position[m_turn]]);
     while (snipers_bits)
     // For each square corresponding to black bishop raying black king
     {
@@ -494,7 +494,7 @@ void BitPosition::setBlockersPinsAndCheckBitsInQS()
             state_info->blockersForKing |= ray;
     }
     // Pins of opponent bishops, rooks and queens
-    snipers_bits = ((m_pieces[m_turn][2] | m_pieces[m_turn][4]) & precomputed_moves::bishop_full_rays[m_king_position[not m_turn]]) | ((m_pieces[m_turn][3] | m_pieces[m_turn][4]) & precomputed_moves::rook_full_rays[m_king_position[not m_turn]]);
+    snipers_bits = ((m_pieces[2] | m_pieces[4]) & m_bitboard_by_color[m_turn] & precomputed_moves::bishop_full_rays[m_king_position[not m_turn]]) | ((m_pieces[3] | m_pieces[4]) & m_bitboard_by_color[m_turn] & precomputed_moves::rook_full_rays[m_king_position[not m_turn]]);
     while (snipers_bits)
     // For each square corresponding to black bishop raying black king
     {
@@ -515,7 +515,7 @@ void BitPosition::setBlockersAndPinsInAB()
     state_info->diagonalPinnedPieces = 0;
 
     // Blockers of own bishops, rooks and queens
-    uint64_t snipers_bits = ((m_pieces[not m_turn][2] | m_pieces[not m_turn][4]) & precomputed_moves::bishop_full_rays[m_king_position[m_turn]]) | ((m_pieces[not m_turn][3] | m_pieces[not m_turn][4]) & precomputed_moves::rook_full_rays[m_king_position[m_turn]]);
+    uint64_t snipers_bits = ((m_pieces[2] | m_pieces[4]) & m_bitboard_by_color[not m_turn] & precomputed_moves::bishop_full_rays[m_king_position[m_turn]]) | ((m_pieces[3] | m_pieces[4]) & m_bitboard_by_color[not m_turn] & precomputed_moves::rook_full_rays[m_king_position[m_turn]]);
     while (snipers_bits)
     // For each square corresponding to our sniper raying opponent king
     {
@@ -524,7 +524,7 @@ void BitPosition::setBlockersAndPinsInAB()
             state_info->blockersForKing |= ray;
     }
     // Pins of opponent bishops and queens
-    snipers_bits = (m_pieces[m_turn][2] | m_pieces[m_turn][4]) & precomputed_moves::bishop_full_rays[m_king_position[not m_turn]];
+    snipers_bits = (m_pieces[2] | m_pieces[4]) & m_bitboard_by_color[m_turn] & precomputed_moves::bishop_full_rays[m_king_position[not m_turn]];
     while (snipers_bits)
     // For each square corresponding to black bishop raying black king
     {
@@ -535,7 +535,7 @@ void BitPosition::setBlockersAndPinsInAB()
         }
     }
     // Pins of opponent rooks and queens
-    snipers_bits = (m_pieces[m_turn][3] | m_pieces[m_turn][4]) & precomputed_moves::rook_full_rays[m_king_position[not m_turn]];
+    snipers_bits = (m_pieces[3] | m_pieces[4]) & m_bitboard_by_color[m_turn] & precomputed_moves::rook_full_rays[m_king_position[not m_turn]];
     while (snipers_bits)
     // For each square corresponding to black rook raying black king
     {
@@ -567,14 +567,14 @@ bool BitPosition::isLegal(const T *move) const
     {
         int origin_square = move->getOriginSquare();
         // Knight moves are always legal
-        if ((1ULL << origin_square) & m_pieces[not m_turn][1])
+        if ((1ULL << origin_square) & m_pieces[1])
             return true;
         // King moves
         else if (origin_square == m_king_position[not m_turn])
             return newKingSquareIsSafe(move->getDestinationSquare());
         // Rest of pieces
         else
-            return ((1ULL << origin_square) & (state_info->pinnedPieces)) == 0 || precomputed_moves::OnLineBitboards[origin_square][move->getDestinationSquare()] & m_pieces[not m_turn][5];
+            return ((1ULL << origin_square) & (state_info->pinnedPieces)) == 0 || precomputed_moves::OnLineBitboards[origin_square][move->getDestinationSquare()] & m_pieces[5] & m_bitboard_by_color[not m_turn];
     }
 }
 
@@ -585,14 +585,14 @@ bool BitPosition::isNormalMoveLegal(int origin_square, int destination_square) c
 {
     // Move is legal if piece is not pinned, otherwise if origin, destination and king position are aligned
     // Knight moves are always legal
-    if ((1ULL << origin_square) & m_pieces[not m_turn][1])
+    if ((1ULL << origin_square) & m_pieces[1])
         return true;
     // King moves
     else if (origin_square == m_king_position[not m_turn])
         return newKingSquareIsSafe(destination_square); // FIX THIS FOR BOTH COLORS
     // Rest of pieces
     else
-        return ((1ULL << origin_square) & (state_info->pinnedPieces)) == 0 || precomputed_moves::OnLineBitboards[origin_square][destination_square] & m_pieces[not m_turn][5];
+        return ((1ULL << origin_square) & (state_info->pinnedPieces)) == 0 || precomputed_moves::OnLineBitboards[origin_square][destination_square] & m_pieces[5] & m_bitboard_by_color[not m_turn];
 }
 
 
@@ -604,14 +604,14 @@ bool BitPosition::isCaptureLegal(const T *move) const
 {
     int origin_square = move->getOriginSquare();
     // Knight moves are always legal
-    if ((1ULL << origin_square) & m_pieces[not m_turn][1])
+    if ((1ULL << origin_square) & m_pieces[1])
         return true;
     // King moves
     else if (origin_square == m_king_position[not m_turn])
         return newKingSquareIsSafe(move->getDestinationSquare()); // FIX THIS FOR BOTH COLORS
     // Rest of pieces
     else
-        return ((1ULL << origin_square) & (state_info->pinnedPieces)) == 0 || precomputed_moves::OnLineBitboards[origin_square][move->getDestinationSquare()] & m_pieces[not m_turn][5];
+        return ((1ULL << origin_square) & (state_info->pinnedPieces)) == 0 || precomputed_moves::OnLineBitboards[origin_square][move->getDestinationSquare()] & m_pieces[5] & m_bitboard_by_color[not m_turn];
 }
 
 bool BitPosition::ttMoveIsOk(Move move) const
@@ -626,23 +626,23 @@ bool BitPosition::newKingSquareIsSafe(int new_position) const
 // For when moving the king in captures
 {
     // Knights
-    if (precomputed_moves::knight_moves[new_position] & m_pieces[m_turn][1])
+    if (precomputed_moves::knight_moves[new_position] & m_pieces[1] & m_bitboard_by_color[m_turn])
         return false;
 
     // Pawns
-    if (precomputed_moves::pawn_attacks[not m_turn][new_position] & m_pieces[m_turn][0])
+    if (precomputed_moves::pawn_attacks[not m_turn][new_position] & m_pieces[0] & m_bitboard_by_color[m_turn])
         return false;
 
     // Rook and queen
-    if (RmagicNOMASK(new_position, m_bitboard_all & ~m_pieces[not m_turn][5]) & (m_pieces[m_turn][3] | m_pieces[m_turn][4]))
+    if (RmagicNOMASK(new_position, m_bitboard_all & ~(m_pieces[5] & m_bitboard_by_color[not m_turn])) & (m_pieces[3] | m_pieces[4]) & m_bitboard_by_color[m_turn])
         return false;
 
     // Bishop and queen
-    if (BmagicNOMASK(new_position, m_bitboard_all & ~m_pieces[not m_turn][5]) & (m_pieces[m_turn][2] | m_pieces[m_turn][4]))
+    if (BmagicNOMASK(new_position, m_bitboard_all & ~(m_pieces[5] & m_bitboard_by_color[not m_turn])) & (m_pieces[2] | m_pieces[4]) & m_bitboard_by_color[m_turn])
         return false;
 
     // King
-    if (precomputed_moves::king_moves[new_position] & m_pieces[m_turn][5])
+    if (precomputed_moves::king_moves[new_position] & m_pieces[5] & m_bitboard_by_color[m_turn])
         return false;
 
     return true;
@@ -651,11 +651,11 @@ bool BitPosition::newKingSquareIsSafe(int new_position) const
 bool BitPosition::kingIsSafeAfterPassant(int removed_square_1, int removed_square_2) const // See if the king is in check or not (from kings position). For when moving the king.
 {
     // Black bishops and queens
-    if ((BmagicNOMASK(m_king_position[not m_turn], (m_bitboard_all & ~((1ULL << removed_square_1) | (1ULL << removed_square_2)))) & (m_pieces[m_turn][2] | m_pieces[m_turn][4])) != 0)
+    if ((BmagicNOMASK(m_king_position[not m_turn], (m_bitboard_all & ~((1ULL << removed_square_1) | (1ULL << removed_square_2)))) & (m_pieces[2] | m_pieces[4]) & m_bitboard_by_color[m_turn]) != 0)
         return false;
 
     // Black rooks and queens
-    if ((RmagicNOMASK(m_king_position[not m_turn], (m_bitboard_all & ~((1ULL << removed_square_1) | (1ULL << removed_square_2)))) & (m_pieces[m_turn][3] | m_pieces[m_turn][4])) != 0)
+    if ((RmagicNOMASK(m_king_position[not m_turn], (m_bitboard_all & ~((1ULL << removed_square_1) | (1ULL << removed_square_2)))) & (m_pieces[3] | m_pieces[4]) & m_bitboard_by_color[m_turn]) != 0)
         return false;
     return true;
 }
@@ -666,7 +666,7 @@ bool BitPosition::isDiscoverCheckAfterPassant() const
 // We just check if removing the pawn captured leads to check, since check after removing and placing our pawn is already checked using isDiscoverCheck
 {
     // If captured pawn is not blocking or after removing captured pawn we are not in check
-    if ((BmagicNOMASK(m_king_position[m_turn], m_bitboard_all) & (m_pieces[not m_turn][2] | m_pieces[not m_turn][4])) || (RmagicNOMASK(m_king_position[m_turn], m_bitboard_all) & (m_pieces[not m_turn][3] | m_pieces[not m_turn][4])))
+    if ((BmagicNOMASK(m_king_position[m_turn], m_bitboard_all) & (m_pieces[2] | m_pieces[4]) & m_bitboard_by_color[not m_turn]) || (RmagicNOMASK(m_king_position[m_turn], m_bitboard_all) & (m_pieces[3] | m_pieces[4]) & m_bitboard_by_color[not m_turn]))
         return true;
     return false;
 }
@@ -677,24 +677,24 @@ inline bool BitPosition::isDiscoverCheck(int origin_square, int destination_squa
 {
     // If piece is not blocking or moving in blocking ray
     if ((1ULL << origin_square) & (state_info->previous->blockersForKing))
-        return (precomputed_moves::OnLineBitboards[origin_square][destination_square] & m_pieces[m_turn][5]) == 0;
+        return (precomputed_moves::OnLineBitboards[origin_square][destination_square] & m_pieces[5] & m_bitboard_by_color[m_turn]) == 0;
     return false;
 }
 
 inline bool BitPosition::isQueenCheck(int destination_square)
 {
-    if ((precomputed_moves::precomputedQueenMovesTableOneBlocker2[destination_square][m_king_position[m_turn]] & m_bitboard_all) == m_pieces[m_turn][5])
+    if ((precomputed_moves::precomputedQueenMovesTableOneBlocker2[destination_square][m_king_position[m_turn]] & m_bitboard_all) == (m_pieces[5] & m_bitboard_by_color[m_turn]))
         return true;
     return false;
 }
 
 bool BitPosition::isPromotionCheck(int piece, int destination_square)
 {
-    if (piece == 2 && ((precomputed_moves::precomputedBishopMovesTableOneBlocker2[destination_square][m_king_position[m_turn]] & m_bitboard_all) == m_pieces[m_turn][5]))
+    if (piece == 2 && ((precomputed_moves::precomputedBishopMovesTableOneBlocker2[destination_square][m_king_position[m_turn]] & m_bitboard_all) == (m_pieces[5] & m_bitboard_by_color[m_turn])))
         return true;
-    else if (piece == 3 && ((precomputed_moves::precomputedRookMovesTableOneBlocker2[destination_square][m_king_position[m_turn]] & m_bitboard_all) == m_pieces[m_turn][5]))
+    else if (piece == 3 && ((precomputed_moves::precomputedRookMovesTableOneBlocker2[destination_square][m_king_position[m_turn]] & m_bitboard_all) == (m_pieces[5] & m_bitboard_by_color[m_turn])))
         return true;
-    else if (piece == 4 && ((precomputed_moves::precomputedQueenMovesTableOneBlocker2[destination_square][m_king_position[m_turn]] & m_bitboard_all) == m_pieces[m_turn][5]))
+    else if (piece == 4 && ((precomputed_moves::precomputedQueenMovesTableOneBlocker2[destination_square][m_king_position[m_turn]] & m_bitboard_all) == (m_pieces[5] & m_bitboard_by_color[m_turn])))
         return true;
     return false;
 }
@@ -729,7 +729,7 @@ std::pair<std::vector<Move>, std::vector<int16_t>> BitPosition::orderAllMovesOnF
 // Capture move generations (for Quiesence)
 ScoredMove *BitPosition::pawnCapturesAndQueenProms(ScoredMove *&move_list) const
 {
-    uint64_t pawns = m_pieces[not m_turn][0];
+    uint64_t pawns = m_pieces[0] & m_bitboard_by_color[not m_turn];
 
     // Right shift captures (no promotion)
     uint64_t destination_bitboard = shift_forward_right[not m_turn](pawns & NON_RIGHT_BITBOARD) & m_bitboard_by_color[m_turn] & ~promotion_ranks[not m_turn];
@@ -786,7 +786,7 @@ ScoredMove *BitPosition::pawnCapturesAndQueenProms(ScoredMove *&move_list) const
 ScoredMove *BitPosition::knightCaptures(ScoredMove *&move_list) const
 // All knight captures
 {
-    uint64_t moveable_knights{m_pieces[not m_turn][1] & ~state_info->pinnedPieces};
+    uint64_t moveable_knights{m_pieces[1] & m_bitboard_by_color[not m_turn] & ~state_info->pinnedPieces};
     uint64_t enemy = m_bitboard_by_color[m_turn];
     while (moveable_knights)
     {
@@ -805,7 +805,7 @@ ScoredMove *BitPosition::knightCaptures(ScoredMove *&move_list) const
 ScoredMove *BitPosition::bishopCaptures(ScoredMove *&move_list) const
 // All bishop captures
 {
-    uint64_t moveable_bishops{m_pieces[not m_turn][2]};
+    uint64_t moveable_bishops{m_pieces[2] & m_bitboard_by_color[not m_turn]};
     uint64_t enemy = m_bitboard_by_color[m_turn];
 
     while (moveable_bishops)
@@ -826,7 +826,7 @@ ScoredMove *BitPosition::bishopCaptures(ScoredMove *&move_list) const
 ScoredMove *BitPosition::rookCaptures(ScoredMove *&move_list) const
 // All rook captures except capturing unsafe pawns, knights or rooks
 {
-    uint64_t moveable_rooks{m_pieces[not m_turn][3]};
+    uint64_t moveable_rooks{m_pieces[3] & m_bitboard_by_color[not m_turn]};
     uint64_t enemy = m_bitboard_by_color[m_turn];
     while (moveable_rooks)
     {
@@ -845,7 +845,7 @@ ScoredMove *BitPosition::rookCaptures(ScoredMove *&move_list) const
 ScoredMove *BitPosition::queenCaptures(ScoredMove *&move_list) const
 // All queen captures except capturing unsafe pieces
 {
-    uint64_t moveable_queens{m_pieces[not m_turn][4]};
+    uint64_t moveable_queens{m_pieces[4] & m_bitboard_by_color[not m_turn]};
     while (moveable_queens)
     {
         int origin{popLeastSignificantBit(moveable_queens)};
@@ -883,7 +883,7 @@ Move *BitPosition::kingCaptures(Move *&move_list) const
 // All move generations (for PV Nodes in Alpha-Beta)
 ScoredMove *BitPosition::pawnAllMoves(ScoredMove *&move_list) const
 {
-    const uint64_t pawns = m_pieces[not m_turn][0];
+    const uint64_t pawns = m_pieces[0] & m_bitboard_by_color[not m_turn];
 
     // Single moves
     uint64_t single_moves = shift_forward[not m_turn](pawns & ~state_info->diagonalPinnedPieces) & ~m_bitboard_all;
@@ -966,7 +966,7 @@ ScoredMove *BitPosition::pawnAllMoves(ScoredMove *&move_list) const
 }
 ScoredMove *BitPosition::knightAllMoves(ScoredMove *&move_list) const
 {
-    uint64_t moveable_knights{m_pieces[not m_turn][1] & ~(state_info->pinnedPieces)};
+    uint64_t moveable_knights{m_pieces[1] & m_bitboard_by_color[not m_turn] & ~(state_info->pinnedPieces)};
     while (moveable_knights)
     {
         int origin{popLeastSignificantBit(moveable_knights)};
@@ -978,7 +978,7 @@ ScoredMove *BitPosition::knightAllMoves(ScoredMove *&move_list) const
 }
 ScoredMove *BitPosition::bishopAllMoves(ScoredMove *&move_list) const
 {
-    uint64_t moveable_bishops{m_pieces[not m_turn][2] & ~(state_info->straightPinnedPieces)};
+    uint64_t moveable_bishops{m_pieces[2] & m_bitboard_by_color[not m_turn] & ~(state_info->straightPinnedPieces)};
     while (moveable_bishops)
     {
         int origin{popLeastSignificantBit(moveable_bishops)};
@@ -990,7 +990,7 @@ ScoredMove *BitPosition::bishopAllMoves(ScoredMove *&move_list) const
 }
 ScoredMove *BitPosition::rookAllMoves(ScoredMove *&move_list) const
 {
-    uint64_t moveable_rooks{m_pieces[not m_turn][3] & ~(state_info->diagonalPinnedPieces)};
+    uint64_t moveable_rooks{m_pieces[3] & m_bitboard_by_color[not m_turn] & ~(state_info->diagonalPinnedPieces)};
     while (moveable_rooks)
     {
         int origin{popLeastSignificantBit(moveable_rooks)};
@@ -1002,7 +1002,7 @@ ScoredMove *BitPosition::rookAllMoves(ScoredMove *&move_list) const
 }
 ScoredMove *BitPosition::queenAllMoves(ScoredMove *&move_list) const
 {
-    uint64_t moveable_queens{m_pieces[not m_turn][4]};
+    uint64_t moveable_queens{m_pieces[4] & m_bitboard_by_color[not m_turn]};
     while (moveable_queens)
     {
         int origin{popLeastSignificantBit(moveable_queens)};
@@ -1036,7 +1036,7 @@ Move *BitPosition::inCheckPawnBlocks(Move *&move_list) const
 // Only called if m_num_checks = 1 and m_check_rays != 0
 // Non captures
 {
-    const uint64_t pawns = m_pieces[not m_turn][0];
+    const uint64_t pawns = m_pieces[0] & m_bitboard_by_color[not m_turn];
     const uint64_t promotion_rank = promotion_ranks[not m_turn];
 
     // Single moves
@@ -1074,7 +1074,7 @@ Move *BitPosition::inCheckKnightBlocks(Move *&move_list) const
 // Only called if m_num_checks = 1 and m_check_rays != 0
 // Non captures
 {
-    uint64_t pieces{m_pieces[not m_turn][1] & ~(state_info->pinnedPieces)};
+    uint64_t pieces{m_pieces[1] & m_bitboard_by_color[not m_turn] & ~(state_info->pinnedPieces)};
     while (pieces)
     {
         int origin{popLeastSignificantBit(pieces)};
@@ -1090,7 +1090,7 @@ Move *BitPosition::inCheckBishopBlocks(Move *&move_list) const
 // Only called if m_num_checks = 1 and m_check_rays != 0
 // Non captures
 {
-    uint64_t pieces{m_pieces[not m_turn][2] & ~(state_info->straightPinnedPieces)};
+    uint64_t pieces{m_pieces[2] & m_bitboard_by_color[not m_turn] & ~(state_info->straightPinnedPieces)};
     while (pieces)
     {
         int origin{popLeastSignificantBit(pieces)};
@@ -1106,7 +1106,7 @@ Move *BitPosition::inCheckRookBlocks(Move *&move_list) const
 // Only called if m_num_checks = 1 and m_check_rays != 0
 // Non captures
 {
-    uint64_t pieces{m_pieces[not m_turn][3] & ~(state_info->diagonalPinnedPieces)};
+    uint64_t pieces{m_pieces[3] & m_bitboard_by_color[not m_turn] & ~(state_info->diagonalPinnedPieces)};
     while (pieces)
     {
         int origin{popLeastSignificantBit(pieces)};
@@ -1122,7 +1122,7 @@ Move *BitPosition::inCheckQueenBlocks(Move *&move_list) const
 // Only called if m_num_checks = 1 and m_check_rays != 0
 // Non captures
 {
-    uint64_t pieces{m_pieces[not m_turn][4]};
+    uint64_t pieces{m_pieces[4] & m_bitboard_by_color[not m_turn]};
     while (pieces)
     {
         int origin{popLeastSignificantBit(pieces)};
@@ -1142,7 +1142,7 @@ Move *BitPosition::inCheckOrderedCapturesAndKingMoves(Move *&move_list) const
     while (piece_moves)
         *move_list++ = Move(m_king_position[not m_turn], popLeastSignificantBit(piece_moves));
 
-    const uint64_t pawns = m_pieces[not m_turn][0];
+    const uint64_t pawns = m_pieces[0] & m_bitboard_by_color[not m_turn];
     const uint64_t promotion_rank = promotion_ranks[not m_turn];
 
     // Pawn captures of the checking piece
@@ -1178,25 +1178,25 @@ Move *BitPosition::inCheckOrderedCapturesAndKingMoves(Move *&move_list) const
     }
 
     // Knight captures from checking position
-    piece_moves = precomputed_moves::knight_moves[m_check_square] & m_pieces[not m_turn][1] & ~state_info->pinnedPieces;
+    piece_moves = precomputed_moves::knight_moves[m_check_square] & m_pieces[1] & m_bitboard_by_color[not m_turn] & ~state_info->pinnedPieces;
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
     }
     // Bishop captures from checking position
-    piece_moves = BmagicNOMASK(m_check_square, m_bitboard_all) & m_pieces[not m_turn][2] & ~(state_info->straightPinnedPieces);
+    piece_moves = BmagicNOMASK(m_check_square, m_bitboard_all) & m_pieces[2] & m_bitboard_by_color[not m_turn] & ~(state_info->straightPinnedPieces);
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
     }
     // Rook captures from checking position
-    piece_moves = RmagicNOMASK(m_check_square, m_bitboard_all) & m_pieces[not m_turn][3] & ~(state_info->diagonalPinnedPieces);
+    piece_moves = RmagicNOMASK(m_check_square, m_bitboard_all) & m_pieces[3] & m_bitboard_by_color[not m_turn] & ~(state_info->diagonalPinnedPieces);
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
     }
     // Queen captures from checking position
-    piece_moves = QmagicNOMASK(m_check_square, m_bitboard_all) & m_pieces[not m_turn][4];
+    piece_moves = QmagicNOMASK(m_check_square, m_bitboard_all) & m_pieces[4] & m_bitboard_by_color[not m_turn];
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
@@ -1227,7 +1227,7 @@ Move *BitPosition::inCheckOrderedCaptures(Move *&move_list) const
         *move_list++ = Move(m_king_position[not m_turn], popLeastSignificantBit(piece_moves));
     }
     // Pawn captures from checking position
-    piece_moves = precomputed_moves::pawn_attacks[m_turn][m_check_square] & m_pieces[not m_turn][0];
+    piece_moves = precomputed_moves::pawn_attacks[m_turn][m_check_square] & m_pieces[0] & m_bitboard_by_color[not m_turn];
     while (piece_moves)
     {
         if (!((1ULL << m_check_square) & promotion_ranks[not m_turn])) // Non promotions
@@ -1240,25 +1240,25 @@ Move *BitPosition::inCheckOrderedCaptures(Move *&move_list) const
         }
     }
     // Knight captures from checking position
-    piece_moves = precomputed_moves::knight_moves[m_check_square] & (m_pieces[not m_turn][1] & ~state_info->pinnedPieces);
+    piece_moves = precomputed_moves::knight_moves[m_check_square] & (m_pieces[1] & m_bitboard_by_color[not m_turn] & ~state_info->pinnedPieces);
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
     }
     // Bishop captures from checking position
-    piece_moves = BmagicNOMASK(m_check_square, m_bitboard_all) & m_pieces[not m_turn][2];
+    piece_moves = BmagicNOMASK(m_check_square, m_bitboard_all) & m_pieces[2] & m_bitboard_by_color[not m_turn];
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
     }
     // Rook captures from checking position
-    piece_moves = RmagicNOMASK(m_check_square, m_bitboard_all) & m_pieces[not m_turn][3];
+    piece_moves = RmagicNOMASK(m_check_square, m_bitboard_all) & m_pieces[3] & m_bitboard_by_color[not m_turn];
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
     }
     // Queen captures from checking position
-    piece_moves = QmagicNOMASK(m_check_square, m_bitboard_all) & m_pieces[not m_turn][4];
+    piece_moves = QmagicNOMASK(m_check_square, m_bitboard_all) & m_pieces[4] & m_bitboard_by_color[not m_turn];
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
@@ -1274,7 +1274,7 @@ bool BitPosition::moveIsReseter(Move move)
     uint64_t origin_bit{1ULL << move.getDestinationSquare()};
     if ((m_bitboard_by_color[m_turn] & destination_bit)) // Capture
         return true;
-    if ((m_pieces[not m_turn][0] & origin_bit) || (state_info->pSquare) == destination_bit) // Passant Capture
+    if ((m_pieces[0] & origin_bit) || (state_info->pSquare) == destination_bit) // Passant Capture
         return true;
     return false;
 }
@@ -1335,8 +1335,6 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     assert(not getIsCheckOnInitialization(not m_turn)); // DEBUG
 #endif
     NNUEU::NNUEUChange nnueuChanges;
-    state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->pSquare];
-
     // Save irreversible aspects of position and create a new state
     // Irreversible aspects include: castlingRights, reversibleMovesMade and zobristKey
     std::memcpy(&new_state_info, state_info, offsetof(StateInfo, straightPinnedPieces));
@@ -1354,17 +1352,18 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     int moved_piece = m_board[origin_square];
     int captured_piece = m_board[destination_square];
 
-    assert(moved_piece != 7);
-
     m_board[origin_square] = 7;
     m_board[destination_square] = moved_piece;
+
+    m_pieces[moved_piece] ^= (origin_bit | destination_bit);
+
+    state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->previous->pSquare];
 
     bool isPassant = false;
 
     if (moved_piece == 5) // Moving king
     {
         // Update king bit and king position
-        m_pieces[not m_turn][5] = destination_bit;
         m_king_position[not m_turn] = destination_square;
 
         state_info->isCheck = isDiscoverCheck(origin_square, destination_square);
@@ -1375,9 +1374,9 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             // Castling
             if (move.getData() == 16772) // White kingside castling
             {
-                m_pieces[0][3] &= ~128;
+                m_pieces[3] &= ~128;
                 m_bitboard_by_color[0] &= ~128;
-                m_pieces[0][3] |= 32;
+                m_pieces[3] |= 32;
                 m_bitboard_by_color[0] |= 32;
 
                 m_board[7] = 7;
@@ -1392,9 +1391,9 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             }
             else if (move.getData() == 16516) // White queenside castling
             {
-                m_pieces[0][3] &= ~1;
+                m_pieces[3] &= ~1;
                 m_bitboard_by_color[0] &= ~1;
-                m_pieces[0][3] |= 8;
+                m_pieces[3] |= 8;
                 m_bitboard_by_color[0] |= 8;
 
                 m_board[0] = 7;
@@ -1412,9 +1411,9 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 // Direct check
                 state_info->isCheck = state_info->previous->checkBits[3] & 2305843009213693952ULL;
 
-                m_pieces[1][3] &= ~9223372036854775808ULL;
+                m_pieces[3] &= ~9223372036854775808ULL;
                 m_bitboard_by_color[1] &= ~9223372036854775808ULL;
-                m_pieces[1][3] |= 2305843009213693952ULL;
+                m_pieces[3] |= 2305843009213693952ULL;
                 m_bitboard_by_color[1] |= 2305843009213693952ULL;
 
                 m_board[63] = 7;
@@ -1429,9 +1428,9 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 // Direct check
                 state_info->isCheck = state_info->previous->checkBits[3] & 576460752303423488ULL;
 
-                m_pieces[1][3] &= ~72057594037927936ULL;
+                m_pieces[3] &= ~72057594037927936ULL;
                 m_bitboard_by_color[1] &= ~72057594037927936ULL;
-                m_pieces[1][3] |= 576460752303423488ULL;
+                m_pieces[3] |= 576460752303423488ULL;
                 m_bitboard_by_color[1] |= 576460752303423488ULL;
 
                 m_board[56] = 7;
@@ -1444,13 +1443,11 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
         }
         // Updating passant square
         state_info->pSquare = 0;
-        state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->pSquare];  
+        state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[0];  
     }
     else if (moved_piece == 0) // Moving Pawn
     {
         state_info->reversibleMovesMade = 0; // Move is irreversible
-
-        m_pieces[not m_turn][0] ^= (origin_bit | destination_bit);
 
         // Checks
         state_info->isCheck = givesCheck(origin_square, destination_square, 0);
@@ -1463,15 +1460,16 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
         {
             if (destination_bit & promotion_ranks[not m_turn]) // Promotions
             {
-                m_pieces[not m_turn][0] &= ~destination_bit;
+                m_pieces[0] ^= destination_bit;
 
                 int promoted_piece = move.getPromotingPiece() + 1;
-                m_pieces[not m_turn][promoted_piece] |= destination_bit;
-
+                m_pieces[promoted_piece] ^= destination_bit;
                 m_board[destination_square] = promoted_piece;
+
                 // Direct check and discover check
                 if (not state_info->isCheck)
                     state_info->isCheck = state_info->previous->checkBits[promoted_piece] & destination_bit || isPromotionCheck(promoted_piece, destination_square);
+                
                 // Set NNUEU input
                 nnueuChanges.add(NNUE_BASE[not m_turn][promoted_piece] + destination_square,
                                 NNUE_BASE[not m_turn][0] + origin_square);
@@ -1480,7 +1478,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
             }
             else // Passant
             {
-                m_pieces[m_turn][0] &= ~shift_forward[m_turn](destination_bit);
+                m_pieces[0] &= ~shift_forward[m_turn](destination_bit);
                 m_bitboard_by_color[m_turn] &= ~shift_forward[m_turn](destination_bit);
                 m_board[destination_square + pawn_move_offsets[not m_turn]] = 7;
 
@@ -1491,8 +1489,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 
                 // Set NNUEU input
                 nnueuChanges.addlast(NNUE_BASE[m_turn][0] + destination_square + pawn_move_offsets[not m_turn]);
+                
                 isPassant = true;
-
                 state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[m_turn][0][destination_square + pawn_move_offsets[not m_turn]];
             }
         }
@@ -1509,8 +1507,6 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     {
         state_info->reversibleMovesMade++; // Move is reversible
 
-        m_pieces[not m_turn][moved_piece] ^= (origin_bit | destination_bit);
-
         // Checks
         state_info->isCheck = givesCheck(origin_square, destination_square, moved_piece);
 
@@ -1520,7 +1516,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 
         // Updating passant square
         state_info->pSquare = 0;
-        state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->pSquare];        
+        state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[0];        
     
     }
     // Captures (Non passant)
@@ -1528,8 +1524,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     {
         state_info->reversibleMovesMade = 0; // Move is irreversible
 
-        m_pieces[m_turn][captured_piece] &= ~destination_bit;
-        m_bitboard_by_color[m_turn] &= ~destination_bit;
+        m_pieces[captured_piece] ^= destination_bit;
+        m_bitboard_by_color[m_turn] ^= destination_bit;
 
         // Set NNUEU input
         nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
@@ -1610,8 +1606,13 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 assert(false);
             }
         }
-        
-        assert(computeFullZobristKey() == state_info->zobristKey);
+        if (state_info->zobristKey != computeFullZobristKey()) // DEBUG
+        {
+            std::cerr << "Assertion failed in makeMove: state_info->zobristKey == computeFullZobristKey()\n";
+            std::cerr << "FEN: " << toFenString() << "\n";
+            std::cerr << "Move: " << move.toString() << "\n";
+            assert(false);
+        }
 #endif
     return nnueuChanges;
 }
@@ -1644,6 +1645,8 @@ void BitPosition::unmakeMove(T move)
 
     m_board[destination_square] = previous_captured_piece;
     m_board[origin_square] = moved_piece;
+
+    m_pieces[moved_piece] ^= (origin_bit | destination_bit);
     // Castling, Passant and promotions
     if (move.isSpecial())
     {
@@ -1651,13 +1654,12 @@ void BitPosition::unmakeMove(T move)
         if (move.getData() == 20412)
         {
             // Rook
-            m_pieces[m_turn][3] |= (1ULL << 63);
+            m_pieces[3] |= (1ULL << 63);
             m_bitboard_by_color[m_turn] |= (1ULL << 63);
-            m_pieces[m_turn][3] &= ~(1ULL << 61);
+            m_pieces[3] &= ~(1ULL << 61);
             m_bitboard_by_color[m_turn] &= ~(1ULL << 61);
 
             // King
-            m_pieces[m_turn][5] = (1ULL << 60);
             m_king_position[m_turn] = 60;
 
             m_board[63] = 3;
@@ -1668,13 +1670,12 @@ void BitPosition::unmakeMove(T move)
         else if (move.getData() == 20156)
         {
             // Rook
-            m_pieces[m_turn][3] |= (1ULL << 56);
+            m_pieces[3] |= (1ULL << 56);
             m_bitboard_by_color[m_turn] |= (1ULL << 56);
-            m_pieces[m_turn][3] &= ~(1ULL << 59);
+            m_pieces[3] &= ~(1ULL << 59);
             m_bitboard_by_color[m_turn] &= ~(1ULL << 59);
 
             // King
-            m_pieces[m_turn][5] = (1ULL << 60);
             m_king_position[m_turn] = 60;
 
             m_board[56] = 3;
@@ -1684,13 +1685,12 @@ void BitPosition::unmakeMove(T move)
         else if (move.getData() == 16772)
         {
             // Rook
-            m_pieces[m_turn][3] |= (1ULL << 7);
+            m_pieces[3] |= (1ULL << 7);
             m_bitboard_by_color[m_turn] |= (1ULL << 7);
-            m_pieces[m_turn][3] &= ~(1ULL << 5);
+            m_pieces[3] &= ~(1ULL << 5);
             m_bitboard_by_color[m_turn] &= ~(1ULL << 5);
 
             // King
-            m_pieces[m_turn][5] = (1ULL << 4);
             m_king_position[m_turn] = 4;
 
             m_board[7] = 3;
@@ -1700,13 +1700,12 @@ void BitPosition::unmakeMove(T move)
         else if (move.getData() == 16516)
         {
             // Rook
-            m_pieces[m_turn][3] |= 1ULL;
+            m_pieces[3] |= 1ULL;
             m_bitboard_by_color[m_turn] |= 1ULL;
-            m_pieces[m_turn][3] &= ~(1ULL << 3);
+            m_pieces[3] &= ~(1ULL << 3);
             m_bitboard_by_color[m_turn] &= ~(1ULL << 3);
 
             // King
-            m_pieces[m_turn][5] = (1ULL << 4);
             m_king_position[m_turn] = 4;
 
             m_board[0] = 3;
@@ -1716,24 +1715,21 @@ void BitPosition::unmakeMove(T move)
         // Unmaking promotions
         else if (destination_bit & promotion_ranks[m_turn])
         {
-            m_pieces[m_turn][0] |= origin_bit;
-            m_pieces[m_turn][move.getPromotingPiece() + 1] &= ~destination_bit;
+            m_pieces[0] |= origin_bit;
+            m_pieces[moved_piece] ^= origin_bit;
 
             // Unmaking captures in promotions
             if (previous_captured_piece != 7)
             {
-                m_pieces[not m_turn][previous_captured_piece] |= destination_bit;
+                m_pieces[previous_captured_piece] |= destination_bit;
                 m_bitboard_by_color[not m_turn] |= destination_bit;
             }
             m_board[origin_square] = 0;
         }
         else // Passant
         {
-            m_pieces[m_turn][0] |= origin_bit;
-            m_pieces[m_turn][0] &= ~destination_bit;
-
             // Restore captured pawn
-            m_pieces[not m_turn][0] |= shift_forward[not m_turn](destination_bit);
+            m_pieces[0] |= shift_forward[not m_turn](destination_bit);
             m_bitboard_by_color[not m_turn] |= shift_forward[not m_turn](destination_bit);
             m_board[destination_square + pawn_move_offsets[m_turn]] = 0;
             m_board[destination_square] = 7;
@@ -1744,19 +1740,12 @@ void BitPosition::unmakeMove(T move)
     {
         if (moved_piece == 5) // Unmove king
         {
-            m_pieces[m_turn][5] = origin_bit;
             m_king_position[m_turn] = origin_square;
-            // moveBlackKingNNUEInput();
-        }
-        else // Unmove any other piece
-        {
-            m_pieces[m_turn][moved_piece] |= origin_bit;
-            m_pieces[m_turn][moved_piece] &= ~destination_bit;
         }
         // Unmaking captures
         if (previous_captured_piece != 7)
         {
-            m_pieces[not m_turn][previous_captured_piece] |= destination_bit;
+            m_pieces[previous_captured_piece] |= destination_bit;
             m_bitboard_by_color[not m_turn] |= destination_bit;
         }
     }
@@ -1821,21 +1810,21 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     int destination_square = move.getDestinationSquare();
     uint64_t destination_bit = 1ULL << destination_square;
 
-    m_bitboard_all &= ~origin_bit;
-    m_bitboard_all |= destination_bit;
+    m_bitboard_all ^= origin_bit;
     m_bitboard_by_color[not m_turn] ^= (origin_bit | destination_bit);
     m_bitboard_by_color[m_turn] &= ~destination_bit;
 
-
     int moved_piece = m_board[origin_square];
     int captured_piece = m_board[destination_square];
-    assert(moved_piece != 7); // DEBUG: Moved piece must be a piece (not empty square or own piece)
 
     // Promotions (always to queen in captures)
     if (move.isSpecial())
     {
-        m_pieces[not m_turn][0] &= ~origin_bit;
-        m_pieces[not m_turn][4] |= destination_bit;
+        m_pieces[0] ^= origin_bit;
+        m_pieces[4] ^= destination_bit;
+
+        m_board[origin_square] = 7;
+        m_board[destination_square] = 4;
 
         // Set NNUE input
         nnueuChanges.add(NNUE_BASE[not m_turn][4] + destination_square,
@@ -1844,12 +1833,14 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
         // Captures (Non passant)
         if (captured_piece != 7)
         {
-            m_pieces[m_turn][captured_piece] &= ~destination_bit;
+            m_pieces[captured_piece] ^= destination_bit;
             // Set NNUE input
             nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
         }
-        m_board[origin_square] = 7;
-        m_board[destination_square] = 4;
+        else
+        {
+            m_bitboard_all ^= destination_bit;
+        }
 
         // Direct or discover checks
         state_info->isCheck = isQueenCheck(destination_square) or isDiscoverCheck(origin_square, destination_square);
@@ -1857,10 +1848,19 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     else // Normal captures
     {
         assert(captured_piece != 7); // Captured piece must be a piece (not empty square or own piece)
+        
+        m_pieces[captured_piece] ^= destination_bit;
+        m_pieces[moved_piece] ^= (origin_bit | destination_bit);
+
+        m_board[origin_square] = 7;
+        m_board[destination_square] = moved_piece;
+
+        // Set NNUE input
+        nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
+
         if (moved_piece == 5) // Moving king
         {
             // Update king bit and king position
-            m_pieces[not m_turn][5] = destination_bit;
             m_king_position[not m_turn] = destination_square;
 
             // Discover checks
@@ -1869,8 +1869,6 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
         // Moving any piece except king
         else
         {
-            m_pieces[not m_turn][moved_piece] ^= (origin_bit | destination_bit);
-
             // Checks
             state_info->isCheck = givesCheck(origin_square, destination_square, moved_piece);
 
@@ -1878,14 +1876,10 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             nnueuChanges.add(NNUE_BASE[not m_turn][moved_piece] + destination_square,
                              NNUE_BASE[not m_turn][moved_piece] + origin_square);
         }
-        // Captures (Non passant)
-        m_pieces[m_turn][captured_piece] &= ~destination_bit;
-        // Set NNUE input
-        nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
-
-        m_board[origin_square] = 7;
-        m_board[destination_square] = moved_piece;
     }
+    m_turn = not m_turn;
+    state_info->capturedPiece = captured_piece;
+    m_ply++;
     
 #ifndef NDEBUG // DEBUG
     // Clear bits if moving from or moving to a rook corner square (we dont need to do this in release mode since in quiescence search
@@ -1895,14 +1889,29 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
         if (mask)
             state_info->castlingRights &= ~mask;
     }
-#endif
-    m_turn = not m_turn;
-    state_info->capturedPiece = captured_piece;
-    m_ply++;
+    if (!posIsFine()) // DEBUG
+    {
+        std::cerr << "Assertion failed in makeCapture: posIsFine()\n";
+        std::cerr << "FEN: " << toFenString() << "\n";
+        std::cerr << "Move: " << move.toString() << "\n";
+        assert(false);
+    }
+    if (isKingInCheck(m_turn)) // DEBUG
+    {
+        std::cerr << "Assertion failed in makeCapture: !isKingInCheck(m_turn)\n";
+        std::cerr << "FEN: " << toFenString() << "\n";
+        std::cerr << "Move: " << move.toString() << "\n";
+        assert(false);
+    }
+    if (getIsCheckOnInitialization(m_turn) != state_info->isCheck) // DEBUG
+    {
+        std::cerr << "Assertion failed in makeCapture: getIsCheckOnInitialization(m_turn) == state_info->isCheck\n";
+        std::cerr << "FEN: " << toFenString() << "\n";
+        std::cerr << "Move: " << move.toString() << "\n";
+        assert(false);
+    }
     state_info->zobristKey = computeFullZobristKey();
-    assert(posIsFine());
-    assert(!isKingInCheck(m_turn));
-    assert(getIsCheckOnInitialization(m_turn) == state_info->isCheck);
+#endif
     return nnueuChanges;
 }
 template <typename T>
@@ -1938,13 +1947,13 @@ void BitPosition::unmakeCapture(T move)
         m_board[destination_square] = previous_captured_piece;
         m_board[origin_square] = 0;
         
-        m_pieces[m_turn][0] |= origin_bit;
-        m_pieces[m_turn][4] &= ~destination_bit;
+        m_pieces[0] |= origin_bit;
+        m_pieces[4] &= ~destination_bit;
 
         // Unmaking captures in promotions
         if (previous_captured_piece != 7)
         {
-            m_pieces[not m_turn][previous_captured_piece] |= destination_bit;
+            m_pieces[previous_captured_piece] |= destination_bit;
         }
         else
         {
@@ -1960,15 +1969,12 @@ void BitPosition::unmakeCapture(T move)
         m_board[origin_square] = moved_piece;
         if (moved_piece == 5) // Unmove king
         {
-            m_pieces[m_turn][5] = origin_bit;
             m_king_position[m_turn] = origin_square;
         }
-        else
-        {
-            m_pieces[m_turn][moved_piece] ^= (origin_bit | destination_bit);
-        }
+        m_pieces[moved_piece] |= origin_bit;
+        m_pieces[moved_piece] &= ~destination_bit;
         // Unmaking captures
-        m_pieces[not m_turn][previous_captured_piece] |= destination_bit;
+        m_pieces[previous_captured_piece] |= destination_bit;
     }
     
     m_turn = not m_turn;
@@ -2005,7 +2011,7 @@ bool BitPosition::isMate() const
     if (m_num_checks == 1) // Can we block with pieces?
     {
         // Knight block
-        uint64_t piece_moves = m_pieces[not m_turn][1] & ~state_info->pinnedPieces;
+        uint64_t piece_moves = m_pieces[1] & m_bitboard_by_color[not m_turn] & ~state_info->pinnedPieces;
         while (piece_moves)
         {
             if (precomputed_moves::knight_moves[popLeastSignificantBit(piece_moves)] & m_check_rays)
@@ -2013,7 +2019,7 @@ bool BitPosition::isMate() const
         }
 
         // Single move pawn block
-        uint64_t single_pawn_advances = shift_forward[not m_turn](m_pieces[not m_turn][0]) & ~m_bitboard_all;
+        uint64_t single_pawn_advances = shift_forward[not m_turn](m_pieces[0] & m_bitboard_by_color[not m_turn]) & ~m_bitboard_all;
         piece_moves = single_pawn_advances & m_check_rays;
         while (piece_moves)
         {
@@ -2031,7 +2037,7 @@ bool BitPosition::isMate() const
         }
 
         // Rook/Queen block
-        piece_moves = m_pieces[not m_turn][3] | m_pieces[not m_turn][4];
+        piece_moves = (m_pieces[3] | m_pieces[4]) & m_bitboard_by_color[not m_turn];
         while (piece_moves)
         {
             int origin{popLeastSignificantBit(piece_moves)};
@@ -2043,7 +2049,7 @@ bool BitPosition::isMate() const
             }
         }
         // Bishop/Queen block
-        piece_moves = m_pieces[not m_turn][2] | m_pieces[not m_turn][4];
+        piece_moves = (m_pieces[2] | m_pieces[4]) & m_bitboard_by_color[not m_turn];
         while (piece_moves)
         {
             int origin{popLeastSignificantBit(piece_moves)};
@@ -2076,7 +2082,7 @@ Move *BitPosition::inCheckPawnBlocksNonQueenProms(Move *&move_list) const
     if (m_turn)
     {
         // Single moves
-        uint64_t single_pawn_moves_bit{shift_up(m_pieces[0][0] & ~(state_info->diagonalPinnedPieces)) & ~m_bitboard_all};
+        uint64_t single_pawn_moves_bit{shift_up(m_pieces[0] & m_bitboard_by_color[0] & ~(state_info->diagonalPinnedPieces)) & ~m_bitboard_all};
         uint64_t single_pawn_moves_blocking_bit{single_pawn_moves_bit & m_check_rays};
         while (single_pawn_moves_blocking_bit)
         {
@@ -2100,7 +2106,7 @@ Move *BitPosition::inCheckPawnBlocksNonQueenProms(Move *&move_list) const
         // Passant block or capture
         if ((state_info->pSquare) != 0)
         {
-            for (int origin : getBitIndices(precomputed_moves::pawn_attacks[1][(state_info->pSquare)] & m_pieces[0][0]))
+            for (int origin : getBitIndices(precomputed_moves::pawn_attacks[1][(state_info->pSquare)] & m_pieces[0] & m_bitboard_by_color[0]))
                 if (kingIsSafeAfterPassant(origin, (state_info->pSquare) - 8)) // Legal
                 {
                     *move_list++ = Move(origin, (state_info->pSquare), 0);
@@ -2110,7 +2116,7 @@ Move *BitPosition::inCheckPawnBlocksNonQueenProms(Move *&move_list) const
     else
     {
         // Single moves
-        uint64_t single_pawn_moves_bit{shift_down(m_pieces[1][0] & ~(state_info->diagonalPinnedPieces)) & ~m_bitboard_all};
+        uint64_t single_pawn_moves_bit{shift_down(m_pieces[0] & m_bitboard_by_color[1] & ~(state_info->diagonalPinnedPieces)) & ~m_bitboard_all};
         uint64_t single_pawn_moves_blocking_bit{single_pawn_moves_bit & m_check_rays};
         while(single_pawn_moves_blocking_bit)
         {
@@ -2134,7 +2140,7 @@ Move *BitPosition::inCheckPawnBlocksNonQueenProms(Move *&move_list) const
         // Passant block or capture
         if ((state_info->pSquare) != 0)
         {
-            for (int origin : getBitIndices(precomputed_moves::pawn_attacks[0][(state_info->pSquare)] & m_pieces[1][0]))
+            for (int origin : getBitIndices(precomputed_moves::pawn_attacks[0][(state_info->pSquare)] & m_pieces[0] & m_bitboard_by_color[1]))
                 if (kingIsSafeAfterPassant(origin, (state_info->pSquare) + 8)) // Legal
                 {
                     *move_list++ = Move(origin, (state_info->pSquare), 0);
@@ -2147,7 +2153,7 @@ Move *BitPosition::inCheckPawnCapturesNonQueenProms(Move *&move_list) const
 {
     if (m_turn)
     {
-        uint64_t piece_bits = precomputed_moves::pawn_attacks[1][m_check_square] & m_pieces[0][0];
+        uint64_t piece_bits = precomputed_moves::pawn_attacks[1][m_check_square] & m_pieces[0] & m_bitboard_by_color[1];
         // Pawn captures from checking position
         while (piece_bits)
         {
@@ -2166,7 +2172,7 @@ Move *BitPosition::inCheckPawnCapturesNonQueenProms(Move *&move_list) const
     }
     else
     {
-        uint64_t piece_bits = precomputed_moves::pawn_attacks[1][m_check_square] & m_pieces[1][0];
+        uint64_t piece_bits = precomputed_moves::pawn_attacks[1][m_check_square] & m_pieces[0] & m_bitboard_by_color[1];
         // Pawn captures from checking position
         while (piece_bits)
         {
@@ -2193,7 +2199,7 @@ Move *BitPosition::inCheckPassantCaptures(Move *&move_list) const
         // Passant block or capture
         if (state_info->pSquare)
         {
-            uint64_t piece_bits = precomputed_moves::pawn_attacks[1][state_info->pSquare] & m_pieces[0][0];
+            uint64_t piece_bits = precomputed_moves::pawn_attacks[1][state_info->pSquare] & m_pieces[0] & m_bitboard_by_color[0];
             while (piece_bits)
             {
                 int origin = popLeastSignificantBit(piece_bits);
@@ -2209,7 +2215,7 @@ Move *BitPosition::inCheckPassantCaptures(Move *&move_list) const
         // Passant block or capture
         if (state_info->pSquare)
         {
-            uint64_t piece_bits = precomputed_moves::pawn_attacks[0][state_info->pSquare] & m_pieces[1][0];
+            uint64_t piece_bits = precomputed_moves::pawn_attacks[0][state_info->pSquare] & m_pieces[0] & m_bitboard_by_color[1];
             while (piece_bits)
             {
                 int origin = popLeastSignificantBit(piece_bits);
@@ -2228,7 +2234,7 @@ Move *BitPosition::pawnNonCapturesNonQueenProms(Move *&move_list) const
     if (m_turn)
     {
         // Single moves
-        uint64_t single_pawn_moves_bit{shift_up(m_pieces[0][0] & ~(state_info->diagonalPinnedPieces)) & ~m_bitboard_all};
+        uint64_t single_pawn_moves_bit{shift_up(m_pieces[0] & m_bitboard_by_color[0] & ~(state_info->diagonalPinnedPieces)) & ~m_bitboard_all};
         for (int destination : getBitIndices(single_pawn_moves_bit))
         {
             if (destination < 56) // Non promotions
@@ -2248,14 +2254,14 @@ Move *BitPosition::pawnNonCapturesNonQueenProms(Move *&move_list) const
             *move_list++ = Move(destination - 16, destination);
         }
         // Right shift captures and non-queen promotions
-        for (int destination : getBitIndices(shift_up_right(m_pieces[0][0] & NON_RIGHT_BITBOARD & ~(state_info->straightPinnedPieces)) & m_bitboard_by_color[m_turn] & EIGHT_ROW_BITBOARD))
+        for (int destination : getBitIndices(shift_up_right(m_pieces[0] & m_bitboard_by_color[0] & NON_RIGHT_BITBOARD & ~(state_info->straightPinnedPieces)) & m_bitboard_by_color[m_turn] & EIGHT_ROW_BITBOARD))
         {
             *move_list++ = Move(destination - 9, destination, 0);
             *move_list++ = Move(destination - 9, destination, 1);
             *move_list++ = Move(destination - 9, destination, 2);
         }
         // Left shift captures and non-queen promotions
-        for (int destination : getBitIndices(shift_up_left(m_pieces[0][0] & NON_LEFT_BITBOARD & ~(state_info->straightPinnedPieces)) & m_bitboard_by_color[m_turn] & EIGHT_ROW_BITBOARD))
+        for (int destination : getBitIndices(shift_up_left(m_pieces[0] & m_bitboard_by_color[0] & NON_LEFT_BITBOARD & ~(state_info->straightPinnedPieces)) & m_bitboard_by_color[m_turn] & EIGHT_ROW_BITBOARD))
         {
             *move_list++ = Move(destination - 7, destination, 0);
             *move_list++ = Move(destination - 7, destination, 1);
@@ -2264,7 +2270,7 @@ Move *BitPosition::pawnNonCapturesNonQueenProms(Move *&move_list) const
         // Passant
         if (state_info->pSquare)
         {
-            for (int origin : getBitIndices(precomputed_moves::pawn_attacks[m_turn][(state_info->pSquare)] & m_pieces[0][0]))
+            for (int origin : getBitIndices(precomputed_moves::pawn_attacks[m_turn][(state_info->pSquare)] & m_pieces[0] & m_bitboard_by_color[0]))
                 if (kingIsSafeAfterPassant(origin, (state_info->pSquare) - 8)) // Legal
                 {
                     *move_list++ = Move(origin, (state_info->pSquare), 0);
@@ -2274,7 +2280,7 @@ Move *BitPosition::pawnNonCapturesNonQueenProms(Move *&move_list) const
     else // Black moves
     {
         // Single moves
-        uint64_t single_pawn_moves_bit{shift_down(m_pieces[1][0] & ~(state_info->diagonalPinnedPieces)) & ~m_bitboard_all};
+        uint64_t single_pawn_moves_bit{shift_down(m_pieces[0] & m_bitboard_by_color[1] & ~(state_info->diagonalPinnedPieces)) & ~m_bitboard_all};
         for (int destination : getBitIndices(single_pawn_moves_bit))
         {
             if (destination > 7) // Non promotions
@@ -2294,14 +2300,14 @@ Move *BitPosition::pawnNonCapturesNonQueenProms(Move *&move_list) const
             *move_list++ = Move(destination + 16, destination);
         }
         // Right shift captures and non-queen promotions
-        for (int destination : getBitIndices(shift_down_right(m_pieces[1][0] & NON_RIGHT_BITBOARD & ~(state_info->straightPinnedPieces)) & m_bitboard_by_color[m_turn] & FIRST_ROW_BITBOARD))
+        for (int destination : getBitIndices(shift_down_right(m_pieces[0] & m_bitboard_by_color[1] & NON_RIGHT_BITBOARD & ~(state_info->straightPinnedPieces)) & m_bitboard_by_color[m_turn] & FIRST_ROW_BITBOARD))
         {
             *move_list++ = Move(destination + 7, destination, 0);
             *move_list++ = Move(destination + 7, destination, 1);
             *move_list++ = Move(destination + 7, destination, 2);
         }
         // Left shift captures and non-queen promotions
-        for (int destination : getBitIndices(shift_down_left(m_pieces[1][0] & NON_LEFT_BITBOARD & ~(state_info->straightPinnedPieces)) & m_bitboard_by_color[m_turn] & FIRST_ROW_BITBOARD))
+        for (int destination : getBitIndices(shift_down_left(m_pieces[0] & m_bitboard_by_color[1] & NON_LEFT_BITBOARD & ~(state_info->straightPinnedPieces)) & m_bitboard_by_color[m_turn] & FIRST_ROW_BITBOARD))
         {
             *move_list++ = Move(destination + 9, destination, 0);
             *move_list++ = Move(destination + 9, destination, 1);
@@ -2310,7 +2316,7 @@ Move *BitPosition::pawnNonCapturesNonQueenProms(Move *&move_list) const
         // Passant
         if (state_info->pSquare)
         {
-            for (int origin : getBitIndices(precomputed_moves::pawn_attacks[m_turn][(state_info->pSquare)] & m_pieces[1][0]))
+            for (int origin : getBitIndices(precomputed_moves::pawn_attacks[m_turn][(state_info->pSquare)] & m_pieces[0] & m_bitboard_by_color[1]))
                 if (kingIsSafeAfterPassant(origin, (state_info->pSquare) + 8))
                 {
                     *move_list++ = Move(origin, (state_info->pSquare), 0);
@@ -2321,7 +2327,7 @@ Move *BitPosition::pawnNonCapturesNonQueenProms(Move *&move_list) const
 }
 Move *BitPosition::knightNonCaptures(Move *&move_list) const
 {
-    uint64_t piece_bits = m_pieces[not m_turn][1] & ~(state_info->pinnedPieces);
+    uint64_t piece_bits = m_pieces[1] & m_bitboard_by_color[not m_turn] & ~(state_info->pinnedPieces);
     while (piece_bits)
     {
         int origin = popLeastSignificantBit(piece_bits);
@@ -2336,7 +2342,7 @@ Move *BitPosition::knightNonCaptures(Move *&move_list) const
 }
 Move *BitPosition::bishopNonCaptures(Move *&move_list) const
 {
-    uint64_t piece_bits = m_pieces[not m_turn][2] & ~state_info->straightPinnedPieces;
+    uint64_t piece_bits = m_pieces[2] & m_bitboard_by_color[not m_turn] & ~state_info->straightPinnedPieces;
     while (piece_bits)
     {
         int origin = popLeastSignificantBit(piece_bits);
@@ -2351,7 +2357,7 @@ Move *BitPosition::bishopNonCaptures(Move *&move_list) const
 }
 Move *BitPosition::rookNonCaptures(Move *&move_list) const
 {
-    uint64_t piece_bits = m_pieces[not m_turn][3] & ~state_info->diagonalPinnedPieces;
+    uint64_t piece_bits = m_pieces[3] & m_bitboard_by_color[not m_turn] & ~state_info->diagonalPinnedPieces;
     while (piece_bits)
     {
         int origin = popLeastSignificantBit(piece_bits);
@@ -2366,7 +2372,7 @@ Move *BitPosition::rookNonCaptures(Move *&move_list) const
 }
 Move *BitPosition::queenNonCaptures(Move *&move_list) const
 {
-    uint64_t piece_bits = m_pieces[not m_turn][4];
+    uint64_t piece_bits = m_pieces[4] & m_bitboard_by_color[not m_turn];
     while (piece_bits)
     {
         int origin = popLeastSignificantBit(piece_bits);
