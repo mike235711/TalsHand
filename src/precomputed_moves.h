@@ -126,38 +126,6 @@ namespace precomputed_moves
         return a;
     }
 
-    /* public compile-time tables --------------------------------*/
-
-    inline constexpr std::array<std::array<uint64_t, 64>, 2> pawn_attacks = []
-    {
-        std::array<std::array<uint64_t, 64>, 2> a{};
-        for (int s = 0; s < 64; ++s)
-        {
-            a[0][s] = calc_pawn_attack(s, true);  // white
-            a[1][s] = calc_pawn_attack(s, false); // black
-        }
-        return a;
-    }();
-
-    /* “full” rays ----------------------------------------------*/
-
-    inline constexpr auto bishop_full_rays = []
-    {
-        std::array<uint64_t, 64> a{};
-        for (int s1 = 0; s1 < 64; ++s1)
-            for (int s2 = 0; s2 < 64; ++s2)
-                a[s1] |= calc_diagonal_between(s1, s2, true);
-        return a;
-    }();
-
-    inline constexpr auto rook_full_rays = []
-    {
-        std::array<uint64_t, 64> a{};
-        for (int s1 = 0; s1 < 64; ++s1)
-            for (int s2 = 0; s2 < 64; ++s2)
-                a[s1] |= calc_straight_between(s1, s2, true);
-        return a;
-    }();
 
     constexpr uint64_t full_line(int s1, int s2)
     {
@@ -186,20 +154,43 @@ namespace precomputed_moves
         return bb;
     }
 
-    inline constexpr auto knight_moves = make64(calc_knight);
-    inline constexpr auto king_moves = make64(calc_king);
+    inline constexpr std::array<std::array<uint64_t, 64>, 2> pawn_attacks = []
+    {
+        std::array<std::array<uint64_t, 64>, 2> a{};
+        for (int s = 0; s < 64; ++s)
+        {
+            a[0][s] = calc_pawn_attack(s, true);  // white
+            a[1][s] = calc_pawn_attack(s, false); // black
+        }
+        return a;
+    }();
+
+    inline constexpr std::array<uint64_t, 64> bishop_full_rays = []
+    {
+        std::array<uint64_t, 64> a{};
+        for (int s1 = 0; s1 < 64; ++s1)
+            for (int s2 = 0; s2 < 64; ++s2)
+                a[s1] |= calc_diagonal_between(s1, s2, true);
+        return a;
+    }();
+
+    inline constexpr std::array<uint64_t, 64> rook_full_rays = []
+    {
+        std::array<uint64_t, 64> a{};
+        for (int s1 = 0; s1 < 64; ++s1)
+            for (int s2 = 0; s2 < 64; ++s2)
+                a[s1] |= calc_straight_between(s1, s2, true);
+        return a;
+    }();
+
+    inline constexpr std::array<uint64_t, 64> knight_moves = make64(calc_knight);
+    inline constexpr std::array<uint64_t, 64> king_moves = make64(calc_king);
 
     /* one-blocker tables ---------------------------------------*/
 
-    inline constexpr auto precomputedBishopMovesTableOneBlocker2 = make64x64([](int s1, int s2)
-                                                                             { return calc_diagonal_between(s1, s2, true); });
-
-    inline constexpr auto precomputedRookMovesTableOneBlocker2 = make64x64([](int s1, int s2)
-                                                                           { return calc_straight_between(s1, s2, true); });
-
     inline constexpr auto precomputedQueenMovesTableOneBlocker2 = make64x64([](int s1, int s2)
-                                                                            { return precomputedBishopMovesTableOneBlocker2[s1][s2] |
-                                                                                     precomputedRookMovesTableOneBlocker2[s1][s2]; });
+                                                                            { return calc_straight_between(s1, s2, true) |
+                                                                                     calc_diagonal_between(s1, s2, true); });
 
     /* 8-square “on-line” ---------------------------------------*/
 

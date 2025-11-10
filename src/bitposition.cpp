@@ -371,49 +371,29 @@ void BitPosition::setCheckInfoOnInitialization()
         m_check_square = knightCheck;
     }
     // Bishop check
-    uint64_t piece_bits = m_pieces[2] & m_bitboard_by_color[m_turn];
+    uint64_t piece_bits = (m_pieces[2] | m_pieces[4]) & m_bitboard_by_color[m_turn];
     while (piece_bits)
     {
         int bishopSquare = popLeastSignificantBit(piece_bits);
-        uint64_t bishopRay{precomputed_moves::precomputedBishopMovesTableOneBlocker2[m_king_position[not m_turn]][bishopSquare]};
-        if ((bishopRay & m_bitboard_all) == (1ULL << bishopSquare))
+        uint64_t bishopRay{BmagicNOMASK(bishopSquare, m_bitboard_all)};
+        if (bishopRay & m_bitboard_by_color[not m_turn] & m_pieces[5])
         {
             m_num_checks++;
-            m_check_rays |= bishopRay & ~(1ULL << bishopSquare);
+            m_check_rays |= bishopRay & precomputed_moves::OnLineBitboards[bishopSquare][m_king_position[not m_turn]] & ~(1ULL << bishopSquare);
             m_check_square = bishopSquare;
         }
     }
     // Rook check
-    piece_bits = m_pieces[3] & m_bitboard_by_color[m_turn];
+    piece_bits = (m_pieces[3] | m_pieces[4]) & m_bitboard_by_color[m_turn];
     while (piece_bits)
     {
         int rookSquare = popLeastSignificantBit(piece_bits);
-        uint64_t rookRay{precomputed_moves::precomputedRookMovesTableOneBlocker2[m_king_position[not m_turn]][rookSquare]};
-        if ((rookRay & m_bitboard_all) == (1ULL << rookSquare))
+        uint64_t rookRay{RmagicNOMASK(rookSquare, m_bitboard_all)};
+        if (rookRay & m_bitboard_by_color[not m_turn] & m_pieces[5])
         {
             m_num_checks++;
-            m_check_rays |= rookRay & ~(1ULL << rookSquare);
+            m_check_rays |= rookRay & precomputed_moves::OnLineBitboards[rookSquare][m_king_position[not m_turn]] & ~(1ULL << rookSquare);
             m_check_square = rookSquare;
-        }
-    }
-    // Queen check
-    piece_bits = m_pieces[4] & m_bitboard_by_color[m_turn];
-    while (piece_bits)
-    {
-        int queenSquare = popLeastSignificantBit(piece_bits);
-        uint64_t queenRayDiag{precomputed_moves::precomputedBishopMovesTableOneBlocker2[m_king_position[not m_turn]][queenSquare]};
-        if ((queenRayDiag & m_bitboard_all) == (1ULL << queenSquare))
-        {
-            m_num_checks++;
-            m_check_rays |= queenRayDiag & ~(1ULL << queenSquare);
-            m_check_square = queenSquare;
-        }
-        uint64_t queenRayStra{precomputed_moves::precomputedRookMovesTableOneBlocker2[m_king_position[not m_turn]][queenSquare]};
-        if ((queenRayStra & m_bitboard_all) == (1ULL << queenSquare))
-        {
-            m_num_checks++;
-            m_check_rays |= queenRayStra & ~(1ULL << queenSquare);
-            m_check_square = queenSquare;
         }
     }
 }
@@ -444,9 +424,9 @@ void BitPosition::setCheckInfo()
     while (checks)
     {
         check_square = popLeastSignificantBit(checks);
-        uint64_t ray = precomputed_moves::precomputedBishopMovesTableOneBlocker2[m_king_position[not m_turn]][check_square];
+        uint64_t ray = BmagicNOMASK(m_king_position[not m_turn], m_bitboard_all) & BmagicNOMASK(check_square, m_bitboard_all);
         m_num_checks++;
-        m_check_rays |= ray & ~(1ULL << check_square);
+        m_check_rays |= ray;
         m_check_square = check_square;
     }
     // Rook and queen
@@ -454,9 +434,9 @@ void BitPosition::setCheckInfo()
     while (checks)
     {
         check_square = popLeastSignificantBit(checks);
-        uint64_t ray = precomputed_moves::precomputedRookMovesTableOneBlocker2[m_king_position[not m_turn]][check_square];
+        uint64_t ray = RmagicNOMASK(m_king_position[not m_turn], m_bitboard_all) & RmagicNOMASK(check_square, m_bitboard_all);
         m_num_checks++;
-        m_check_rays |= ray & ~(1ULL << check_square);
+        m_check_rays |= ray;
         m_check_square = check_square;
     }
 }
@@ -526,7 +506,7 @@ void BitPosition::setBlockersAndPinsInAB()
     while (snipers_bits)
     // For each square corresponding to black bishop raying black king
     {
-        uint64_t bishop_ray = precomputed_moves::precomputedBishopMovesTableOneBlocker2[popLeastSignificantBit(snipers_bits)][m_king_position[not m_turn]] & m_bitboard_all & ~(1ULL << m_king_position[not m_turn]);
+        uint64_t bishop_ray = precomputed_moves::precomputedQueenMovesTableOneBlocker2[popLeastSignificantBit(snipers_bits)][m_king_position[not m_turn]] & m_bitboard_all & ~(1ULL << m_king_position[not m_turn]);
         if ((bishop_ray & m_bitboard_by_color[not m_turn]) && hasOneOne(bishop_ray))
         {
             state_info->diagonalPinnedPieces |= bishop_ray;
@@ -537,7 +517,7 @@ void BitPosition::setBlockersAndPinsInAB()
     while (snipers_bits)
     // For each square corresponding to black rook raying black king
     {
-        uint64_t rook_ray = precomputed_moves::precomputedRookMovesTableOneBlocker2[popLeastSignificantBit(snipers_bits)][m_king_position[not m_turn]] & m_bitboard_all & ~(1ULL << m_king_position[not m_turn]);
+        uint64_t rook_ray = precomputed_moves::precomputedQueenMovesTableOneBlocker2[popLeastSignificantBit(snipers_bits)][m_king_position[not m_turn]] & m_bitboard_all & ~(1ULL << m_king_position[not m_turn]);
         if ((rook_ray & m_bitboard_by_color[not m_turn]) && hasOneOne(rook_ray))
         {
             state_info->straightPinnedPieces |= rook_ray;
@@ -672,18 +652,16 @@ inline bool BitPosition::isDiscoverCheck(int origin_square, int destination_squa
 
 inline bool BitPosition::isQueenCheck(int destination_square)
 {
-    if ((precomputed_moves::precomputedQueenMovesTableOneBlocker2[destination_square][m_king_position[m_turn]] & m_bitboard_all) == (m_pieces[5] & m_bitboard_by_color[m_turn]))
-        return true;
-    return false;
+    return (QmagicNOMASK(destination_square, m_bitboard_all)) & m_pieces[5] & m_bitboard_by_color[m_turn] != 0;
 }
 
 bool BitPosition::isPromotionCheck(int piece, int destination_square)
 {
-    if (piece == 2 && ((precomputed_moves::precomputedBishopMovesTableOneBlocker2[destination_square][m_king_position[m_turn]] & m_bitboard_all) == (m_pieces[5] & m_bitboard_by_color[m_turn])))
+    if (piece == 2 && BmagicNOMASK(destination_square, m_bitboard_all) & m_pieces[5] & m_bitboard_by_color[m_turn])
         return true;
-    else if (piece == 3 && ((precomputed_moves::precomputedRookMovesTableOneBlocker2[destination_square][m_king_position[m_turn]] & m_bitboard_all) == (m_pieces[5] & m_bitboard_by_color[m_turn])))
+    else if (piece == 3 && RmagicNOMASK(destination_square, m_bitboard_all) & m_pieces[5] & m_bitboard_by_color[m_turn])
         return true;
-    else if (piece == 4 && ((precomputed_moves::precomputedQueenMovesTableOneBlocker2[destination_square][m_king_position[m_turn]] & m_bitboard_all) == (m_pieces[5] & m_bitboard_by_color[m_turn])))
+    else if (piece == 4 && QmagicNOMASK(destination_square, m_bitboard_all) & m_pieces[5] & m_bitboard_by_color[m_turn])
         return true;
     return false;
 }
