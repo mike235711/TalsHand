@@ -99,7 +99,6 @@ namespace
 
             if (quiescent)
             {
-                pos.setBlockersPinsAndCheckBitsInQS();
                 if (pos.getIsCheck())
                 {
                     pos.setCheckInfo();
@@ -111,7 +110,7 @@ namespace
                         }
                         ++leaf_nodes;
                     }
-
+                    pos.setCheckInfo();
                     pos.setBlockersAndPinsInAB();
                     pos.setCheckBits();
                     QSMoveSelectorCheckNonCaptures selNC(pos);
@@ -196,7 +195,6 @@ namespace
 
         if (quiescent)
         {
-            pos.setBlockersPinsAndCheckBitsInQS();
             if (pos.getIsCheck())
             {
                 pos.setCheckInfo();
@@ -216,6 +214,7 @@ namespace
                     
                     total_nodes += child_nodes;
                 }
+                pos.setCheckInfo();
                 pos.setBlockersAndPinsInAB();
                 pos.setCheckBits();
                 QSMoveSelectorCheckNonCaptures non_captures_move_selector(pos);
