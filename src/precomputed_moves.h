@@ -128,9 +128,6 @@ namespace precomputed_moves
 
     /* public compile-time tables --------------------------------*/
 
-    inline constexpr auto knight_moves = make64(calc_knight);
-    inline constexpr auto king_moves = make64(calc_king);
-
     inline constexpr std::array<std::array<uint64_t, 64>, 2> pawn_attacks = []
     {
         std::array<std::array<uint64_t, 64>, 2> a{};
@@ -189,17 +186,10 @@ namespace precomputed_moves
         return bb;
     }
 
+    inline constexpr auto knight_moves = make64(calc_knight);
+    inline constexpr auto king_moves = make64(calc_king);
+
     /* one-blocker tables ---------------------------------------*/
-
-    inline constexpr auto precomputedBishopMovesTableOneBlocker = make64x64([](int s1, int s2)
-                                                                            { return calc_diagonal_between(s1, s2, false); });
-
-    inline constexpr auto precomputedRookMovesTableOneBlocker = make64x64([](int s1, int s2)
-                                                                          { return calc_straight_between(s1, s2, false); });
-
-    inline constexpr auto precomputedQueenMovesTableOneBlocker = make64x64([](int s1, int s2)
-                                                                           { return precomputedBishopMovesTableOneBlocker[s1][s2] |
-                                                                                    precomputedRookMovesTableOneBlocker[s1][s2]; });
 
     inline constexpr auto precomputedBishopMovesTableOneBlocker2 = make64x64([](int s1, int s2)
                                                                              { return calc_diagonal_between(s1, s2, true); });

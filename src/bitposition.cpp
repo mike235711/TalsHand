@@ -489,7 +489,7 @@ void BitPosition::setBlockersPinsAndCheckBitsInQS()
     while (snipers_bits)
     // For each square corresponding to opponent slider raying our king
     {
-        uint64_t ray = precomputed_moves::precomputedQueenMovesTableOneBlocker[popLeastSignificantBit(snipers_bits)][m_king_position[m_turn]] & m_bitboard_all;
+        uint64_t ray = precomputed_moves::precomputedQueenMovesTableOneBlocker2[popLeastSignificantBit(snipers_bits)][m_king_position[m_turn]] & m_bitboard_all & ~(1ULL << m_king_position[m_turn]);
         if (ray && hasOneOne(ray))
             state_info->blockersForKing |= ray;
     }
@@ -498,7 +498,7 @@ void BitPosition::setBlockersPinsAndCheckBitsInQS()
     while (snipers_bits)
     // For each square corresponding to opponent slider raying our king
     {
-        uint64_t ray = precomputed_moves::precomputedQueenMovesTableOneBlocker[popLeastSignificantBit(snipers_bits)][m_king_position[not m_turn]] & m_bitboard_all;
+        uint64_t ray = precomputed_moves::precomputedQueenMovesTableOneBlocker2[popLeastSignificantBit(snipers_bits)][m_king_position[not m_turn]] & m_bitboard_all & ~(1ULL << m_king_position[not m_turn]);
         if ((ray & m_bitboard_by_color[not m_turn]) && hasOneOne(ray))
         {
             state_info->pinnedPieces |= ray;
@@ -519,7 +519,7 @@ void BitPosition::setBlockersAndPinsInAB()
     while (snipers_bits)
     // For each square corresponding to our sniper raying opponent king
     {
-        uint64_t ray = precomputed_moves::precomputedQueenMovesTableOneBlocker[popLeastSignificantBit(snipers_bits)][m_king_position[m_turn]] & m_bitboard_all;
+        uint64_t ray = precomputed_moves::precomputedQueenMovesTableOneBlocker2[popLeastSignificantBit(snipers_bits)][m_king_position[m_turn]] & m_bitboard_all & ~(1ULL << m_king_position[m_turn]);
         if (ray && hasOneOne(ray))
             state_info->blockersForKing |= ray;
     }
@@ -528,7 +528,7 @@ void BitPosition::setBlockersAndPinsInAB()
     while (snipers_bits)
     // For each square corresponding to black bishop raying black king
     {
-        uint64_t bishop_ray = precomputed_moves::precomputedBishopMovesTableOneBlocker[popLeastSignificantBit(snipers_bits)][m_king_position[not m_turn]] & m_bitboard_all;
+        uint64_t bishop_ray = precomputed_moves::precomputedBishopMovesTableOneBlocker2[popLeastSignificantBit(snipers_bits)][m_king_position[not m_turn]] & m_bitboard_all & ~(1ULL << m_king_position[not m_turn]);
         if ((bishop_ray & m_bitboard_by_color[not m_turn]) && hasOneOne(bishop_ray))
         {
             state_info->diagonalPinnedPieces |= bishop_ray;
@@ -539,7 +539,7 @@ void BitPosition::setBlockersAndPinsInAB()
     while (snipers_bits)
     // For each square corresponding to black rook raying black king
     {
-        uint64_t rook_ray = precomputed_moves::precomputedRookMovesTableOneBlocker[popLeastSignificantBit(snipers_bits)][m_king_position[not m_turn]] & m_bitboard_all;
+        uint64_t rook_ray = precomputed_moves::precomputedRookMovesTableOneBlocker2[popLeastSignificantBit(snipers_bits)][m_king_position[not m_turn]] & m_bitboard_all & ~(1ULL << m_king_position[not m_turn]);
         if ((rook_ray & m_bitboard_by_color[not m_turn]) && hasOneOne(rook_ray))
         {
             state_info->straightPinnedPieces |= rook_ray;
