@@ -487,7 +487,7 @@ void BitPosition::setBlockersPinsAndCheckBitsInQS()
     // Blockers of own bishops, rooks and queens
     uint64_t snipers_bits = ((m_pieces[2] | m_pieces[4]) & m_bitboard_by_color[not m_turn] & precomputed_moves::bishop_full_rays[m_king_position[m_turn]]) | ((m_pieces[3] | m_pieces[4]) & m_bitboard_by_color[not m_turn] & precomputed_moves::rook_full_rays[m_king_position[m_turn]]);
     while (snipers_bits)
-    // For each square corresponding to black bishop raying black king
+    // For each square corresponding to opponent slider raying our king
     {
         uint64_t ray = precomputed_moves::precomputedQueenMovesTableOneBlocker[popLeastSignificantBit(snipers_bits)][m_king_position[m_turn]] & m_bitboard_all;
         if (ray && hasOneOne(ray))
@@ -496,7 +496,7 @@ void BitPosition::setBlockersPinsAndCheckBitsInQS()
     // Pins of opponent bishops, rooks and queens
     snipers_bits = ((m_pieces[2] | m_pieces[4]) & m_bitboard_by_color[m_turn] & precomputed_moves::bishop_full_rays[m_king_position[not m_turn]]) | ((m_pieces[3] | m_pieces[4]) & m_bitboard_by_color[m_turn] & precomputed_moves::rook_full_rays[m_king_position[not m_turn]]);
     while (snipers_bits)
-    // For each square corresponding to black bishop raying black king
+    // For each square corresponding to opponent slider raying our king
     {
         uint64_t ray = precomputed_moves::precomputedQueenMovesTableOneBlocker[popLeastSignificantBit(snipers_bits)][m_king_position[not m_turn]] & m_bitboard_all;
         if ((ray & m_bitboard_by_color[not m_turn]) && hasOneOne(ray))
@@ -566,11 +566,8 @@ bool BitPosition::isLegal(const T *move) const
     else
     {
         int origin_square = move->getOriginSquare();
-        // Knight moves are always legal
-        if ((1ULL << origin_square) & m_pieces[1])
-            return true;
         // King moves
-        else if (origin_square == m_king_position[not m_turn])
+        if (origin_square == m_king_position[not m_turn])
             return newKingSquareIsSafe(move->getDestinationSquare());
         // Rest of pieces
         else
@@ -584,12 +581,9 @@ bool BitPosition::isNormalMoveLegal(int origin_square, int destination_square) c
 // This is only called in isMate within QuisenceSearch
 {
     // Move is legal if piece is not pinned, otherwise if origin, destination and king position are aligned
-    // Knight moves are always legal
-    if ((1ULL << origin_square) & m_pieces[1])
-        return true;
     // King moves
-    else if (origin_square == m_king_position[not m_turn])
-        return newKingSquareIsSafe(destination_square); // FIX THIS FOR BOTH COLORS
+    if (origin_square == m_king_position[not m_turn])
+        return newKingSquareIsSafe(destination_square);
     // Rest of pieces
     else
         return ((1ULL << origin_square) & (state_info->pinnedPieces)) == 0 || precomputed_moves::OnLineBitboards[origin_square][destination_square] & m_pieces[5] & m_bitboard_by_color[not m_turn];
@@ -603,12 +597,9 @@ bool BitPosition::isCaptureLegal(const T *move) const
 // This is only called when origin is in line with king position and there are no pieces in between
 {
     int origin_square = move->getOriginSquare();
-    // Knight moves are always legal
-    if ((1ULL << origin_square) & m_pieces[1])
-        return true;
     // King moves
-    else if (origin_square == m_king_position[not m_turn])
-        return newKingSquareIsSafe(move->getDestinationSquare()); // FIX THIS FOR BOTH COLORS
+    if (origin_square == m_king_position[not m_turn])
+        return newKingSquareIsSafe(move->getDestinationSquare());
     // Rest of pieces
     else
         return ((1ULL << origin_square) & (state_info->pinnedPieces)) == 0 || precomputed_moves::OnLineBitboards[origin_square][move->getDestinationSquare()] & m_pieces[5] & m_bitboard_by_color[not m_turn];
@@ -1870,7 +1861,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             // Discover checks
             state_info->isCheck = isDiscoverCheck(origin_square, destination_square);
             
-            // Set NNUE input (king moves are recorded with same source/dest to mark as king move)
+            // Set NNUE input
             nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
         }
         // Moving any piece except king
@@ -1879,7 +1870,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             // Checks
             state_info->isCheck = givesCheck(origin_square, destination_square, moved_piece);
 
-            // Set NNUE input - MUST call add() before addlast()
+            // Set NNUE input
             nnueuChanges.add(NNUE_BASE[not m_turn][moved_piece] + destination_square,
                              NNUE_BASE[not m_turn][moved_piece] + origin_square);
             nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
