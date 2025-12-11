@@ -1,4 +1,4 @@
-# Tals Hand
+# La Mano de Miguelito
 
 In this project I will create a chess engine from scratch. Classical chess engines usually consist of 3 main parts:
 
