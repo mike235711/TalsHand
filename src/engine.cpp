@@ -403,7 +403,7 @@ void THEngine::readUci()
     {
         if (token == "uci")
         {
-            std::cout << "id name TalsHand\n"
+            std::cout << "id name La Mano de Miguelito\n"
                       << "id author Miguel Córdoba\n"
                       << "uciok\n"
                       << std::flush;

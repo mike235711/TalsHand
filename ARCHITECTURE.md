@@ -1,4 +1,4 @@
-# Architecture and Key Components
+# La Mano de Miguelito - Architecture and Key Components
 
 The engine's architecture is divided into several main components, all located in the `src/` directory:
 
@@ -94,14 +94,18 @@ Minor fluctuations (<5%) can be due to background system load. For stable baseli
 
 #### Extending
 To add more benchmark depths or positions, edit `tests/test_perft_perf.cpp`. Keep depths modest (≤5) to maintain fast CI runs.
+1) To build and test the Debug&Verbose version:
+cmake -B build_debug_verbose -DCMAKE_BUILD_TYPE=Debug -DENABLE_VERBOSE_DEBUG=ON
+cmake --build build_debug_verbose
+cd build_debug_verbose && ctest --verbose
 2) To build and test the Debug&Verbose version:
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_VERBOSE_DEBUG=ON
-cmake --build build
-cd build && ctest --verbose
+cmake -B build_debug -DCMAKE_BUILD_TYPE=Debug -DENABLE_VERBOSE_DEBUG=OFF
+cmake --build build_debug
+cd build_debug && ctest --verbose
 3) To build and test the Release version:
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DENABLE_VERBOSE_DEBUG=OFF
-cmake --build build
-cd build && ctest --verbose
+cmake --B build_release -DCMAKE_BUILD_TYPE=Release -DENABLE_VERBOSE_DEBUG=OFF
+cmake --build build_release
+cd build_release && ctest --verbose
 
 ## Versioning and Releases
 
