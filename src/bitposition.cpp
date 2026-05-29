@@ -652,7 +652,7 @@ inline bool BitPosition::isDiscoverCheck(int origin_square, int destination_squa
 
 inline bool BitPosition::isQueenCheck(int destination_square)
 {
-    return (QmagicNOMASK(destination_square, m_bitboard_all)) & m_pieces[5] & m_bitboard_by_color[m_turn] != 0;
+    return (QmagicNOMASK(destination_square, m_bitboard_all) & m_pieces[5] & m_bitboard_by_color[m_turn]) != 0;
 }
 
 bool BitPosition::isPromotionCheck(int piece, int destination_square)
@@ -752,8 +752,13 @@ ScoredMove *BitPosition::pawnCapturesAndQueenProms(ScoredMove *&move_list) const
 }
 ScoredMove *BitPosition::knightCaptures(ScoredMove *&move_list) const
 // All knight captures
+// NOTE: we do NOT pre-filter pinned knights here. In QS the pins are computed
+// lazily inside QSMoveSelectorNotCheck::select_legal (after init() has already
+// generated the captures), so state_info->pinnedPieces is not valid yet at this
+// point. Pinned knights are filtered out correctly by isCaptureLegal, exactly as
+// for bishop/rook/queen captures.
 {
-    uint64_t moveable_knights{m_pieces[1] & m_bitboard_by_color[not m_turn] & ~state_info->pinnedPieces};
+    uint64_t moveable_knights{m_pieces[1] & m_bitboard_by_color[not m_turn]};
     uint64_t enemy = m_bitboard_by_color[m_turn];
     while (moveable_knights)
     {
@@ -2366,22 +2371,29 @@ Move *BitPosition::kingNonCaptures(Move *&move_list) const
     {
         *move_list++ = Move(m_king_position[not m_turn], destination);
     }
+    // NOTE: This generator is only used by the test-only QS move selectors (QS perft).
+    // Unlike makeMove, makeCapture does not maintain castlingRights in release builds
+    // (a deliberate optimization, since the real quiescence search never generates
+    // castling). In a QS perft a capture can therefore displace a castling rook while
+    // the castling right stays set, so we must additionally verify that the rook is
+    // actually still on its corner square before emitting the castle. This check lives
+    // here (test-only path) and never touches the real search hot path.
     if (m_turn)
     {
-        // Kingside castling
-        if ((state_info->castlingRights & WHITE_KS) && (m_king_position[0] == 4) && (m_bitboard_all & 96) == 0)
+        // Kingside castling (rook must still be on h1)
+        if ((state_info->castlingRights & WHITE_KS) && (m_king_position[0] == 4) && (m_bitboard_all & 96) == 0 && (m_pieces[3] & m_bitboard_by_color[0] & (1ULL << 7)))
             *move_list++ = castling_moves[0][0];
-        // Queenside castling
-        if ((state_info->castlingRights & WHITE_QS) && (m_king_position[0] == 4) && (m_bitboard_all & 14) == 0)
+        // Queenside castling (rook must still be on a1)
+        if ((state_info->castlingRights & WHITE_QS) && (m_king_position[0] == 4) && (m_bitboard_all & 14) == 0 && (m_pieces[3] & m_bitboard_by_color[0] & 1ULL))
             *move_list++ = castling_moves[0][1];
     }
     else
     {
-        // Kingside castling
-        if ((state_info->castlingRights & BLACK_KS) && (m_king_position[1] == 60) && (m_bitboard_all & 6917529027641081856) == 0)
+        // Kingside castling (rook must still be on h8)
+        if ((state_info->castlingRights & BLACK_KS) && (m_king_position[1] == 60) && (m_bitboard_all & 6917529027641081856) == 0 && (m_pieces[3] & m_bitboard_by_color[1] & (1ULL << 63)))
             *move_list++ = castling_moves[1][0];
-        // Queenside castling
-        if ((state_info->castlingRights & BLACK_QS) && (m_king_position[1] == 60) && (m_bitboard_all & 1008806316530991104) == 0)
+        // Queenside castling (rook must still be on a8)
+        if ((state_info->castlingRights & BLACK_QS) && (m_king_position[1] == 60) && (m_bitboard_all & 1008806316530991104) == 0 && (m_pieces[3] & m_bitboard_by_color[1] & (1ULL << 56)))
             *move_list++ = castling_moves[1][1];
     }
     return move_list;
