@@ -14,7 +14,9 @@ Run after collecting metrics for one or more versions:
 """
 from __future__ import annotations
 
+import csv
 import json
+from collections import defaultdict
 from pathlib import Path
 
 import matplotlib
@@ -114,6 +116,50 @@ def chart_elo(records: list[dict]) -> str | None:
     return _save(fig, "elo_gain.png")
 
 
+def load_tactic_times() -> dict[str, dict[str, dict[int, float]]]:
+    """version -> tactic -> depth -> time, from version_test_results/tactic_results_v*.csv."""
+    data: dict[str, dict[str, dict[int, float]]] = defaultdict(lambda: defaultdict(dict))
+    for path in RESULTS_DIR.glob("tactic_results_v*.csv"):
+        version = path.stem.replace("tactic_results_v", "")
+        try:
+            for row in csv.DictReader(path.open()):
+                data[version][row["TacticName"]][int(row["Depth"])] = float(row["TimeTakenSeconds"])
+        except Exception as exc:  # noqa: BLE001
+            print(f"[report] skipping {path.name}: {exc}")
+    return data
+
+
+def tactic_totals() -> tuple[dict[str, float], int]:
+    """Per-version total time to solve every tactic to the deepest depth that is
+    common to all versions (apples-to-apples; lower is better). Returns
+    ({version: total_seconds}, common_depth)."""
+    data = load_tactic_times()
+    if not data:
+        return ({}, 0)
+    # Depth contiguous from 2, so the common reference depth is the smallest
+    # per-(version,tactic) max depth across the whole dataset.
+    dstar = min(max(depths) for ver in data.values() for depths in ver.values())
+    totals: dict[str, float] = {}
+    for version, tactics in data.items():
+        totals[version] = sum(depths.get(dstar, 0.0) for depths in tactics.values())
+    return (totals, dstar)
+
+
+def chart_tactic_times() -> tuple[str | None, dict[str, float], int]:
+    totals, dstar = tactic_totals()
+    if len(totals) < 2:
+        return (None, totals, dstar)
+    versions = sorted(totals, key=semver_key)
+    times_ms = [totals[v] * 1000.0 for v in versions]
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.plot(versions, times_ms, marker="o", color="#c44e52")
+    ax.set_ylabel(f"total time to solve tactics @ depth {dstar} (ms)")
+    ax.set_xlabel("version")
+    ax.set_title("Tactic search time by version (lower is better)")
+    ax.grid(True, alpha=0.3)
+    return (_save(fig, "tactic_times.png"), totals, dstar)
+
+
 def build_table(records: list[dict]) -> str:
     rows = ["| Version | AB Mnps | QS Mnps | Mates | Elo vs prev |",
             "|---|---|---|---|---|"]
@@ -142,11 +188,18 @@ def main() -> int:
     print(f"[report] {len(records)} version(s): " +
           ", ".join(r.get("version", "?") for r in records))
 
+    tactic_chart, tactic_totals_map, tactic_depth = chart_tactic_times()
     charts = {
         "Perft speed": chart_nps(records),
+        "Tactic search time": tactic_chart,
         "Mate puzzles": chart_mates(records),
         "Strength gain (Elo)": chart_elo(records),
     }
+    if tactic_totals_map:
+        print("[report] tactic totals @ depth "
+              f"{tactic_depth}: " +
+              ", ".join(f"{v}={t*1000:.1f}ms" for v, t in sorted(tactic_totals_map.items(),
+                                                                 key=lambda kv: semver_key(kv[0]))))
 
     lines = [
         "# TalsHand version progression report",
