@@ -1,0 +1,41 @@
+build/
+tests/.cache/
+
+# C++ build artifacts
+build_debug/
+build_release/
+*.o
+*.a
+*.so
+*.exe
+*.dll
+*.lib
+*.dylib
+
+# macOS specific
+.DS_Store
+*.dSYM/
+
+# Log and temporary files
+*.log
+engine_log.txt
+out.txt
+*~
+*.swp
+*.stackdump
+
+# CMake generated files
+cmake_install.cmake
+CMakeCache.txt
+CTestTestfile.cmake
+Makefile
+Testing/
+**/CMakeFiles/
+**/_deps/
+
+# Executables
+main_nnueu_test
+test_qs_pos2_debug
+
+# VSCode
+.vscode/
