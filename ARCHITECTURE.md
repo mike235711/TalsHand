@@ -131,10 +131,30 @@ This project follows [Semantic Versioning](https://semver.org/). The release pro
 
 5.  **Create GitHub Release**: Navigate to the "Releases" section of the GitHub repository. Draft a new release, select the tag you just pushed, and copy the release notes from `CHANGELOG.md` into the description.
 
+### Release quality gate and progression tracking
+
+Before bumping the version (step 1 above), the new build must be shown to be **no weaker than the previous release**, and the result is recorded so improvement can be tracked across versions. The tooling lives in `scripts/` and uses `python-chess`:
+
+* **`scripts/version_match.py`** — plays a match between two builds (binary paths or git refs; a ref is built in a throw-away worktree). Each opening is played twice (one game with each engine as White) over bullet (1+1, 1+3) and blitz (3+2, 5+2) time controls, and reports the score and Elo ± error per time control and overall. Writes a JSON report with `--output`.
+* **`scripts/release_gate.py`** — runs `version_match.py` against the previous git tag (auto-detected) and **exits non-zero unless the Elo lower bound is ≥ 0** (i.e. the new build is at least as strong). Use `--min-elo N` to demand proven improvement. This is the gate to run before tagging.
+* **`scripts/collect_release_metrics.py`** — records objective per-version metrics (perft NPS, mate-puzzles solved, and optionally the match Elo via `--match <prev tag>`) into `version_test_results/<version>.json`.
+* **`scripts/generate_report.py`** — turns all `version_test_results/*.json` into `version_test_results/REPORT.md` plus PNG charts under `version_test_results/charts/` (perft speed, mates solved, Elo gain per version). The Markdown report renders directly on GitHub, so no notebook is needed.
+
+Typical release flow:
+```bash
+# 1. Quality gate: current build must not be weaker than the previous tag
+python3 scripts/release_gate.py            # must pass before bumping the version
+
+# 2. Record this version's metrics (including the match Elo) and refresh the report
+python3 scripts/collect_release_metrics.py --match v0.3.1
+python3 scripts/generate_report.py
+git add version_test_results/ && git commit -m "chore: record vX.Y.Z metrics"
+
+# 3. Proceed with the Versioning steps above (changelog, tag, push, release)
+```
+
 ## TODO
 - Try to improve the move generator and see if we can reach stockfish's nodes per second.
-- Include the final test for version release which is to play several games on different positions and time controls against last oldest version and see the score.
-- Make in some way a tracking on the test results for each version release.
 - Create specific tests for Zobrist key generation (e.g., for transpositions and move/unmove symmetry).
 - Add a process for creating regression tests for any fixed bugs.
 - Try to see if including zobrist key updates and ttable lookup in quiesence is worth it.

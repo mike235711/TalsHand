@@ -1,0 +1,103 @@
+{
+  "version": "0.3.2",
+  "perft": {
+    "depth": 4,
+    "AB": [
+      {
+        "position": 1,
+        "nps": 27191482
+      },
+      {
+        "position": 2,
+        "nps": 38947520
+      },
+      {
+        "position": 3,
+        "nps": 17016135
+      },
+      {
+        "position": 4,
+        "nps": 35034088
+      },
+      {
+        "position": 5,
+        "nps": 35280333
+      },
+      {
+        "position": 6,
+        "nps": 41698194
+      }
+    ],
+    "QS": [
+      {
+        "position": 1,
+        "nps": 25174901
+      },
+      {
+        "position": 2,
+        "nps": 38794156
+      },
+      {
+        "position": 3,
+        "nps": 17187202
+      },
+      {
+        "position": 4,
+        "nps": 34933194
+      },
+      {
+        "position": 5,
+        "nps": 34068598
+      },
+      {
+        "position": 6,
+        "nps": 41066169
+      }
+    ],
+    "AB_median_nps": 35157210.5,
+    "QS_median_nps": 34500896.0
+  },
+  "mates": {
+    "solved": 6,
+    "total": 6,
+    "puzzles": [
+      {
+        "name": "Back-rank mate in 1 (a)",
+        "move": "a1a8",
+        "score": 30001,
+        "solved": true
+      },
+      {
+        "name": "Back-rank mate in 1 (b)",
+        "move": "f1f8",
+        "score": 30001,
+        "solved": true
+      },
+      {
+        "name": "Rook box mate in 1",
+        "move": "h1h8",
+        "score": 30001,
+        "solved": true
+      },
+      {
+        "name": "Back-rank mate in 1 (c)",
+        "move": "a1a8",
+        "score": 30001,
+        "solved": true
+      },
+      {
+        "name": "WAC.001 (mate)",
+        "move": "g3g6",
+        "score": 30002,
+        "solved": true
+      },
+      {
+        "name": "Legall-style mate in 2",
+        "move": "d5d8",
+        "score": 30001,
+        "solved": true
+      }
+    ],
+    "passed": true
+  }
+}
