@@ -5,6 +5,8 @@
 #include <memory>
 #include <deque>
 #include <filesystem>
+#include <string>
+#include <utility>
 
 #include <optional>
 
@@ -59,6 +61,9 @@ public:
     // Performance testing utilities
     std::string searchFixedDepth(int8_t depth);
     std::string searchWithTimeConstraint(int timeLimitMs);
+    // Like searchFixedDepth but also returns the root score (useful for mate
+    // detection in tests: a forced mate yields a score of large magnitude).
+    std::pair<std::string, int16_t> searchFixedDepthWithScore(int8_t depth);
 
 private:
     BitPosition pos;

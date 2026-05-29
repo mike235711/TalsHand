@@ -135,7 +135,6 @@ This project follows [Semantic Versioning](https://semver.org/). The release pro
 - Try to improve the move generator and see if we can reach stockfish's nodes per second.
 - Include the final test for version release which is to play several games on different positions and time controls against last oldest version and see the score.
 - Make in some way a tracking on the test results for each version release.
-- Build tests for "Mate in X" puzzles to validate search efficiency and correctness.
 - Implement tests for the UCI protocol to ensure robust communication with GUIs.
 - Create specific tests for Zobrist key generation (e.g., for transpositions and move/unmove symmetry).
 - Add a process for creating regression tests for any fixed bugs.

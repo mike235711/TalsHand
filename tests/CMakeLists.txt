@@ -34,6 +34,14 @@ if(CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG" AND NOT ENABLE_VERBOSE_DEBUG)
         Talshand::lib
     )
     catch_discover_tests(nnueu_tests)
+
+    # "Mate in X" puzzle tests
+    add_executable(mate_tests "test_mate.cpp")
+    target_link_libraries(mate_tests PRIVATE
+        Catch2::Catch2WithMain
+        Talshand::lib
+    )
+    catch_discover_tests(mate_tests)
 endif()
 
 # Scenario 2: Debug Verbose Build (Tactics up to Depth 5)
@@ -82,4 +90,12 @@ if(CMAKE_BUILD_TYPE_UPPER STREQUAL "RELEASE")
         Talshand::lib
     )
     catch_discover_tests(nnueu_tests)
+
+    # "Mate in X" puzzle tests (also run in release, where deeper mates are fast)
+    add_executable(mate_tests test_mate.cpp)
+    target_link_libraries(mate_tests PRIVATE
+        Catch2::Catch2WithMain
+        Talshand::lib
+    )
+    catch_discover_tests(mate_tests)
 endif()
