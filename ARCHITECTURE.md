@@ -133,7 +133,6 @@ This project follows [Semantic Versioning](https://semver.org/). The release pro
 
 ## TODO
 - Try to improve the move generator and see if we can reach stockfish's nodes per second.
-- Build tests for the nnueu loading and accumulation.
 - Include the final test for version release which is to play several games on different positions and time controls against last oldest version and see the score.
 - Make in some way a tracking on the test results for each version release.
 - Build tests for "Mate in X" puzzles to validate search efficiency and correctness.

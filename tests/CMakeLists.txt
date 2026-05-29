@@ -26,6 +26,14 @@ if(CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG" AND NOT ENABLE_VERBOSE_DEBUG)
         Talshand::lib
     )
     catch_discover_tests(perft_tests)
+
+    # NNUEU loading and accumulation tests
+    add_executable(nnueu_tests "test_nnueu.cpp")
+    target_link_libraries(nnueu_tests PRIVATE
+        Catch2::Catch2WithMain
+        Talshand::lib
+    )
+    catch_discover_tests(nnueu_tests)
 endif()
 
 # Scenario 2: Debug Verbose Build (Tactics up to Depth 5)
@@ -66,4 +74,12 @@ if(CMAKE_BUILD_TYPE_UPPER STREQUAL "RELEASE")
         Talshand::lib
     )
     catch_discover_tests(perft_perf_tests)
+
+    # NNUEU loading and accumulation tests (also run in release)
+    add_executable(nnueu_tests test_nnueu.cpp)
+    target_link_libraries(nnueu_tests PRIVATE
+        Catch2::Catch2WithMain
+        Talshand::lib
+    )
+    catch_discover_tests(nnueu_tests)
 endif()
