@@ -143,6 +143,11 @@ def play_game(white: chess.engine.SimpleEngine,
             result = mover.play(board, limit)
         except chess.engine.EngineError as exc:
             loser = board.turn
+            try:  # record the position that made the engine die (for crash repro)
+                with open("/tmp/crash_fens.txt", "a") as fh:
+                    fh.write(board.fen() + "\n")
+            except Exception:
+                pass
             return ("0-1" if loser == chess.WHITE else "1-0", f"engine error: {exc}")
         elapsed = time.monotonic() - t0
 
@@ -187,6 +192,20 @@ def elo_with_error(points: float, n: int, results: list[float]) -> tuple[float, 
     return (elo, 1.96 * d_elo * stderr)
 
 
+def safe_quit(engine) -> None:
+    """Quit an engine, tolerating one that has already crashed/terminated
+    (quitting a dead engine otherwise raises EngineTerminatedError)."""
+    if engine is None:
+        return
+    try:
+        engine.quit()
+    except Exception:
+        try:
+            engine.close()
+        except Exception:
+            pass
+
+
 def run_match(new_bin: Path, old_bin: Path, tc_map: dict[str, tuple[float, float]],
               openings: list[str]) -> dict:
     print(f"[match] NEW={new_bin}\n[match] OLD={old_bin}", flush=True)
@@ -198,9 +217,10 @@ def run_match(new_bin: Path, old_bin: Path, tc_map: dict[str, tuple[float, float
         for op_idx, fen in enumerate(openings):
             # Two games: new as White, then new as Black.
             for new_is_white in (True, False):
-                new_eng = chess.engine.SimpleEngine.popen_uci(str(new_bin))
-                old_eng = chess.engine.SimpleEngine.popen_uci(str(old_bin))
+                new_eng = old_eng = None
                 try:
+                    new_eng = chess.engine.SimpleEngine.popen_uci(str(new_bin))
+                    old_eng = chess.engine.SimpleEngine.popen_uci(str(old_bin))
                     if new_is_white:
                         white_result, reason = play_game(new_eng, old_eng, fen, base, inc)
                         new_pov = white_result
@@ -208,9 +228,13 @@ def run_match(new_bin: Path, old_bin: Path, tc_map: dict[str, tuple[float, float
                         white_result, reason = play_game(old_eng, new_eng, fen, base, inc)
                         # flip to new engine's POV
                         new_pov = {"1-0": "0-1", "0-1": "1-0", "1/2-1/2": "1/2-1/2"}[white_result]
+                except Exception as exc:  # noqa: BLE001
+                    # Setup/teardown failure (e.g. an engine that crashed at
+                    # startup). Don't kill the whole match; record a void game.
+                    new_pov, reason = ("1/2-1/2", f"harness error: {exc}")
                 finally:
-                    new_eng.quit()
-                    old_eng.quit()
+                    safe_quit(new_eng)
+                    safe_quit(old_eng)
 
                 if new_pov == "1-0":
                     res.wins += 1
