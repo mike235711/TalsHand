@@ -30,8 +30,8 @@ bool BitPosition::see_ge(Move m, int threshold) const
         return (precomputed_moves::pawn_attacks[1][sq] & m_pieces[0] & m_bitboard_by_color[0]) | // white pawns
                (precomputed_moves::pawn_attacks[0][sq] & m_pieces[0] & m_bitboard_by_color[1]) | // black pawns
                (precomputed_moves::knight_moves[sq] & m_pieces[1]) |
-               (BmagicNOMASK(sq, occ) & m_pieces[2] | m_pieces[4]) |
-               (RmagicNOMASK(sq, occ) & m_pieces[3] | m_pieces[4]) |
+               (BmagicNOMASK(sq, occ) & (m_pieces[2] | m_pieces[4])) |
+               (RmagicNOMASK(sq, occ) & (m_pieces[3] | m_pieces[4])) |
                (precomputed_moves::king_moves[sq] & m_pieces[5]);
     };
 
