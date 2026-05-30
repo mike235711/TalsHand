@@ -645,8 +645,12 @@ inline bool BitPosition::isDiscoverCheck(int origin_square, int destination_squa
 // For direct checks we know because of the move
 {
     // If piece is not blocking or moving in blocking ray
+    // NOTE: use the enemy king POSITION (reliably maintained) rather than
+    // `m_pieces[5] & m_bitboard_by_color[m_turn]`: during a king move makeMove
+    // calls this before the colour bitboards are fully consistent, so the latter
+    // can wrongly include the just-moved king and miss the discovered check.
     if ((1ULL << origin_square) & (state_info->previous->blockersForKing))
-        return (precomputed_moves::OnLineBitboards[origin_square][destination_square] & m_pieces[5] & m_bitboard_by_color[m_turn]) == 0;
+        return (precomputed_moves::OnLineBitboards[origin_square][destination_square] & (1ULL << m_king_position[m_turn])) == 0;
     return false;
 }
 
