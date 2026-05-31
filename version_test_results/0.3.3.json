@@ -1,0 +1,564 @@
+{
+  "version": "0.3.3",
+  "perft": {
+    "depth": 4,
+    "AB": [
+      {
+        "position": 1,
+        "nps": 69895837
+      },
+      {
+        "position": 2,
+        "nps": 67693988
+      },
+      {
+        "position": 3,
+        "nps": 47573098
+      },
+      {
+        "position": 4,
+        "nps": 57759876
+      },
+      {
+        "position": 5,
+        "nps": 70865537
+      },
+      {
+        "position": 6,
+        "nps": 82105968
+      }
+    ],
+    "QS": [
+      {
+        "position": 1,
+        "nps": 66486140
+      },
+      {
+        "position": 2,
+        "nps": 74997054
+      },
+      {
+        "position": 3,
+        "nps": 43905762
+      },
+      {
+        "position": 4,
+        "nps": 55635301
+      },
+      {
+        "position": 5,
+        "nps": 73644688
+      },
+      {
+        "position": 6,
+        "nps": 87927151
+      }
+    ],
+    "AB_median_nps": 68794912.5,
+    "QS_median_nps": 70065414.0
+  },
+  "mates": {
+    "solved": 6,
+    "total": 6,
+    "puzzles": [
+      {
+        "name": "Back-rank mate in 1 (a)",
+        "move": "a1a8",
+        "score": 30001,
+        "solved": true
+      },
+      {
+        "name": "Back-rank mate in 1 (b)",
+        "move": "f1f8",
+        "score": 30001,
+        "solved": true
+      },
+      {
+        "name": "Rook box mate in 1",
+        "move": "h1h8",
+        "score": 30001,
+        "solved": true
+      },
+      {
+        "name": "Back-rank mate in 1 (c)",
+        "move": "a1a8",
+        "score": 30001,
+        "solved": true
+      },
+      {
+        "name": "WAC.001 (mate)",
+        "move": "g3g6",
+        "score": 30001,
+        "solved": true
+      },
+      {
+        "name": "Legall-style mate in 2",
+        "move": "d5d8",
+        "score": 30002,
+        "solved": true
+      }
+    ],
+    "passed": true
+  },
+  "match_vs": {
+    "opponent": "v0.3.1",
+    "new_binary": "/tmp/claude-504/talshand-HEAD-1cgh96sj/build_release/src/talshand_exe",
+    "old_binary": "/tmp/claude-504/talshand-v0.3.1-fdcdaz_u/build_release/src/talshand_exe",
+    "per_tc": [
+      {
+        "tc": "bullet-1+1",
+        "base": 60.0,
+        "inc": 1.0,
+        "wins": 5,
+        "draws": 8,
+        "losses": 3,
+        "n": 16,
+        "points": 9.0,
+        "score_pct": 56.25,
+        "elo": 43.65778777002724,
+        "elo_error": 124.31256414874451,
+        "games": [
+          {
+            "opening": 0,
+            "new_white": true,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 0,
+            "new_white": false,
+            "result_new_pov": "1/2-1/2",
+            "reason": "max plies (200)"
+          },
+          {
+            "opening": 1,
+            "new_white": true,
+            "result_new_pov": "1-0",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 1,
+            "new_white": false,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 2,
+            "new_white": true,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 2,
+            "new_white": false,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 3,
+            "new_white": true,
+            "result_new_pov": "1/2-1/2",
+            "reason": "insufficient_material"
+          },
+          {
+            "opening": 3,
+            "new_white": false,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 4,
+            "new_white": true,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 4,
+            "new_white": false,
+            "result_new_pov": "1/2-1/2",
+            "reason": "insufficient_material"
+          },
+          {
+            "opening": 5,
+            "new_white": true,
+            "result_new_pov": "1-0",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 5,
+            "new_white": false,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 6,
+            "new_white": true,
+            "result_new_pov": "1-0",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 6,
+            "new_white": false,
+            "result_new_pov": "1-0",
+            "reason": "time forfeit"
+          },
+          {
+            "opening": 7,
+            "new_white": true,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 7,
+            "new_white": false,
+            "result_new_pov": "1-0",
+            "reason": "checkmate"
+          }
+        ]
+      },
+      {
+        "tc": "bullet-1+3",
+        "base": 60.0,
+        "inc": 3.0,
+        "wins": 6,
+        "draws": 5,
+        "losses": 5,
+        "n": 16,
+        "points": 8.5,
+        "score_pct": 53.125,
+        "elo": 21.74306492903708,
+        "elo_error": 145.9430999177451,
+        "games": [
+          {
+            "opening": 0,
+            "new_white": true,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 0,
+            "new_white": false,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 1,
+            "new_white": true,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 1,
+            "new_white": false,
+            "result_new_pov": "1-0",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 2,
+            "new_white": true,
+            "result_new_pov": "1-0",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 2,
+            "new_white": false,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 3,
+            "new_white": true,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 3,
+            "new_white": false,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 4,
+            "new_white": true,
+            "result_new_pov": "1-0",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 4,
+            "new_white": false,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 5,
+            "new_white": true,
+            "result_new_pov": "1-0",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 5,
+            "new_white": false,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 6,
+            "new_white": true,
+            "result_new_pov": "1-0",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 6,
+            "new_white": false,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 7,
+            "new_white": true,
+            "result_new_pov": "1-0",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 7,
+            "new_white": false,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          }
+        ]
+      },
+      {
+        "tc": "blitz-3+2",
+        "base": 180.0,
+        "inc": 2.0,
+        "wins": 3,
+        "draws": 8,
+        "losses": 5,
+        "n": 16,
+        "points": 7.0,
+        "score_pct": 43.75,
+        "elo": -43.6577877700272,
+        "elo_error": 124.31256414874453,
+        "games": [
+          {
+            "opening": 0,
+            "new_white": true,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 0,
+            "new_white": false,
+            "result_new_pov": "1-0",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 1,
+            "new_white": true,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 1,
+            "new_white": false,
+            "result_new_pov": "1/2-1/2",
+            "reason": "max plies (200)"
+          },
+          {
+            "opening": 2,
+            "new_white": true,
+            "result_new_pov": "1-0",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 2,
+            "new_white": false,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 3,
+            "new_white": true,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 3,
+            "new_white": false,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 4,
+            "new_white": true,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 4,
+            "new_white": false,
+            "result_new_pov": "1-0",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 5,
+            "new_white": true,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 5,
+            "new_white": false,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 6,
+            "new_white": true,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 6,
+            "new_white": false,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 7,
+            "new_white": true,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 7,
+            "new_white": false,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          }
+        ]
+      },
+      {
+        "tc": "blitz-5+2",
+        "base": 300.0,
+        "inc": 2.0,
+        "wins": 2,
+        "draws": 7,
+        "losses": 7,
+        "n": 16,
+        "points": 5.5,
+        "score_pct": 34.375,
+        "elo": -112.3306438302777,
+        "elo_error": 132.85142697332333,
+        "games": [
+          {
+            "opening": 0,
+            "new_white": true,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 0,
+            "new_white": false,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 1,
+            "new_white": true,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 1,
+            "new_white": false,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 2,
+            "new_white": true,
+            "result_new_pov": "1-0",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 2,
+            "new_white": false,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 3,
+            "new_white": true,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 3,
+            "new_white": false,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 4,
+            "new_white": true,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 4,
+            "new_white": false,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 5,
+            "new_white": true,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 5,
+            "new_white": false,
+            "result_new_pov": "1/2-1/2",
+            "reason": "threefold_repetition"
+          },
+          {
+            "opening": 6,
+            "new_white": true,
+            "result_new_pov": "1-0",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 6,
+            "new_white": false,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 7,
+            "new_white": true,
+            "result_new_pov": "0-1",
+            "reason": "checkmate"
+          },
+          {
+            "opening": 7,
+            "new_white": false,
+            "result_new_pov": "0-1",
+            "reason": "time forfeit"
+          }
+        ]
+      }
+    ],
+    "overall": {
+      "wins": 16,
+      "draws": 28,
+      "losses": 20,
+      "n": 64,
+      "points": 30.0,
+      "score_pct": 46.875,
+      "elo": -21.74306492903707,
+      "elo_error": 64.3736176063968
+    }
+  }
+}
