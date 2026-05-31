@@ -464,7 +464,7 @@ void BitPosition::setBlockersPinsAndCheckBitsInQS()
     // For each square corresponding to opponent slider raying our king
     {
         uint64_t ray = precomputed_moves::precomputedQueenMovesTableOneBlocker2[popLeastSignificantBit(snipers_bits)][m_king_position[m_turn]] & m_bitboard_all & ~(1ULL << m_king_position[m_turn]);
-        if (ray && hasOneOne(ray))
+        if (ray & m_bitboard_by_color[not m_turn] && hasOneOne(ray))
             state_info->blockersForKing |= ray;
     }
     // Pins of opponent bishops, rooks and queens
@@ -494,7 +494,7 @@ void BitPosition::setBlockersAndPinsInAB()
     // For each square corresponding to our sniper raying opponent king
     {
         uint64_t ray = precomputed_moves::precomputedQueenMovesTableOneBlocker2[popLeastSignificantBit(snipers_bits)][m_king_position[m_turn]] & m_bitboard_all & ~(1ULL << m_king_position[m_turn]);
-        if (ray && hasOneOne(ray))
+        if (ray & m_bitboard_by_color[not m_turn] && hasOneOne(ray))
             state_info->blockersForKing |= ray;
     }
     // Pins of opponent bishops and queens
@@ -1873,7 +1873,7 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     m_turn = not m_turn;
     state_info->capturedPiece = captured_piece;
     m_ply++;
-    
+
 #ifndef NDEBUG // DEBUG
     // Clear bits if moving from or moving to a rook corner square (we dont need to do this in release mode since in quiescence search
     // we dont care about castling rights)
