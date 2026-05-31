@@ -287,10 +287,6 @@ void BitPosition::setIsCheckOnInitialization()
     // Bishop
     if ((BmagicNOMASK(m_king_position[not m_turn], m_bitboard_all) & m_pieces[2] & m_bitboard_by_color[m_turn]))
         state_info->isCheck = true;
-
-    // King
-    if ((precomputed_moves::king_moves[m_king_position[not m_turn]] & m_pieces[5] & m_bitboard_by_color[m_turn]) != 0)
-        state_info->isCheck = true;
 }
 
 bool BitPosition::getIsCheckOnInitialization(bool turn)
