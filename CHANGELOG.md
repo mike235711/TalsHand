@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `inCheckOrderedCaptures`: removed a stale-pin pre-filter on the knight captures (`& ~state_info->pinnedPieces`). In quiescence search the pins are computed lazily in `QSMoveSelectorCheck::select_legal()`, i.e. *after* `init()` has already generated the captures, so `pinnedPieces` was stale when `inCheckOrderedCaptures` read it and a legal knight capture of the checker could be wrongly dropped (the engine could miss capturing the checking piece with a knight in QS). This mirrors the same fix applied to `knightCaptures` in 0.3.2; pinned knights are still filtered correctly by `isCaptureLegal`. Surfaced by the new QS-capture-consistency test (below) at depth ≥ 5.
+
+### Changed
+- Replaced the QS perft test with a direct QS-capture-vs-AB-legal consistency check (`THEngine::qsCaptureConsistencyTest`): it walks the alpha-beta legal-move tree and asserts that, at every node, the quiescence capture selectors emit exactly the AB-legal moves that are captures or queen promotions (`BitPosition::isQSCaptureOrQueenProm`). This removed the test-only non-capture QS generators and selectors (`QSMoveSelector{NotCheck,Check}NonCaptures`, `pawn/knight/bishop/rook/queen/kingNonCaptures`, `kingNonCapturesInCheck`, `inCheckPawnBlocksNonQueenProms`, `inCheckPawnCapturesNonQueenProms`, `inCheckPassantCaptures`) plus the quiescent branch of the perft driver and the dead `tests.h`, shrinking the codebase. UCI move parsing (`findMoveFromString`) now enumerates moves with the AB selectors, which also fixes parsing of under-promotions while in check.
+- `setBlockersPinsAndCheckBitsInQS` / `setBlockersAndPinsInAB`: discovered-check blockers are now restricted to own pieces (`& m_bitboard_by_color[not m_turn]`), a semantic cleanup (behaviourally inert: the only readers test own-piece origins).
+- Release builds add `-funroll-loops` and, on arm64, `-march=armv8.2-a+dotprod`.
+
 ## [0.3.3] - 2026-05-31
 
 Bug-fix release: corrects two strength/stability regressions introduced by the
