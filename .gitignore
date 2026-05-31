@@ -39,3 +39,7 @@ test_qs_pos2_debug
 
 # VSCode
 .vscode/
+
+# Local engine binaries for matches (built artifacts)
+bin_head/
+bin_v031/

@@ -75,6 +75,8 @@ class TCResult:
     wins: int = 0       # from the "new" engine's perspective
     draws: int = 0
     losses: int = 0
+    new_time_losses: int = 0  # games the NEW engine lost on the clock
+    old_time_losses: int = 0  # games the OLD engine lost on the clock
     games: list[dict] = field(default_factory=list)
 
     @property
@@ -242,6 +244,11 @@ def run_match(new_bin: Path, old_bin: Path, tc_map: dict[str, tuple[float, float
                     res.losses += 1
                 else:
                     res.draws += 1
+                if reason == "time forfeit":
+                    if new_pov == "0-1":
+                        res.new_time_losses += 1
+                    elif new_pov == "1-0":
+                        res.old_time_losses += 1
                 res.games.append({"opening": op_idx, "new_white": new_is_white,
                                   "result_new_pov": new_pov, "reason": reason})
                 print(f"  op{op_idx} new_{'W' if new_is_white else 'B'}: "
@@ -260,12 +267,18 @@ def run_match(new_bin: Path, old_bin: Path, tc_map: dict[str, tuple[float, float
         total.wins += res.wins
         total.draws += res.draws
         total.losses += res.losses
+        total.new_time_losses += res.new_time_losses
+        total.old_time_losses += res.old_time_losses
         elo, err = elo_with_error(res.points, res.n, scores)
         summary.append({"tc": res.tc, "base": res.base, "inc": res.inc,
                         "wins": res.wins, "draws": res.draws, "losses": res.losses,
                         "n": res.n, "points": res.points,
                         "score_pct": (100.0 * res.points / res.n) if res.n else 0.0,
                         "elo": elo, "elo_error": err,
+                        "new_time_losses": res.new_time_losses,
+                        "old_time_losses": res.old_time_losses,
+                        # >0 means the NEW build manages the clock better than the old one
+                        "time_mgmt_diff": res.old_time_losses - res.new_time_losses,
                         "games": res.games})
 
     elo, err = elo_with_error(total.points, total.n, all_results)
@@ -275,23 +288,33 @@ def run_match(new_bin: Path, old_bin: Path, tc_map: dict[str, tuple[float, float
         "overall": {"wins": total.wins, "draws": total.draws, "losses": total.losses,
                     "n": total.n, "points": total.points,
                     "score_pct": (100.0 * total.points / total.n) if total.n else 0.0,
-                    "elo": elo, "elo_error": err},
+                    "elo": elo, "elo_error": err,
+                    "new_time_losses": total.new_time_losses,
+                    "old_time_losses": total.old_time_losses,
+                    "time_mgmt_diff": total.old_time_losses - total.new_time_losses},
     }
 
 
 def print_summary(report: dict) -> None:
-    print("\n================ MATCH SUMMARY ================")
-    print(f"{'TC':<14} {'W-D-L':<12} {'score%':>7}  {'Elo':>8} {'±':>6}")
+    print("\n========================= MATCH SUMMARY =========================")
+    print(f"{'TC':<14} {'W-D-L':<12} {'score%':>7}  {'Elo':>8} {'±':>6}  {'timeLoss(new/old)':>17}")
     for s in report["per_tc"]:
         wdl = f"{s['wins']}-{s['draws']}-{s['losses']}"
+        tl = f"{s['new_time_losses']}/{s['old_time_losses']}"
         print(f"{s['tc']:<14} {wdl:<12} {s['score_pct']:>6.1f}%  "
-              f"{s['elo']:>+8.1f} {s['elo_error']:>6.1f}")
+              f"{s['elo']:>+8.1f} {s['elo_error']:>6.1f}  {tl:>17}")
     o = report["overall"]
     wdl = f"{o['wins']}-{o['draws']}-{o['losses']}"
-    print("-" * 47)
+    tl = f"{o['new_time_losses']}/{o['old_time_losses']}"
+    print("-" * 65)
     print(f"{'OVERALL':<14} {wdl:<12} {o['score_pct']:>6.1f}%  "
-          f"{o['elo']:>+8.1f} {o['elo_error']:>6.1f}")
-    print("===============================================")
+          f"{o['elo']:>+8.1f} {o['elo_error']:>6.1f}  {tl:>17}")
+    # Time-management score: net clock losses avoided vs the old build.
+    diff = o["time_mgmt_diff"]
+    verdict = ("better" if diff > 0 else "worse" if diff < 0 else "equal")
+    print(f"time-management: new lost {o['new_time_losses']} on time, old lost "
+          f"{o['old_time_losses']} -> new is {verdict} (diff {diff:+d})")
+    print("=================================================================")
 
 
 def main() -> int:
