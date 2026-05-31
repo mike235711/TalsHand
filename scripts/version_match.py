@@ -64,7 +64,7 @@ DEFAULT_OPENINGS: list[str] = [
     "rnbqkbnr/ppp1pppp/8/8/3pP3/8/PPP2PPP/RNBQKBNR w KQkq - 0 3",          # Centre game-ish
 ]
 
-MAX_PLIES = 400  # adjudicate as draw if a game runs this long
+MAX_PLIES = 200  # adjudicate as draw if a game runs this long (keeps drawn endgames from dragging on with increment)
 
 
 @dataclass
