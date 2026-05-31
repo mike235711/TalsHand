@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-05-31
+
+Bug-fix release: corrects two strength/stability regressions introduced by the
+2D→1D `m_pieces` refactor that shipped in 0.3.2. The refactor's ~8x move-generation
+speedup is kept; with these fixes the engine plays on par with 0.3.1 (no longer
+weaker) and no longer crashes in real games.
+
+### Fixed
+- `isDiscoverCheck`: discovered checks were missed on king moves. The 2D→1D refactor rewrote `m_pieces[m_turn][5]` (a clean enemy-king bitboard) as `m_pieces[5] & m_bitboard_by_color[m_turn]`, which during a king move (called before the colour bitboards are consistent) could include the just-moved king and miss the discovered check. A wrong `isCheck` then drove the in-check quiescence path to an out-of-bounds read (`m_check_square` left at 65), causing SIGSEGV in real games, and also weakened play. Now uses the enemy king position `m_king_position[m_turn]`.
+- `see_ge` (Static Exchange Evaluation): operator-precedence bug in the attacker computation. `BmagicNOMASK(sq, occ) & m_pieces[2] | m_pieces[4]` parses as `(... & m_pieces[2]) | m_pieces[4]`, treating *every* queen on the board as an attacker of every square (same on the rook line). This corrupted SEE, which quiescence uses to prune captures, weakening tactical play. Parenthesized: `... & (m_pieces[2] | m_pieces[4])`.
+
+### Added
+- Tests: NNUEU loading/accumulation, "Mate in X" puzzles, and UCI protocol handshake.
+- Release tooling under `scripts/`: a version-match harness (Elo and time-management metrics vs a previous build), a release gate, per-version metric collection, and a Markdown progression report under `version_test_results/`.
+
 ## [0.3.2] - 2026-05-29
 
 ### Fixed
