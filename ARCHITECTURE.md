@@ -154,14 +154,25 @@ git add version_test_results/ && git commit -m "chore: record vX.Y.Z metrics"
 ```
 
 ## TODO
-- Try to improve the move generator and see if we can reach stockfish's nodes per second.
+
+### Engine strength — search & evaluation (roughly easiest × most-effective first)
+These come from a Stockfish-vs-LaManodeMiguelito code comparison. Validate each with a version match (Elo).
+- **Store the best move in the transposition table.** `alphaBetaSearch` (`worker.cpp`) declares `best_move` but never assigns it, so internal nodes call `tt.save(..., Move(0), ...)` and the TT-move ordering — the single most valuable ordering signal — is inoperative (only the root stores a real move). Assign `best_move = move` on each improvement. While here, store a real **upper bound**: a fail-low (value ≤ the original alpha) is currently saved as "exact", which is both a correctness risk and lost cutoffs. ~One-line change, large gain.
+- **Real move ordering for the AB selectors.** `aBMoveValue` scores every quiet move `0` (so quiets are searched in generation order) and captures coarsely. Add MVV-LVA (victim × attacker) for captures, plus killer moves and a butterfly/history heuristic for quiets. Highest ROI together with the TT-move fix.
+- **Principal Variation Search (PVS).** The AB loop searches every move with the full `(-beta, -alpha)` window. Search the first move full, the rest with a null window `(-alpha-1, -alpha)`, and re-search at full window only on fail-high. Pays off once the ordering above is in place.
+- **SEE pruning in the main search.** `see_ge` is currently only used in quiescence; also prune clearly-losing captures (and later quiets) in `alphaBetaSearch`, with a margin scaled by depth.
+- **Aspiration windows.** Search the root with a narrow window around the previous iteration's score and widen on fail-high/low, instead of the current ±31000 full window.
+- **Late Move Reductions (LMR) in the main search.** Only the root reduces today. Reduce late/quiet moves in `alphaBetaSearch` by an amount driven by depth and move count (later also history/improving), with a full-depth re-search on fail-high.
+- **Lazy SMP multithreading.** The `ThreadPool` framework exists but only thread 0 searches. Run N worker threads sharing the global transposition table.
+- **Faster NNUEU evaluation (search is eval-bound).** Two big wins: SIMD (NEON on Apple Silicon) for the accumulator/affine layers, and accumulator caching ("Finny tables") to avoid full accumulator refreshes on king moves. Faster eval converts directly into search depth.
+
+### Other
 - Tune the quiescence SEE-pruning margin. QS currently prunes captures with `see_ge(capture, -120)` in `worker.cpp` (it only skips clearly-losing captures). Experiment with a tighter, position-aware threshold — e.g. `beta + 100`, which in a quick test made the depth-5 Tactic 2 study find the winning `c6c7` and netted +1 on the depth-5 tactics suite — and consider making it depth- or phase-dependent. Validate any change with a version match (Elo): aggressive QS pruning can help tactics in some positions while missing them in others (e.g. winning positions where `beta` is large).
 - Create specific tests for Zobrist key generation (e.g., for transpositions and move/unmove symmetry).
 - Add a process for creating regression tests for any fixed bugs.
 - Try to see if including zobrist key updates and ttable lookup in quiesence is worth it.
-- Aspiration windows
-- Build three nnueu's, one for openings, one for middle game and another for endgames.  
+- Build three nnueu's, one for openings, one for middle game and another for endgames.
 - Mate distance pruning
-- If not in check we can perform a static evaluation of the position
+- If not in check we can perform a static evaluation of the position (enables futility / reverse-futility / null-move pruning).
 - Build an ss to save search tree information
-- MultiThreading
+- Try to improve the move generator and see if we can reach stockfish's nodes per second.
