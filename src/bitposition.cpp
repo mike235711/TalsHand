@@ -1211,8 +1211,13 @@ Move *BitPosition::inCheckOrderedCaptures(Move *&move_list) const
             *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square, 3);
         }
     }
-    // Knight captures from checking position
-    piece_moves = precomputed_moves::knight_moves[m_check_square] & (m_pieces[1] & m_bitboard_by_color[not m_turn] & ~state_info->pinnedPieces);
+    // Knight captures from checking position.
+    // NOTE: do NOT pre-filter with state_info->pinnedPieces here. In QS the pins
+    // are computed lazily in QSMoveSelectorCheck::select_legal(), i.e. AFTER init()
+    // has already generated these captures, so pinnedPieces is stale at this point
+    // and could wrongly drop a legal knight capture of the checker. Pinned knights
+    // are filtered correctly by isCaptureLegal (same convention as knightCaptures).
+    piece_moves = precomputed_moves::knight_moves[m_check_square] & m_pieces[1] & m_bitboard_by_color[not m_turn];
     while (piece_moves)
     {
         *move_list++ = Move(popLeastSignificantBit(piece_moves), m_check_square);
