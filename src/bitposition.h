@@ -438,6 +438,9 @@ public:
         printBoard(m_board, "Board");
 
         printBitboards();
+
+        printChecksInfo();
+        printPinsInfo();
     }
 
     void printBitboards() const

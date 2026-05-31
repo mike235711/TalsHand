@@ -1309,6 +1309,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     }
     assert(move.getData() != 0); // DEBUG
     assert(not getIsCheckOnInitialization(not m_turn)); // DEBUG
+    std::string before_fen = toFenString();
 #endif
     NNUEU::NNUEUChange nnueuChanges;
     // Save irreversible aspects of position and create a new state
@@ -1341,7 +1342,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 
     if (moved_piece == 5) // Moving king
     {
-        // Update king bit and king position
+        // Update king position
         m_king_position[not m_turn] = destination_square;
 
         state_info->isCheck = isDiscoverCheck(origin_square, destination_square);
@@ -1542,6 +1543,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
     // is stored when making the next move to be able to go back.
     // So we store it in the m_ply+1 position because the initial position (or position after capture) is the m_ply 0.
     m_ply++;
+
 #ifndef NDEBUG // DEBUG
         if (!posIsFine()) // DEBUG
         {
@@ -1560,8 +1562,14 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
         if (getIsCheckOnInitialization(m_turn) != state_info->isCheck) // DEBUG
         {
             std::cerr << "Assertion failed in makeMove: getIsCheckOnInitialization(m_turn) == state_info->isCheck\n";
+            if (state_info->isCheck)
+                std::cerr << "Check with updates but not on initialization\n";
+            else
+                std::cerr << "Check on initialization but not with updates\n";
             std::cerr << "FEN: " << toFenString() << "\n";
             std::cerr << "Move: " << move.toString() << "\n";
+            std::cerr << "Blockers bitboard: " << state_info->previous->blockersForKing << "\n";
+            std::cerr << "Before FEN: " << before_fen << "\n";
             assert(false);
         }
         // If the castling rights are on, the king must be on initial square
@@ -1890,6 +1898,10 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
     if (getIsCheckOnInitialization(m_turn) != state_info->isCheck) // DEBUG
     {
         std::cerr << "Assertion failed in makeCapture: getIsCheckOnInitialization(m_turn) == state_info->isCheck\n";
+        if (state_info->isCheck)
+            std::cerr << "Check with updates but not on initialization\n";
+        else
+            std::cerr << "Check on initialization but not with updates\n";
         std::cerr << "FEN: " << toFenString() << "\n";
         std::cerr << "Move: " << move.toString() << "\n";
         assert(false);
