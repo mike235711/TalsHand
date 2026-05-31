@@ -157,6 +157,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
     // Baseline eval
     int16_t child_value;
     int16_t value{static_cast<int16_t>(-31000)};
+    const int16_t alphaOrig = alpha; // original alpha, to classify the stored TT bound on save
     Move best_move;
     StateInfo state_info;
 
@@ -170,29 +171,19 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
     // If position is stored in ttable
     if (ttEntry != nullptr)
     {
+        tt_move = ttEntry->getMove();
         assert(tt_move.getData() == 0 || currentPos.ttMoveIsOk(tt_move));
-        // We are in a PV-Node
-        if (ttEntry->getIsExact())
+        // If the stored search was at least as deep, the stored bound may let us
+        // return immediately: an exact value, a lower bound that already reaches
+        // beta (fail-high), or an upper bound that is already <= alpha (fail-low).
+        if (ttEntry->getDepth() >= depth)
         {
-            if (ttEntry->getDepth() >= depth)
-                return ttEntry->getValue();
-
-            tt_move = ttEntry->getMove();
-        }
-        // We are not in a PV-Node
-        else
-        {
-            // At a non principal node the ttEntry stores an lower bound
-            // If we have a deeper depth in the ttable and the lower bound
-            // is higher than beta, we can return beta.
-            // What is beta: Suppose it is our opponents move,
-            // beta represents the value which we can at this point garantee from the 
-            // search for the opponent to find, the lower the beta the better for us).
-            tt_move = ttEntry->getMove();
-            if (ttEntry->getDepth() >= depth && ttEntry->getValue() >= beta)
-            {
-                return beta;
-            }
+            const int16_t ttValue = ttEntry->getValue();
+            const uint8_t ttBound = ttEntry->getBound();
+            if (ttBound == BOUND_EXACT
+                || (ttBound == BOUND_LOWER && ttValue >= beta)
+                || (ttBound == BOUND_UPPER && ttValue <= alpha))
+                return ttValue;
         }
     }
 
@@ -211,6 +202,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
         if (child_value > value)
         {
             value = child_value;
+            best_move = tt_move;
             if (child_value > alpha)
                 alpha = child_value;
         }
@@ -235,6 +227,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
                 if (child_value > value)
                 {
                     value = child_value;
+                    best_move = move;
                     if (child_value > alpha)
                         alpha = child_value;
                 }
@@ -260,6 +253,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
                 if (child_value > value)
                 {
                     value = child_value;
+                    best_move = move;
                     if (child_value > alpha)
                         alpha = child_value;
                 }
@@ -277,18 +271,22 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
         // Stalemate
         if (not currentPos.getIsCheck())
         {
-            tt.save(currentPos.getZobristKey(), 0, depth, best_move, true);
+            tt.save(currentPos.getZobristKey(), 0, depth, best_move, BOUND_EXACT);
             return 0;
         }
         // Checkmate against us
         else
         {
-            tt.save(currentPos.getZobristKey(), -30000 - depth, depth, best_move, true);
+            tt.save(currentPos.getZobristKey(), -30000 - depth, depth, best_move, BOUND_EXACT);
             return -30000 - depth;
         }
     }
-    // Saving a tt value
-    tt.save(currentPos.getZobristKey(), value, depth, best_move, not cutoff);
+    // Classify the result for the transposition table: a fail-high (cutoff) is a
+    // lower bound; a value that beat the original alpha is exact; otherwise it is
+    // an upper bound (fail-low).
+    const uint8_t bound = cutoff ? BOUND_LOWER
+                                 : (value > alphaOrig ? BOUND_EXACT : BOUND_UPPER);
+    tt.save(currentPos.getZobristKey(), value, depth, best_move, bound);
 
     return value;
 }
@@ -366,7 +364,7 @@ void Worker::firstMoveSearch(int8_t depth)
     }
 
     // Save in TT as “exact”
-    tt.save(currentPos.getZobristKey(), bestRootValue, depth, bestRootMove, true);
+    tt.save(currentPos.getZobristKey(), bestRootValue, depth, bestRootMove, BOUND_EXACT);
 }
 
 void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)

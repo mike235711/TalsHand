@@ -190,7 +190,7 @@ namespace
             }
         }
         
-        tt.save(pos.getZobristKey(), 0, depth, Move(0), true);
+        tt.save(pos.getZobristKey(), 0, depth, Move(0), BOUND_EXACT);
         
         return total_nodes;
     }

@@ -26,21 +26,31 @@
 // best move                                                        16 bit
 // is exact (otherwise the turn determines if it lower or upper)    8 or 4 bit (boolean)
 
+// Value (bound) type of a stored search result.
+enum Bound : uint8_t
+{
+    BOUND_NONE = 0,
+    BOUND_UPPER = 1, // an alpha cutoff happened (fail-low): value is an upper bound
+    BOUND_LOWER = 2, // a beta cutoff happened (fail-high): value is a lower bound
+    BOUND_EXACT = 3  // exact value (the search did not fail high or low)
+};
+
 struct TTEntry
 {
 
     Move getMove() const { return Move(move); }
     int16_t getValue() const { return value; }
     uint8_t getDepth() const { return depth; }
-    bool getIsExact() const { return isExact; }
+    uint8_t getBound() const { return bound; }
+    bool getIsExact() const { return bound == BOUND_EXACT; }
     // Implementation of TTEntry::save
-    void save(uint64_t z_k, int16_t v, uint8_t d, Move m, bool type)
+    void save(uint64_t z_k, int16_t v, uint8_t d, Move m, uint8_t b)
     {
         z_key = z_k;
         value = v;
         depth = d;
         move = m;
-        isExact = type;
+        bound = b;
     }
 
 private:
@@ -50,7 +60,7 @@ private:
     uint8_t depth;
     Move move;
     int16_t value;
-    bool isExact;
+    uint8_t bound;
 };
 
 
@@ -80,18 +90,18 @@ public:
     }
 
     // Save a new entry to the table
-    void save(uint64_t z_key, int16_t value, uint8_t depth, Move move, bool isExact)
+    void save(uint64_t z_key, int16_t value, uint8_t depth, Move move, uint8_t bound)
     {
         size_t index = z_key % tableSize;
 
         // If the position was already stored we only replace by a deeper depth
-        if (table[index].z_key != 0 && table[index].depth < depth) 
+        if (table[index].z_key != 0 && table[index].depth < depth)
             {
                 table[index].z_key = z_key;
                 table[index].depth = depth;
                 table[index].value = value;
                 table[index].move = move;
-                table[index].isExact = isExact;
+                table[index].bound = bound;
             }
         // If the position was not stored, we store it regardless the depth
         else if (table[index].z_key == 0)
@@ -100,7 +110,7 @@ public:
             table[index].depth = depth;
             table[index].value = value;
             table[index].move = move;
-            table[index].isExact = isExact;
+            table[index].bound = bound;
         }
     }
 
