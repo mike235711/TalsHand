@@ -35,7 +35,13 @@ Move QSMoveSelectorCheck::select_legal()
     if (cur == endMoves)
         return Move(0);
 
-    pos.setBlockersPinsAndCheckBitsInQS();
+    // Pins/blockers/checkBits describe the current (parent) position and stay
+    // valid across the balanced make/unmake in the QS loop, so compute once.
+    if (!pinsReady)
+    {
+        pos.setBlockersPinsAndCheckBitsInQS();
+        pinsReady = true;
+    }
     for (; cur < endMoves; ++cur)
     {
         // If move is not legal we skip it
@@ -52,8 +58,14 @@ Move QSMoveSelectorNotCheck::select_legal()
     if (cur == endMoves)
         return Move(0);
 
-    pos.setBlockersPinsAndCheckBitsInQS();
-    
+    // Pins/blockers/checkBits describe the current (parent) position and stay
+    // valid across the balanced make/unmake in the QS loop, so compute once.
+    if (!pinsReady)
+    {
+        pos.setBlockersPinsAndCheckBitsInQS();
+        pinsReady = true;
+    }
+
     while (cur < endMoves)
     {
         // Find best remaining move in [cur, endMoves) 

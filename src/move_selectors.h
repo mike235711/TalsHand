@@ -26,6 +26,7 @@ private:
 
     BitPosition &pos;
     Move *cur, *endMoves;
+    bool pinsReady = false;
     Move moves[64];
 };
 
@@ -47,6 +48,7 @@ private:
 
     BitPosition &pos;
     ScoredMove *cur, *endMoves;
+    bool pinsReady = false;
     ScoredMove moves[128];
 };
 
