@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-05-31
+
+Correctness and codebase-cleanup release. Strength-neutral vs 0.3.3 (≈51.6% over a
+32-game bullet match, within noise). Fixes a quiescence in-check move-generation bug,
+replaces the QS perft test with a lighter QS-capture-consistency check (removing a
+large amount of test-only move-generation code), and adds architecture-specific
+Release build flags.
+
 ### Fixed
 - `inCheckOrderedCaptures`: removed a stale-pin pre-filter on the knight captures (`& ~state_info->pinnedPieces`). In quiescence search the pins are computed lazily in `QSMoveSelectorCheck::select_legal()`, i.e. *after* `init()` has already generated the captures, so `pinnedPieces` was stale when `inCheckOrderedCaptures` read it and a legal knight capture of the checker could be wrongly dropped (the engine could miss capturing the checking piece with a knight in QS). This mirrors the same fix applied to `knightCaptures` in 0.3.2; pinned knights are still filtered correctly by `isCaptureLegal`. Surfaced by the new QS-capture-consistency test (below) at depth ≥ 5.
 
