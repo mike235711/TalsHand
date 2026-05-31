@@ -212,7 +212,7 @@ TEST_CASE("AB Perft Total - Position 1 (Initial)")
     engine.setPosition(fens[0], {});
     std::string testFile = TEST_OUTPUT_DIR + "/ab_test_pos1";
     // This part might crash, but it will generate a file first.
-    REQUIRE(engine.perftTest(DEPTH, false, testFile) == 197281ULL);
+    REQUIRE(engine.perftTest(DEPTH, testFile) ==197281ULL);
 }
 TEST_CASE("AB Perft Compare - Position 1 (Initial)")
 {
@@ -230,7 +230,7 @@ TEST_CASE("AB Perft Total - Position 2")
     THEngine engine;
     engine.setPosition(fens[1], {});
     std::string testFile = TEST_OUTPUT_DIR + "/ab_test_pos2";
-    REQUIRE(engine.perftTest(DEPTH, false, testFile) == 4085603ULL);
+    REQUIRE(engine.perftTest(DEPTH, testFile) ==4085603ULL);
 }
 TEST_CASE("AB Perft Compare - Position 2")
 {
@@ -247,7 +247,7 @@ TEST_CASE("AB Perft Total - Position 3")
     THEngine engine;
     engine.setPosition(fens[2], {});
     std::string testFile = TEST_OUTPUT_DIR + "/ab_test_pos3";
-    REQUIRE(engine.perftTest(DEPTH, false, testFile) == 43238ULL);
+    REQUIRE(engine.perftTest(DEPTH, testFile) ==43238ULL);
 }
 TEST_CASE("AB Perft Compare - Position 3")
 {
@@ -264,7 +264,7 @@ TEST_CASE("AB Perft Total - Position 4")
     THEngine engine;
     engine.setPosition(fens[3], {});
     std::string testFile = TEST_OUTPUT_DIR + "/ab_test_pos4";
-    REQUIRE(engine.perftTest(DEPTH, false, testFile) == 422333ULL);
+    REQUIRE(engine.perftTest(DEPTH, testFile) ==422333ULL);
 }
 TEST_CASE("AB Perft Compare - Position 4")
 {
@@ -281,7 +281,7 @@ TEST_CASE("AB Perft Total - Position 5")
     THEngine engine;
     engine.setPosition(fens[4], {});
     std::string testFile = TEST_OUTPUT_DIR + "/ab_test_pos5";
-    REQUIRE(engine.perftTest(DEPTH, false, testFile) == 2103487ULL);
+    REQUIRE(engine.perftTest(DEPTH, testFile) ==2103487ULL);
 }
 TEST_CASE("AB Perft Compare - Position 5")
 {
@@ -298,7 +298,7 @@ TEST_CASE("AB Perft Total - Position 6")
     THEngine engine;
     engine.setPosition(fens[5], {});
     std::string testFile = TEST_OUTPUT_DIR + "/ab_test_pos6";
-    REQUIRE(engine.perftTest(DEPTH, false, testFile) == 3894594ULL);
+    REQUIRE(engine.perftTest(DEPTH, testFile) ==3894594ULL);
 }
 TEST_CASE("AB Perft Compare - Position 6")
 {
@@ -310,106 +310,66 @@ TEST_CASE("AB Perft Compare - Position 6")
     REQUIRE(error == "");
 }
 
-TEST_CASE("QS Perft Total - Position 1 (Initial)")
+// =============================================================================
+// QS capture-selector consistency.
+//
+// Instead of reconstructing the full move tree from QS captures + QS non-captures
+// and comparing to perft, we walk the AB-legal tree and assert that, at every
+// node, the quiescence capture selectors emit exactly the AB-legal moves that are
+// captures or queen promotions (BitPosition::isQSCaptureOrQueenProm). The node
+// count is cross-checked against the known perft reference.
+// =============================================================================
+TEST_CASE("QS Capture Consistency - Position 1 (Initial)")
 {
     THEngine engine;
     engine.setPosition(fens[0], {});
-    std::string testFile = TEST_OUTPUT_DIR + "/qs_test_pos1";
-    // This part might crash, but it will generate a file first.
-    REQUIRE(engine.perftTest(DEPTH, true, testFile) == 197281ULL);
+    auto result = engine.qsCaptureConsistencyTest(DEPTH);
+    INFO("QS capture set disagreed with AB-legal captures at " << result.mismatches << " node(s) for Position 1.");
+    REQUIRE(result.mismatches == 0ULL);
+    REQUIRE(result.nodes == 197281ULL);
 }
-TEST_CASE("QS Perft Compare - Position 1 (Initial)")
-{
-    std::string testFile = TEST_OUTPUT_DIR + "/qs_test_pos1";
-    std::string correctFile = CORRECT_DATA_DIR + "/perft_" + sanitize_fen(fens[0]) + "_depth_" + std::to_string(DEPTH) + ".txt";
-    
-    // This test only reads files, so it will not segfault.
-    std::string error = comparePerftFiles(correctFile, testFile);
-    INFO("File comparison failed for QS Position 1. Check the file: " << testFile);
-    REQUIRE(error == "");
-}
-
-TEST_CASE("QS Perft Total - Position 2")
+TEST_CASE("QS Capture Consistency - Position 2")
 {
     THEngine engine;
     engine.setPosition(fens[1], {});
-    std::string testFile = TEST_OUTPUT_DIR + "/qs_test_pos2";
-    REQUIRE(engine.perftTest(DEPTH, true, testFile) == 4085603ULL);
+    auto result = engine.qsCaptureConsistencyTest(DEPTH);
+    INFO("QS capture set disagreed with AB-legal captures at " << result.mismatches << " node(s) for Position 2.");
+    REQUIRE(result.mismatches == 0ULL);
+    REQUIRE(result.nodes == 4085603ULL);
 }
-TEST_CASE("QS Perft Compare - Position 2")
-{
-    std::string testFile = TEST_OUTPUT_DIR + "/qs_test_pos2";
-    std::string correctFile = CORRECT_DATA_DIR + "/perft_" + sanitize_fen(fens[1]) + "_depth_" + std::to_string(DEPTH) + ".txt";
-    
-    std::string error = comparePerftFiles(correctFile, testFile);
-    INFO("File comparison failed for QS Position 2. Check the file: " << testFile);
-    REQUIRE(error == "");
-}
-
-TEST_CASE("QS Perft Total - Position 3")
+TEST_CASE("QS Capture Consistency - Position 3")
 {
     THEngine engine;
     engine.setPosition(fens[2], {});
-    std::string testFile = TEST_OUTPUT_DIR + "/qs_test_pos3";
-    REQUIRE(engine.perftTest(DEPTH, true, testFile) == 43238ULL);
+    auto result = engine.qsCaptureConsistencyTest(DEPTH);
+    INFO("QS capture set disagreed with AB-legal captures at " << result.mismatches << " node(s) for Position 3.");
+    REQUIRE(result.mismatches == 0ULL);
+    REQUIRE(result.nodes == 43238ULL);
 }
-TEST_CASE("QS Perft Compare - Position 3")
-{
-    std::string testFile = TEST_OUTPUT_DIR + "/qs_test_pos3";
-    std::string correctFile = CORRECT_DATA_DIR + "/perft_" + sanitize_fen(fens[2]) + "_depth_" + std::to_string(DEPTH) + ".txt";
-    
-    std::string error = comparePerftFiles(correctFile, testFile);
-    INFO("File comparison failed for QS Position 3. Check the file: " << testFile);
-    REQUIRE(error == "");
-}
-
-TEST_CASE("QS Perft Total - Position 4")
+TEST_CASE("QS Capture Consistency - Position 4")
 {
     THEngine engine;
     engine.setPosition(fens[3], {});
-    std::string testFile = TEST_OUTPUT_DIR + "/qs_test_pos4";
-    REQUIRE(engine.perftTest(DEPTH, true, testFile) == 422333ULL);
+    auto result = engine.qsCaptureConsistencyTest(DEPTH);
+    INFO("QS capture set disagreed with AB-legal captures at " << result.mismatches << " node(s) for Position 4.");
+    REQUIRE(result.mismatches == 0ULL);
+    REQUIRE(result.nodes == 422333ULL);
 }
-TEST_CASE("QS Perft Compare - Position 4")
-{
-    std::string testFile = TEST_OUTPUT_DIR + "/qs_test_pos4";
-    std::string correctFile = CORRECT_DATA_DIR + "/perft_" + sanitize_fen(fens[3]) + "_depth_" + std::to_string(DEPTH) + ".txt";
-    
-    std::string error = comparePerftFiles(correctFile, testFile);
-    INFO("File comparison failed for QS Position 4. Check the file: " << testFile);
-    REQUIRE(error == "");
-}
-
-TEST_CASE("QS Perft Total - Position 5")
+TEST_CASE("QS Capture Consistency - Position 5")
 {
     THEngine engine;
     engine.setPosition(fens[4], {});
-    std::string testFile = TEST_OUTPUT_DIR + "/qs_test_pos5";
-    REQUIRE(engine.perftTest(DEPTH, true, testFile) == 2103487ULL);
+    auto result = engine.qsCaptureConsistencyTest(DEPTH);
+    INFO("QS capture set disagreed with AB-legal captures at " << result.mismatches << " node(s) for Position 5.");
+    REQUIRE(result.mismatches == 0ULL);
+    REQUIRE(result.nodes == 2103487ULL);
 }
-TEST_CASE("QS Perft Compare - Position 5")
-{
-    std::string testFile = TEST_OUTPUT_DIR + "/qs_test_pos5";
-    std::string correctFile = CORRECT_DATA_DIR + "/perft_" + sanitize_fen(fens[4]) + "_depth_" + std::to_string(DEPTH) + ".txt";
-    
-    std::string error = comparePerftFiles(correctFile, testFile);
-    INFO("File comparison failed for QS Position 5. Check the file: " << testFile);
-    REQUIRE(error == "");
-}
-
-TEST_CASE("QS Perft Total - Position 6")
+TEST_CASE("QS Capture Consistency - Position 6")
 {
     THEngine engine;
     engine.setPosition(fens[5], {});
-    std::string testFile = TEST_OUTPUT_DIR + "/qs_test_pos6";
-    REQUIRE(engine.perftTest(DEPTH, true, testFile) == 3894594ULL);
-}
-TEST_CASE("QS Perft Compare - Position 6")
-{
-    std::string testFile = TEST_OUTPUT_DIR + "/qs_test_pos6";
-    std::string correctFile = CORRECT_DATA_DIR + "/perft_" + sanitize_fen(fens[5]) + "_depth_" + std::to_string(DEPTH) + ".txt";
-    
-    std::string error = comparePerftFiles(correctFile, testFile);
-    INFO("File comparison failed for QS Position 6. Check the file: " << testFile);
-    REQUIRE(error == "");
+    auto result = engine.qsCaptureConsistencyTest(DEPTH);
+    INFO("QS capture set disagreed with AB-legal captures at " << result.mismatches << " node(s) for Position 6.");
+    REQUIRE(result.mismatches == 0ULL);
+    REQUIRE(result.nodes == 3894594ULL);
 }

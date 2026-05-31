@@ -85,29 +85,6 @@ Move QSMoveSelectorNotCheck::select_legal()
     }
     return Move(0); // no legal capture left
 }
-Move QSMoveSelectorCheckNonCaptures::select_legal()
-{
-    for (; cur < endMoves; ++cur)
-    {
-        // If move is not legal we skip it
-        if (pos.isLegal(cur))
-        {
-            return *cur++;
-        }
-    }
-    return Move(0);
-}
-Move QSMoveSelectorNotCheckNonCaptures::select_legal()
-{
-    for (; cur < endMoves; ++cur)
-        if (*cur != ttMove)
-        {
-            // If move is not legal we skip it
-            if (pos.isLegal(cur))
-                return *cur++;
-        }
-    return Move(0);
-}
 Move ABMoveSelectorCheck::select_legal()
 {
     for (; cur < endMoves; ++cur)
@@ -155,41 +132,6 @@ void QSMoveSelectorCheck::init()
         endMoves = pos.kingCaptures(endMoves);
     else
         endMoves = pos.inCheckOrderedCaptures(endMoves);
-}
-void QSMoveSelectorNotCheckNonCaptures::init()
-{
-    cur = endMoves = moves;
-    endMoves = pos.pawnNonCapturesNonQueenProms(endMoves);
-    endMoves = pos.knightNonCaptures(endMoves);
-    endMoves = pos.bishopNonCaptures(endMoves);
-    endMoves = pos.rookNonCaptures(endMoves);
-    endMoves = pos.queenNonCaptures(endMoves);
-    endMoves = pos.kingNonCaptures(endMoves);
-}
-void QSMoveSelectorCheckNonCaptures::init()
-{
-    cur = endMoves = moves;
-    if (pos.moreThanOneCheck())
-        endMoves = pos.kingNonCapturesInCheck(endMoves);
-    else
-    {
-        if (pos.sliderChecking())
-        {
-            endMoves = pos.inCheckPawnBlocksNonQueenProms(endMoves);
-            endMoves = pos.inCheckPawnCapturesNonQueenProms(endMoves);
-            endMoves = pos.inCheckKnightBlocks(endMoves);
-            endMoves = pos.inCheckBishopBlocks(endMoves);
-            endMoves = pos.inCheckRookBlocks(endMoves);
-            endMoves = pos.inCheckQueenBlocks(endMoves);
-            endMoves = pos.kingNonCapturesInCheck(endMoves);
-        }
-        else // Passant captures and king moves
-        {
-            endMoves = pos.inCheckPawnCapturesNonQueenProms(endMoves);
-            endMoves = pos.inCheckPassantCaptures(endMoves);
-            endMoves = pos.kingNonCapturesInCheck(endMoves);
-        }
-    }
 }
 // AB Search (PV nodes)
 void ABMoveSelectorNotCheck::init_all()

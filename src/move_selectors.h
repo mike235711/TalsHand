@@ -52,46 +52,6 @@ private:
     ScoredMove moves[128];
 };
 
-// Only used for tests
-class QSMoveSelectorNotCheckNonCaptures
-{
-public:
-    QSMoveSelectorNotCheckNonCaptures(const QSMoveSelectorNotCheckNonCaptures &) = delete;
-    QSMoveSelectorNotCheckNonCaptures &operator=(const QSMoveSelectorNotCheckNonCaptures &) = delete;
-    QSMoveSelectorNotCheckNonCaptures(BitPosition & p, Move m) : pos(p), ttMove(m) {};
-    // Qscence Search
-    void init();
-    Move select_legal();
-
-private:
-    Move *begin() { return cur; }
-    Move *end() { return endMoves; }
-
-    BitPosition &pos;
-    Move ttMove;
-    Move *cur, *endMoves;
-    Move moves[256];
-};
-// Only used for tests
-class QSMoveSelectorCheckNonCaptures
-{
-public:
-    QSMoveSelectorCheckNonCaptures(const QSMoveSelectorCheckNonCaptures &) = delete;
-    QSMoveSelectorCheckNonCaptures &operator=(const QSMoveSelectorCheckNonCaptures &) = delete;
-    QSMoveSelectorCheckNonCaptures(BitPosition & p) : pos(p) {};
-    // Qscence Search
-    void init();
-    Move select_legal();
-
-private:
-    Move *begin() { return cur; }
-    Move *end() { return endMoves; }
-
-    BitPosition &pos;
-    Move *cur, *endMoves;
-    Move moves[256];
-};
-
 //////////////////////////////////////
 // Alpha-Beta Search Move Selectors
 //////////////////////////////////////

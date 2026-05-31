@@ -291,7 +291,7 @@ public:
     bool isDraw() const;
 
     inline bool givesCheck(int origin_square, int destination_square, int moved_piece) const
-    {   
+    {
         // Direct check
         if (state_info->previous->checkBits[moved_piece] & (1ULL << destination_square))
             return true;
@@ -349,17 +349,6 @@ public:
 
     inline StateInfo *get_state_info() const { return state_info; }
 
-    // Functions for tests
-    Move *inCheckPawnBlocksNonQueenProms(Move *&move_list) const;
-    Move *inCheckPawnCapturesNonQueenProms(Move *&move_list) const;
-    Move *inCheckPassantCaptures(Move *&move_list) const;
-    Move *pawnNonCapturesNonQueenProms(Move *&move_list) const;
-    Move *knightNonCaptures(Move *&move_list) const;
-    Move *bishopNonCaptures(Move *&move_list) const;
-    Move *rookNonCaptures(Move *&move_list) const;
-    Move *queenNonCaptures(Move *&move_list) const;
-    Move *kingNonCaptures(Move *&move_list) const;
-    Move *kingNonCapturesInCheck(Move *&move_list) const;
 
     // Simple member function definitions
 
@@ -401,6 +390,33 @@ public:
     int getCapturedPiece() const { return state_info->capturedPiece; }
     int getWhiteKingPosition() const { return m_king_position[0]; }
     int getBlackKingPosition() const { return m_king_position[1]; }
+
+    // True iff `move` is one that the quiescence *capture* selectors emit, i.e. a
+    // move the real quiescence search considers. This is exactly: a non-promoting
+    // capture, a queen promotion (push or capture) and — only when not in check —
+    // a queen promotion push. En-passant and under-promotions are intentionally
+    // excluded (the QS capture generators never emit them); in check, only queen
+    // promotions that capture the checker are emitted. Used by the QS-capture
+    // consistency test to cross-check the generators against the AB-legal moves.
+    inline bool isQSCaptureOrQueenProm(Move move) const
+    {
+        const int destination_square = move.getDestinationSquare();
+        const uint64_t destination_bit = 1ULL << destination_square;
+        const bool is_capture = (m_bitboard_by_color[m_turn] & destination_bit) != 0;
+        const bool on_promotion_rank = (destination_square <= 7 || destination_square >= 56);
+
+        if (move.isSpecial() && on_promotion_rank) // queen/under promotion (or castling: promo bits 0)
+        {
+            if (move.getPromotingPiece() != 3) // QS only emits queen promotions
+                return false;
+            // In check, inCheckOrderedCaptures only emits promotions that capture
+            // the checker; non-capturing queen-promotion blocks are not searched.
+            return getIsCheck() ? is_capture : true;
+        }
+        // Non-promotion. En-passant has isSpecial() set but an empty destination
+        // square, so is_capture is false and it is correctly treated as non-QS.
+        return is_capture;
+    }
 
 
     // Debugging helper functions

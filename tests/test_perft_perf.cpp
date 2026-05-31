@@ -66,7 +66,7 @@ TEST_CASE("Perft performance (AB) - nodes/sec per position") {
 
             std::uint64_t nodes = 0;
             double secs = time_seconds([&](){
-                nodes = engine.perftTest(PERF_DEPTH, /*quiescent=*/false, std::nullopt);
+                nodes = engine.perftTest(PERF_DEPTH, std::nullopt);
             });
 
             // Protect against division by zero in pathological cases
@@ -86,29 +86,32 @@ TEST_CASE("Perft performance (AB) - nodes/sec per position") {
     }
 }
 
-// Optional: Measure quiescence-perft as well (captures/promotions only)
-TEST_CASE("Perft performance (QS) - nodes/sec per position") {
+// Exercise the quiescence capture selectors over the whole tree (via the
+// QS-capture-consistency walk) and report nodes/sec. Also asserts the QS capture
+// set stays consistent with the AB-legal captures at this (typically deeper) depth.
+TEST_CASE("QS capture-consistency walk - nodes/sec per position") {
     const int PERF_DEPTH = get_perf_depth();
     for (size_t i = 0; i < fens.size(); ++i) {
         SECTION("FEN #" + std::to_string(i+1) + " - " + sanitize_fen(fens[i])) {
             THEngine engine;
             engine.setPosition(fens[i], {});
 
-            std::uint64_t nodes = 0;
+            THEngine::QSConsistencyResult result{0, 0};
             double secs = time_seconds([&](){
-                nodes = engine.perftTest(PERF_DEPTH, /*quiescent=*/true, std::nullopt);
+                result = engine.qsCaptureConsistencyTest(PERF_DEPTH);
             });
 
-            double nps = (secs > 0.0) ? (static_cast<double>(nodes) / secs) : 0.0;
+            double nps = (secs > 0.0) ? (static_cast<double>(result.nodes) / secs) : 0.0;
 
-          std::cout << "[Perft-QS] Position " << (i+1) << ": depth=" << PERF_DEPTH
-                      << ", nodes=" << nodes << ", time=" << secs << "s"
-                      << ", nps=" << static_cast<long long>(nps) << std::endl;
-            INFO("[Perft-QS] Position " << (i+1) << ": depth=" << PERF_DEPTH
-                 << ", nodes=" << nodes << ", time=" << secs << "s"
-                 << ", nps=" << static_cast<long long>(nps));
+          std::cout << "[QS-consistency] Position " << (i+1) << ": depth=" << PERF_DEPTH
+                      << ", nodes=" << result.nodes << ", mismatches=" << result.mismatches
+                      << ", time=" << secs << "s, nps=" << static_cast<long long>(nps) << std::endl;
+            INFO("[QS-consistency] Position " << (i+1) << ": depth=" << PERF_DEPTH
+                 << ", nodes=" << result.nodes << ", mismatches=" << result.mismatches
+                 << ", time=" << secs << "s, nps=" << static_cast<long long>(nps));
 
-            REQUIRE(nodes > 0ULL);
+            REQUIRE(result.mismatches == 0ULL);
+            REQUIRE(result.nodes > 0ULL);
         }
     }
 }

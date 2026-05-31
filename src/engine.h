@@ -33,8 +33,16 @@ public:
 
     ~THEngine() { waitToFinishSearch(); }
 
-    // Test move generation
-    std::uint64_t perftTest(int depth, bool quiescent, const std::optional<std::string>& filename = std::nullopt);
+    // Test move generation (alpha-beta legal-move perft).
+    std::uint64_t perftTest(int depth, const std::optional<std::string>& filename = std::nullopt);
+
+    // Walks the full AB-legal move tree to `depth` and, at every node, checks that
+    // the quiescence capture selectors emit exactly the AB-legal moves that are
+    // captures or queen promotions (see BitPosition::isQSCaptureOrQueenProm).
+    // Returns the perft node count and the number of nodes whose QS capture set
+    // disagreed with the reference (0 == fully consistent).
+    struct QSConsistencyResult { std::uint64_t nodes; std::uint64_t mismatches; };
+    QSConsistencyResult qsCaptureConsistencyTest(int depth);
 
     // uci functions
     void readUci(); // Reads uci loop (options, position and time)

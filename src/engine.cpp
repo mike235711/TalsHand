@@ -34,23 +34,18 @@ namespace
 
     Move findMoveFromString(std::string moveString, BitPosition &position)
     {
+        // Enumerate every legal move with the AB selectors (which emit the full
+        // legal move set, including en-passant, castling and under-promotions) and
+        // return the one whose UCI string matches.
+        position.setBlockersAndPinsInAB();
+        position.setCheckBits();
+        Move move;
         if (position.getIsCheck())
         {
             position.setCheckInfo();
-            position.setBlockersPinsAndCheckBitsInQS();
-            // Captures
-            Move move;
-            QSMoveSelectorCheck move_selector_1(position);
-            move_selector_1.init();
-            while ((move = move_selector_1.select_legal()) != Move(0))
-            {
-                if (move.toString() == moveString)
-                    return move;
-            }
-            // Non Captures
-            QSMoveSelectorCheckNonCaptures move_selector_2(position);
-            move_selector_2.init();
-            while ((move = move_selector_2.select_legal()) != Move(0))
+            ABMoveSelectorCheck move_selector(position, Move(0));
+            move_selector.init();
+            while ((move = move_selector.select_legal()) != Move(0))
             {
                 if (move.toString() == moveString)
                     return move;
@@ -58,20 +53,9 @@ namespace
         }
         else
         {
-            position.setBlockersPinsAndCheckBitsInQS();
-            // Captures
-            Move move;
-            QSMoveSelectorNotCheck move_selector_1(position);
-            move_selector_1.init();
-            while ((move = move_selector_1.select_legal()) != Move(0))
-            {
-                if (move.toString() == moveString)
-                    return move;
-            }
-            // Non Captures
-            QSMoveSelectorNotCheckNonCaptures move_selector_2(position, Move(0));
-            move_selector_2.init();
-            while ((move = move_selector_2.select_legal()) != Move(0))
+            ABMoveSelectorNotCheck move_selector(position, Move(0));
+            move_selector.init_all();
+            while ((move = move_selector.select_legal()) != Move(0))
             {
                 if (move.toString() == moveString)
                     return move;
@@ -84,7 +68,7 @@ namespace
 
 namespace
 {
-    std::uint64_t perft_recursive(int depth, bool quiescent, BitPosition& pos, TranspositionTable& tt, std::ofstream* outfile, const std::string& prefix)
+    std::uint64_t perft_recursive(int depth, BitPosition& pos, TranspositionTable& tt, std::ofstream* outfile, const std::string& prefix)
     {
         // Base case: at depth 0 a single node is counted
         if (depth == 0)
@@ -97,55 +81,6 @@ namespace
             std::uint64_t leaf_nodes = 0;
             Move m;
 
-            if (quiescent)
-            {
-                if (pos.getIsCheck())
-                {
-                    pos.setCheckInfo();
-                    QSMoveSelectorCheck selC(pos);
-                    selC.init();
-                    while ((m = selC.select_legal()) != Move(0)) {
-                        if (outfile) {
-                            (*outfile) << prefix << m.toString() << ": 1" << std::endl;
-                        }
-                        ++leaf_nodes;
-                    }
-                    pos.setCheckInfo();
-                    pos.setBlockersAndPinsInAB();
-                    pos.setCheckBits();
-                    QSMoveSelectorCheckNonCaptures selNC(pos);
-                    selNC.init();
-                    while ((m = selNC.select_legal()) != Move(0)) {
-                        if (outfile) {
-                            (*outfile) << prefix << m.toString() << ": 1" << std::endl;
-                        }
-                        ++leaf_nodes;
-                    }
-                }
-                else
-                {
-                    QSMoveSelectorNotCheck selC(pos);
-                    selC.init();
-                    while ((m = selC.select_legal()) != Move(0)) {
-                        if (outfile) {
-                            (*outfile) << prefix << m.toString() << ": 1" << std::endl;
-                        }
-                        ++leaf_nodes;
-                    }
-
-                    pos.setBlockersAndPinsInAB();
-                    pos.setCheckBits();
-                    QSMoveSelectorNotCheckNonCaptures selNC(pos, Move(0));
-                    selNC.init();
-                    while ((m = selNC.select_legal()) != Move(0)) {
-                        if (outfile) {
-                            (*outfile) << prefix << m.toString() << ": 1" << std::endl;
-                        }
-                        ++leaf_nodes;
-                    }
-                }
-            }
-            else // AB
             {
                 pos.setBlockersAndPinsInAB();
                 pos.setCheckBits();
@@ -193,86 +128,6 @@ namespace
         Move move;
         StateInfo st;
 
-        if (quiescent)
-        {
-            if (pos.getIsCheck())
-            {
-                pos.setCheckInfo();
-                QSMoveSelectorCheck captures_move_selector(pos);
-                captures_move_selector.init();
-                while ((move = captures_move_selector.select_legal()) != Move(0))
-                {
-                    pos.makeCapture(move, st);
-
-                    std::uint64_t child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
-                    
-                    pos.unmakeCapture(move);
-
-                    if (outfile) {
-                        (*outfile) << prefix << move.toString() << ": " << child_nodes << std::endl;
-                    }
-                    
-                    total_nodes += child_nodes;
-                }
-                pos.setCheckInfo();
-                pos.setBlockersAndPinsInAB();
-                pos.setCheckBits();
-                QSMoveSelectorCheckNonCaptures non_captures_move_selector(pos);
-                non_captures_move_selector.init();
-                while ((move = non_captures_move_selector.select_legal()) != Move(0))
-                {
-                    pos.makeMove(move, st);
-
-                    std::uint64_t child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
-                    
-                    pos.unmakeMove(move);
-
-                    if (outfile) {
-                        (*outfile) << prefix << move.toString() << ": " << child_nodes << std::endl;
-                    }
-                    
-                    total_nodes += child_nodes;
-                }
-            }
-            else
-            {
-                QSMoveSelectorNotCheck captures_move_selector(pos);
-                captures_move_selector.init();
-                while ((move = captures_move_selector.select_legal()) != Move(0))
-                {
-                    pos.makeCapture(move, st);
-
-                    std::uint64_t child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
-                    
-                    pos.unmakeCapture(move);
-
-                    if (outfile) {
-                        (*outfile) << prefix << move.toString() << ": " << child_nodes << std::endl;
-                    }
-                    
-                    total_nodes += child_nodes;
-                }
-                pos.setBlockersAndPinsInAB();
-                pos.setCheckBits();
-                QSMoveSelectorNotCheckNonCaptures non_captures_move_selector(pos, Move(0));
-                non_captures_move_selector.init();
-                while ((move = non_captures_move_selector.select_legal()) != Move(0))
-                {
-                    pos.makeMove(move, st);
-
-                    std::uint64_t child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
-                    
-                    pos.unmakeMove(move);
-
-                    if (outfile) {
-                        (*outfile) << prefix << move.toString() << ": " << child_nodes << std::endl;
-                    }
-                    
-                    total_nodes += child_nodes;
-                }
-            }
-        }
-        else // Not quiescent (standard AB move generator)
         {
             pos.setBlockersAndPinsInAB();
             pos.setCheckBits();
@@ -283,7 +138,7 @@ namespace
             {
                 pos.makeMove(tt_move, st);
 
-                std::uint64_t child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + tt_move.toString() + " ");
+                std::uint64_t child_nodes = perft_recursive(depth - 1, pos, tt, outfile, prefix + tt_move.toString() + " ");
                 
                 pos.unmakeMove(tt_move);
 
@@ -302,7 +157,7 @@ namespace
                 {
                     pos.makeMove(move, st);
 
-                    std::uint64_t child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
+                    std::uint64_t child_nodes = perft_recursive(depth - 1, pos, tt, outfile, prefix + move.toString() + " ");
                     
                     pos.unmakeMove(move);
 
@@ -322,7 +177,7 @@ namespace
                 {
                     pos.makeMove(move, st);
 
-                    std::uint64_t child_nodes = perft_recursive(depth - 1, quiescent, pos, tt, outfile, prefix + move.toString() + " ");
+                    std::uint64_t child_nodes = perft_recursive(depth - 1, pos, tt, outfile, prefix + move.toString() + " ");
                     
                     pos.unmakeMove(move);
 
@@ -341,7 +196,7 @@ namespace
     }
 }
 
-std::uint64_t THEngine::perftTest(int depth, bool quiescent, const std::optional<std::string>& filename)
+std::uint64_t THEngine::perftTest(int depth, const std::optional<std::string>& filename)
 {
     // If a filename is provided, open the file and start the recursion.
     if (filename) {
@@ -352,7 +207,7 @@ std::uint64_t THEngine::perftTest(int depth, bool quiescent, const std::optional
         }
         
         // Start the recursion with an empty prefix string ""
-        std::uint64_t total_nodes = perft_recursive(depth, quiescent, pos, tt, &outfile_stream, "");
+        std::uint64_t total_nodes = perft_recursive(depth, pos, tt, &outfile_stream, "");
         
         // Write the total at the end, just like the Python script.
         outfile_stream << "\nTotal: " << total_nodes << std::endl;
@@ -364,7 +219,93 @@ std::uint64_t THEngine::perftTest(int depth, bool quiescent, const std::optional
     }
 
     // If no filename, just run the counter without the file pointer and prefix.
-    return perft_recursive(depth, quiescent, pos, tt, nullptr, "");
+    return perft_recursive(depth, pos, tt, nullptr, "");
+}
+
+namespace
+{
+    // Walk the full AB-legal tree and, at every node, assert that the quiescence
+    // capture selectors emit exactly the AB-legal moves classified as captures or
+    // queen promotions. Returns the perft node count; increments `mismatches` for
+    // every node whose QS capture set differs from the reference.
+    std::uint64_t qs_consistency_recursive(int depth, BitPosition &pos, std::uint64_t &mismatches)
+    {
+        if (depth == 0)
+            return 1;
+
+        StateInfo st;
+        Move m;
+
+        // Actual: moves emitted by the quiescence *capture* selectors.
+        std::vector<std::uint16_t> actual;
+        if (pos.getIsCheck())
+        {
+            pos.setCheckInfo();
+            QSMoveSelectorCheck sel(pos);
+            sel.init();
+            while ((m = sel.select_legal()) != Move(0))
+                actual.push_back(m.getData());
+        }
+        else
+        {
+            pos.setBlockersPinsAndCheckBitsInQS();
+            QSMoveSelectorNotCheck sel(pos);
+            sel.init();
+            while ((m = sel.select_legal()) != Move(0))
+                actual.push_back(m.getData());
+        }
+
+        // Reference: every AB-legal move. Set up for making moves last so the
+        // recursion below descends with a consistent (AB) position state.
+        pos.setBlockersAndPinsInAB();
+        pos.setCheckBits();
+        std::vector<Move> ab_legal;
+        if (pos.getIsCheck())
+        {
+            pos.setCheckInfo();
+            ABMoveSelectorCheck sel(pos, Move(0));
+            sel.init();
+            while ((m = sel.select_legal()) != Move(0))
+                ab_legal.push_back(m);
+        }
+        else
+        {
+            ABMoveSelectorNotCheck sel(pos, Move(0));
+            sel.init_all();
+            while ((m = sel.select_legal()) != Move(0))
+                ab_legal.push_back(m);
+        }
+
+        // Expected = AB-legal moves that are captures or queen promotions.
+        std::vector<std::uint16_t> expected;
+        for (Move mv : ab_legal)
+            if (pos.isQSCaptureOrQueenProm(mv))
+                expected.push_back(mv.getData());
+
+        std::sort(actual.begin(), actual.end());
+        std::sort(expected.begin(), expected.end());
+        if (actual != expected)
+        {
+            ++mismatches;
+            std::cerr << "QS/AB capture-set mismatch at FEN: " << pos.toFenString() << std::endl;
+        }
+
+        std::uint64_t count = 0;
+        for (Move mv : ab_legal)
+        {
+            pos.makeMove(mv, st);
+            count += qs_consistency_recursive(depth - 1, pos, mismatches);
+            pos.unmakeMove(mv);
+        }
+        return count;
+    }
+}
+
+THEngine::QSConsistencyResult THEngine::qsCaptureConsistencyTest(int depth)
+{
+    std::uint64_t mismatches = 0;
+    std::uint64_t nodes = qs_consistency_recursive(depth, pos, mismatches);
+    return {nodes, mismatches};
 }
 
 constexpr auto STARTFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
