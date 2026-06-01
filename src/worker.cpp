@@ -140,7 +140,7 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta)
     return value;
 }
 
-int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
+int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int ply)
 // This search is done when depth is more than 0 and considers all moves and stores positions in the transposition table
 {
     assert(alpha <= beta);
@@ -197,7 +197,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
 #endif
         no_moves = false;
         makeMove(tt_move, state_info);
-        child_value = -alphaBetaSearch(depth - 1, -beta, -alpha);
+        child_value = -alphaBetaSearch(depth - 1, -beta, -alpha, ply + 1);
         unmakeMove(tt_move);
         if (child_value > value)
         {
@@ -207,7 +207,10 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
                 alpha = child_value;
         }
         if (child_value >= beta)
+        {
             cutoff = true; // Fail high
+            storeKiller(ply, tt_move);
+        }
     }
 
     // We only search if tt_move didn't produce a cutoff in the search tree
@@ -216,13 +219,13 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
         if (not currentPos.getIsCheck()) // Not in check
         {
             Move move;
-            ABMoveSelectorNotCheck move_selector(currentPos, tt_move);
+            ABMoveSelectorNotCheck move_selector(currentPos, tt_move, killers[ply][0], killers[ply][1]);
             move_selector.init_all();
             while ((move = move_selector.select_legal()) != Move(0))
             {
                 no_moves = false;
                 makeMove(move, state_info);
-                child_value = -alphaBetaSearch(depth - 1, -beta, -alpha);
+                child_value = -alphaBetaSearch(depth - 1, -beta, -alpha, ply + 1);
                 unmakeMove(move);
                 if (child_value > value)
                 {
@@ -234,6 +237,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
                 if (child_value >= beta)
                 {
                     cutoff = true;
+                    storeKiller(ply, move);
                     break; // Fail high
                 }
             }
@@ -248,7 +252,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
             {
                 no_moves = false;
                 makeMove(move, state_info);
-                child_value = -alphaBetaSearch(depth - 1, -beta, -alpha);
+                child_value = -alphaBetaSearch(depth - 1, -beta, -alpha, ply + 1);
                 unmakeMove(move);
                 if (child_value > value)
                 {
@@ -260,6 +264,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta)
                 if (child_value >= beta)
                 {
                     cutoff = true;
+                    storeKiller(ply, move);
                     break; // Fail high
                 }
             }
@@ -340,13 +345,13 @@ void Worker::firstMoveSearch(int8_t depth)
         // Do the “reduced” (or normal) alpha-beta search:
         int8_t searchDepth = std::max(0, depth - 1 - reduction);
 
-        int16_t child_value = -alphaBetaSearch(searchDepth, -31001, -bestRootValue);
+        int16_t child_value = -alphaBetaSearch(searchDepth, -31001, -bestRootValue, 1);
 
         // If a reduced search beats the best score so far,
         // we re-search at the full depth to avoid missing a good move.
         if (reduction > 0 && child_value > bestRootValue)
         {
-            child_value = -alphaBetaSearch(depth - 1, -31001, -bestRootValue);
+            child_value = -alphaBetaSearch(depth - 1, -31001, -bestRootValue, 1);
         }
         unmakeMove(currentMove);
 
@@ -369,6 +374,8 @@ void Worker::firstMoveSearch(int8_t depth)
 
 void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
 {
+    std::memset(killers, 0, sizeof(killers)); // fresh killer table per search
+
     rootPos.setBlockersAndPinsInAB(); // For discovered checks and move generators
     rootPos.setCheckBits();           // For direct checks
 

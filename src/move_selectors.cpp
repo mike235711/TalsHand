@@ -21,7 +21,17 @@ void sort_moves(ScoredMove *begin, ScoredMove *end)
 void ABMoveSelectorNotCheck::score()
 {
     for (auto &move : *this)
-        move.score = pos.aBMoveValue(move);
+    {
+        int s = pos.aBMoveValue(move);
+        if (s == 0) // a plain quiet move: rank killer moves above the rest
+        {
+            if (move == killer0)
+                s = BitPosition::KILLER_SCORE;
+            else if (move == killer1)
+                s = BitPosition::KILLER_SCORE - 1;
+        }
+        move.score = s;
+    }
 }
 void QSMoveSelectorNotCheck::score()
 {

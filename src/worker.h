@@ -57,6 +57,17 @@ private:
         currentPos.unmakeCapture(move);
         accumulatorStack.pop();
     }
+    // Record a quiet beta-cutoff move as a killer for this ply (captures/promotions,
+    // which score != 0 in aBMoveValue, are ignored).
+    inline void storeKiller(int ply, Move m)
+    {
+        if (ply < MAX_SEARCH_PLY && currentPos.aBMoveValue(m) == 0 && !(killers[ply][0] == m))
+        {
+            killers[ply][1] = killers[ply][0];
+            killers[ply][0] = m;
+        }
+    }
+
     // Calls first move search iteratively
     void iterativeSearch(int8_t start_depth = 2, int8_t fixed_max_depth = 99);
 
@@ -64,7 +75,7 @@ private:
     void firstMoveSearch(int8_t depth);
 
     // Calls quisence when depth 0 is reached
-    int16_t alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta);
+    int16_t alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int ply);
 
     // Only captures are searched making sure there is no mate in the end
     int16_t quiesenceSearch(int16_t alpha, int16_t beta);
@@ -95,6 +106,10 @@ private:
     int16_t bestRootValue;
     // BitPosition object within search
     BitPosition currentPos;
+
+    // Move ordering: 2 killer moves (quiet moves that produced a beta cutoff) per ply.
+    static constexpr int MAX_SEARCH_PLY = 128;
+    Move killers[MAX_SEARCH_PLY][2];
 
     // Threading (to implement)
     size_t threadIdx;

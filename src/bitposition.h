@@ -316,6 +316,7 @@ public:
     // are small piece weights indexed by piece type (P,N,B,R,Q,K; index 7 = empty).
     static constexpr int MVV_LVA_VALUE[8] = {1, 3, 3, 5, 9, 0, 0, 0};
     static constexpr int CAPTURE_SCORE = 1 << 20; // good captures / queen promotions
+    static constexpr int KILLER_SCORE = 1 << 17;  // quiet killer moves
     static constexpr int CASTLE_SCORE = 1 << 15;  // castling: a preferred quiet
 
     int qSMoveValue(Move move) const

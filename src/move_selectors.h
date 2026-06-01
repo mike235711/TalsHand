@@ -80,7 +80,8 @@ class ABMoveSelectorNotCheck
 public:
     ABMoveSelectorNotCheck(const ABMoveSelectorNotCheck &) = delete;
     ABMoveSelectorNotCheck &operator=(const ABMoveSelectorNotCheck &) = delete;
-    ABMoveSelectorNotCheck(BitPosition & p, Move m) : pos(p), ttMove(m) {};
+    ABMoveSelectorNotCheck(BitPosition & p, Move m, Move k0 = Move(0), Move k1 = Move(0))
+        : pos(p), ttMove(m), killer0(k0), killer1(k1) {};
     // AB Search (PV nodes)
     void init_all();
     Move select_legal();
@@ -92,6 +93,7 @@ private:
 
     BitPosition &pos;
     Move ttMove;
+    Move killer0, killer1; // quiet killer moves for this ply (Move(0) = none)
     ScoredMove *cur, *endMoves;
     ScoredMove moves[256];
 };
