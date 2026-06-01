@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-06-01
+
+Search-strength release: the transposition table now actually drives move ordering
+and stores correct bounds. Worth roughly **+38 Elo** over 0.3.4 in a 64-game match
+(55.5%, positive in 3 of the 4 time controls), with zero time losses.
+
+### Fixed
+- Transposition table — `alphaBetaSearch` never assigned `best_move`, so internal nodes stored `Move(0)` and TT-move ordering (the single most valuable move-ordering signal) was inoperative; only the root stored a real move. The best move is now recorded on each improvement. The single `isExact` flag is replaced by a 3-valued bound (exact / lower / upper): a fail-low (value ≤ the original alpha) was previously stored as "exact", which is incorrect — it is now an *upper* bound, and the probe returns on exact, lower ≥ beta, or upper ≤ alpha. The full 64-bit Zobrist key is stored and matched on probe, so the recovered TT move is always legal for the same position.
+
 ## [0.3.4] - 2026-05-31
 
 Correctness and codebase-cleanup release. Strength-neutral vs 0.3.3 (≈51.6% over a
