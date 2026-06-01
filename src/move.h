@@ -98,13 +98,16 @@ public:
 // Moves which contain a score
 struct ScoredMove : public Move
 {
-    int8_t score;
+    // Wide enough to layer capture / killer / history scores (see aBMoveValue and
+    // the move selectors): captures rank above all quiets, killers above the rest
+    // of the quiets, and remaining quiets are ordered by the (signed) history score.
+    int32_t score;
 
     // This is so that we can assign efficiently Move object to a *ScoredMove object
     void operator=(Move m) { data = m.getData(); }
 
     // Constructor to initialize both data (from Move) and score
-    ScoredMove(int dataValue = 0, int8_t scoreValue = 0)
+    ScoredMove(int dataValue = 0, int32_t scoreValue = 0)
         : Move(dataValue), score(scoreValue) {}
 
 };

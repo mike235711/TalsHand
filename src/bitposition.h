@@ -310,31 +310,35 @@ public:
         return m_board[dst];
     }
 
+    // Move-ordering score bands (stored in ScoredMove::score). Captures and queen
+    // promotions rank above all quiets; killers (added later by the search) sit
+    // just below captures; remaining quiets are ordered by history. MVV_LVA_VALUE
+    // are small piece weights indexed by piece type (P,N,B,R,Q,K; index 7 = empty).
+    static constexpr int MVV_LVA_VALUE[8] = {1, 3, 3, 5, 9, 0, 0, 0};
+    static constexpr int CAPTURE_SCORE = 1 << 20; // good captures / queen promotions
+    static constexpr int CASTLE_SCORE = 1 << 15;  // castling: a preferred quiet
+
     int qSMoveValue(Move move) const
     {
-        // Promotions and castling
+        // Promotions / en-passant (special-move bit): rank as a top capture.
         if (move.getData() & 0b0100000000000000)
-            return 30;
-        // Non promotions
-        return m_board[move.getDestinationSquare()];
+            return CAPTURE_SCORE + MVV_LVA_VALUE[4] * 16;
+        // Captures: most-valuable-victim minus least-valuable-attacker (MVV-LVA).
+        return CAPTURE_SCORE + MVV_LVA_VALUE[m_board[move.getDestinationSquare()]] * 16 - MVV_LVA_VALUE[m_board[move.getOriginSquare()]];
     }
     int aBMoveValue(Move move) const
-    // Captures and queen promotions
     {
-        // Promotions and castling
+        // Promotions, en-passant and castling (the special-move bit)
         if (move.getData() & 0b0100000000000000)
         {
-            // Promotions
-            if (m_board[move.getOriginSquare()] == 0)
-                return 30;
-            // Castling
-            return 2;
+            if (m_board[move.getOriginSquare()] == 0) // pawn: promotion or en-passant capture
+                return CAPTURE_SCORE + MVV_LVA_VALUE[4] * 16;
+            return CASTLE_SCORE; // castling
         }
-        // Non promotions
-        int piece_at = m_board[move.getDestinationSquare()];
-        if (piece_at != 7)
-            return piece_at + 1;
-            
+        // Captures: MVV-LVA. Quiets score 0 (ordered by killers/history once added).
+        int victim = m_board[move.getDestinationSquare()];
+        if (victim != 7)
+            return CAPTURE_SCORE + MVV_LVA_VALUE[victim] * 16 - MVV_LVA_VALUE[m_board[move.getOriginSquare()]];
         return 0;
     }
 
