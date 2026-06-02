@@ -49,6 +49,7 @@ private:
     BitPosition &pos;
     ScoredMove *cur, *endMoves;
     bool pinsReady = false;
+    uint64_t needLegalityMask = 0; // pinned pieces | side-to-move king: only these need full isCaptureLegal
     ScoredMove moves[128];
 };
 

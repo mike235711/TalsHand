@@ -73,12 +73,15 @@ Move QSMoveSelectorNotCheck::select_legal()
     if (!pinsReady)
     {
         pos.setBlockersPinsAndCheckBitsInQS();
+        // Only king and pinned captures can be illegal here; QS never generates
+        // en passant, so every other capture is legal exactly as generated.
+        needLegalityMask = pos.piecesNeedingLegalityCheck();
         pinsReady = true;
     }
 
     while (cur < endMoves)
     {
-        // Find best remaining move in [cur, endMoves) 
+        // Find best remaining move in [cur, endMoves)
         ScoredMove *best = cur;
         for (ScoredMove *p = cur + 1; p < endMoves; ++p)
             if (p->score > best->score)
@@ -88,6 +91,9 @@ Move QSMoveSelectorNotCheck::select_legal()
         if (best != cur)
             std::swap(*best, *cur);
 
+        // Fast legality: non-king, non-pinned captures are always legal.
+        if (((1ULL << cur->getOriginSquare()) & needLegalityMask) == 0)
+            return *cur++;
         if (pos.isCaptureLegal(cur))
             return *cur++; // success → advance and return
 
