@@ -111,7 +111,12 @@ Move ABMoveSelectorNotCheck::select_legal()
     for (; cur < endMoves; ++cur)
         if (*cur != ttMove)
         {
-            // If move is not legal we skip it
+            // Fast legality: in a non-check node a non-king, non-pinned move is
+            // always legal (en passant is pre-filtered at generation). Only king
+            // moves, castling (origin == king square) and pinned pieces — flagged
+            // in needLegalityMask = pinnedPieces | kingBB — need the full check.
+            if (((1ULL << cur->getOriginSquare()) & needLegalityMask) == 0)
+                return *cur++;
             if (pos.isLegal(cur))
                 return *cur++;
         }
@@ -147,6 +152,9 @@ void QSMoveSelectorCheck::init()
 void ABMoveSelectorNotCheck::init_all()
 {
     cur = endMoves = moves;
+    // Cache the pieces that still need a full legality check (king + pinned);
+    // every other generated move is legal as-is and skips isLegal in select_legal.
+    needLegalityMask = pos.piecesNeedingLegalityCheck();
     endMoves = pos.pawnAllMoves(endMoves);
     endMoves = pos.knightAllMoves(endMoves);
     endMoves = pos.bishopAllMoves(endMoves);

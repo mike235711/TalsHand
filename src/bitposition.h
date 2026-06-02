@@ -367,6 +367,15 @@ public:
     {
         return m_king_position[turn];
     }
+    // Bitboard of side-to-move pieces whose moves still need a full legality
+    // check at a non-check AB node: the king (king-safety / castling) plus all
+    // pinned pieces (may step off the pin line). Every other pseudo-legal move
+    // is already legal (en passant is pre-filtered at generation), so the AB
+    // selector can skip isLegal for it. Requires setBlockersAndPinsInAB() first.
+    inline uint64_t piecesNeedingLegalityCheck() const
+    {
+        return state_info->pinnedPieces | (1ULL << m_king_position[not m_turn]);
+    }
     uint64_t getPieces(int color, int pieceType) const
     {
         return m_pieces[pieceType] & m_bitboard_by_color[color];
