@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-06-02
+
+Search-strength release: real move ordering at interior nodes. Quiet moves are now
+ordered with a killer-move heuristic and captures with MVV-LVA, on top of the TT
+move. Worth roughly **+77 Elo** over 0.3.5 in a 64-game match (60.9%, positive in
+all 4 time controls), with zero time losses.
+
+### Added
+- MVV-LVA capture ordering — captures are scored by victim value minus a small
+  attacker term (`CAPTURE_SCORE + MVV_LVA_VALUE[victim]*16 - MVV_LVA_VALUE[attacker]`),
+  so a pawn-takes-queen is tried before queen-takes-pawn. En-passant and castling
+  are handled explicitly. The per-move ordering score was widened from `int8_t` to
+  `int32_t` to hold the new score bands (captures > castling > quiets).
+- Killer-move heuristic — two quiet moves per ply that produced a beta cutoff are
+  remembered (`killers[ply][2]`) and ordered just below captures and above the
+  remaining quiets, so a refutation found in one sibling is tried early in the next.
+
+### Notes
+- A continuation-history experiment (search stack + `[prevPiece][prevTo][curPiece][curTo]`
+  table with bonus/malus) was tested separately and did **not** show a net gain over
+  this release (−11 ± 57 Elo, 64 games): it loses badly at bullet-1+1 (−89, where the
+  590 KB table's overhead dominates ~1 s/move) and is mildly positive at intermediate
+  controls. It is kept on the `history-experiment` branch for future work (overhead
+  reduction / time-gated activation), not merged. See `version_test_results/`.
+
 ## [0.3.5] - 2026-06-01
 
 Search-strength release: the transposition table now actually drives move ordering

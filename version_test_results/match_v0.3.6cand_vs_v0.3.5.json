@@ -1,0 +1,475 @@
+{
+  "new_binary": "/Users/miguel/Documents/GitHub/TalsHandThreaded/bin_v036cand/talshand_exe",
+  "old_binary": "/Users/miguel/Documents/GitHub/TalsHandThreaded/bin_v035/talshand_exe",
+  "per_tc": [
+    {
+      "tc": "bullet-1+1",
+      "base": 60.0,
+      "inc": 1.0,
+      "wins": 5,
+      "draws": 9,
+      "losses": 2,
+      "n": 16,
+      "points": 9.5,
+      "score_pct": 59.375,
+      "elo": 65.9240994583969,
+      "elo_error": 115.59162838926359,
+      "new_time_losses": 0,
+      "old_time_losses": 0,
+      "time_mgmt_diff": 0,
+      "games": [
+        {
+          "opening": 0,
+          "new_white": true,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 0,
+          "new_white": false,
+          "result_new_pov": "1/2-1/2",
+          "reason": "max plies (200)"
+        },
+        {
+          "opening": 1,
+          "new_white": true,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 1,
+          "new_white": false,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 2,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 2,
+          "new_white": false,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 3,
+          "new_white": true,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 3,
+          "new_white": false,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 4,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 4,
+          "new_white": false,
+          "result_new_pov": "0-1",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 5,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 5,
+          "new_white": false,
+          "result_new_pov": "0-1",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 6,
+          "new_white": true,
+          "result_new_pov": "1-0",
+          "reason": "engine error: invalid uci (use 0000 for null moves): 'a1a1'"
+        },
+        {
+          "opening": 6,
+          "new_white": false,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 7,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 7,
+          "new_white": false,
+          "result_new_pov": "1/2-1/2",
+          "reason": "insufficient_material"
+        }
+      ]
+    },
+    {
+      "tc": "bullet-1+3",
+      "base": 60.0,
+      "inc": 3.0,
+      "wins": 6,
+      "draws": 8,
+      "losses": 2,
+      "n": 16,
+      "points": 10.0,
+      "score_pct": 62.5,
+      "elo": 88.73949984654253,
+      "elo_error": 124.0516349300833,
+      "new_time_losses": 0,
+      "old_time_losses": 0,
+      "time_mgmt_diff": 0,
+      "games": [
+        {
+          "opening": 0,
+          "new_white": true,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 0,
+          "new_white": false,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 1,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 1,
+          "new_white": false,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 2,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 2,
+          "new_white": false,
+          "result_new_pov": "0-1",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 3,
+          "new_white": true,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 3,
+          "new_white": false,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 4,
+          "new_white": true,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 4,
+          "new_white": false,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 5,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 5,
+          "new_white": false,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 6,
+          "new_white": true,
+          "result_new_pov": "0-1",
+          "reason": "engine error: invalid uci (use 0000 for null moves): 'a1a1'"
+        },
+        {
+          "opening": 6,
+          "new_white": false,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 7,
+          "new_white": true,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 7,
+          "new_white": false,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        }
+      ]
+    },
+    {
+      "tc": "blitz-3+2",
+      "base": 180.0,
+      "inc": 2.0,
+      "wins": 6,
+      "draws": 7,
+      "losses": 3,
+      "n": 16,
+      "points": 9.5,
+      "score_pct": 59.375,
+      "elo": 65.9240994583969,
+      "elo_error": 132.33497929541028,
+      "new_time_losses": 0,
+      "old_time_losses": 0,
+      "time_mgmt_diff": 0,
+      "games": [
+        {
+          "opening": 0,
+          "new_white": true,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 0,
+          "new_white": false,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 1,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 1,
+          "new_white": false,
+          "result_new_pov": "0-1",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 2,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "max plies (200)"
+        },
+        {
+          "opening": 2,
+          "new_white": false,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 3,
+          "new_white": true,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 3,
+          "new_white": false,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 4,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 4,
+          "new_white": false,
+          "result_new_pov": "0-1",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 5,
+          "new_white": true,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 5,
+          "new_white": false,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 6,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 6,
+          "new_white": false,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 7,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "insufficient_material"
+        },
+        {
+          "opening": 7,
+          "new_white": false,
+          "result_new_pov": "0-1",
+          "reason": "checkmate"
+        }
+      ]
+    },
+    {
+      "tc": "blitz-5+2",
+      "base": 300.0,
+      "inc": 2.0,
+      "wins": 6,
+      "draws": 8,
+      "losses": 2,
+      "n": 16,
+      "points": 10.0,
+      "score_pct": 62.5,
+      "elo": 88.73949984654253,
+      "elo_error": 124.0516349300833,
+      "new_time_losses": 0,
+      "old_time_losses": 0,
+      "time_mgmt_diff": 0,
+      "games": [
+        {
+          "opening": 0,
+          "new_white": true,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 0,
+          "new_white": false,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 1,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 1,
+          "new_white": false,
+          "result_new_pov": "0-1",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 2,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 2,
+          "new_white": false,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 3,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 3,
+          "new_white": false,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 4,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 4,
+          "new_white": false,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 5,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 5,
+          "new_white": false,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 6,
+          "new_white": true,
+          "result_new_pov": "1/2-1/2",
+          "reason": "threefold_repetition"
+        },
+        {
+          "opening": 6,
+          "new_white": false,
+          "result_new_pov": "0-1",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 7,
+          "new_white": true,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        },
+        {
+          "opening": 7,
+          "new_white": false,
+          "result_new_pov": "1-0",
+          "reason": "checkmate"
+        }
+      ]
+    }
+  ],
+  "overall": {
+    "wins": 23,
+    "draws": 32,
+    "losses": 9,
+    "n": 64,
+    "points": 39.0,
+    "score_pct": 60.9375,
+    "elo": 77.24983934178465,
+    "elo_error": 60.58930251342768,
+    "new_time_losses": 0,
+    "old_time_losses": 0,
+    "time_mgmt_diff": 0
+  }
+}
