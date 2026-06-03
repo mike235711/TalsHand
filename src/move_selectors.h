@@ -96,6 +96,7 @@ private:
     Move ttMove;
     Move killer0, killer1; // quiet killer moves for this ply (Move(0) = none)
     uint64_t needLegalityMask = 0; // pinned pieces | side-to-move king: only these need full isLegal
+    int stage = 0;                 // 0 = captures, 1 = quiets (generated lazily), 2 = exhausted
     ScoredMove *cur, *endMoves;
     ScoredMove moves[256];
 };

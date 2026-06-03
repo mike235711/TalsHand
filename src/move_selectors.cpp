@@ -114,19 +114,57 @@ Move ABMoveSelectorCheck::select_legal()
 }
 Move ABMoveSelectorNotCheck::select_legal()
 {
-    for (; cur < endMoves; ++cur)
-        if (*cur != ttMove)
+    for (;;)
+    {
+        while (cur < endMoves)
         {
-            // Fast legality: in a non-check node a non-king, non-pinned move is
-            // always legal (en passant is pre-filtered at generation). Only king
-            // moves, castling (origin == king square) and pinned pieces — flagged
-            // in needLegalityMask = pinnedPieces | kingBB — need the full check.
-            if (((1ULL << cur->getOriginSquare()) & needLegalityMask) == 0)
-                return *cur++;
-            if (pos.isLegal(cur))
-                return *cur++;
+            ScoredMove *m = cur++;
+            if (*m == ttMove) // already searched before the selector was built
+                continue;
+            // Fast legality (Task-1): only king/castling and pinned origins, flagged in
+            // needLegalityMask = pinnedPieces | kingBB, need the full isLegal check;
+            // every other move is legal as generated (en passant pre-filtered at gen).
+            if (((1ULL << m->getOriginSquare()) & needLegalityMask) == 0)
+                return *m;
+            if (pos.isLegal(m))
+                return *m;
         }
-    return Move(0);
+        if (stage != 0) // quiets already produced (or there were none) → done
+            return Move(0);
+
+        // Deferred stage 2: no capture caused a cutoff, so generate the quiets now.
+        // Regenerate the full all-moves list over the (finished) capture slots, drop
+        // the captures / queen-promotions it repeats — already searched in stage 1 —
+        // then score the surviving quiets (killers boosted) and sort just those.
+        ScoredMove *raw = moves;
+        raw = pos.pawnAllMoves(raw);
+        raw = pos.knightAllMoves(raw);
+        raw = pos.bishopAllMoves(raw);
+        raw = pos.rookAllMoves(raw);
+        raw = pos.queenAllMoves(raw);
+        raw = pos.kingAllMoves(raw);
+        ScoredMove *w = moves;
+        for (ScoredMove *p = moves; p < raw; ++p)
+        {
+            if (pos.isCaptureStageMove(*p))
+                continue; // already searched as a capture in stage 1
+            int s = pos.aBMoveValue(*p);
+            if (s == 0) // plain quiet: rank killers above the rest
+            {
+                if (*p == killer0)
+                    s = BitPosition::KILLER_SCORE;
+                else if (*p == killer1)
+                    s = BitPosition::KILLER_SCORE - 1;
+            }
+            *w = *p;
+            w->score = s;
+            ++w;
+        }
+        sort_moves(moves, w);
+        cur = moves;
+        endMoves = w;
+        stage = 1;
+    }
 }
 
 // Qscence Search
@@ -154,21 +192,27 @@ void QSMoveSelectorCheck::init()
     else
         endMoves = pos.inCheckOrderedCaptures(endMoves);
 }
-// AB Search (PV nodes)
+// AB Search (PV nodes) — staged: captures first, quiets generated lazily.
 void ABMoveSelectorNotCheck::init_all()
 {
-    cur = endMoves = moves;
     // Cache the pieces that still need a full legality check (king + pinned);
     // every other generated move is legal as-is and skips isLegal in select_legal.
     needLegalityMask = pos.piecesNeedingLegalityCheck();
-    endMoves = pos.pawnAllMoves(endMoves);
-    endMoves = pos.knightAllMoves(endMoves);
-    endMoves = pos.bishopAllMoves(endMoves);
-    endMoves = pos.rookAllMoves(endMoves);
-    endMoves = pos.queenAllMoves(endMoves);
-    endMoves = pos.kingAllMoves(endMoves);
-    score();
+    cur = endMoves = moves;
+    // Stage 1: captures + queen promotions only. Quiets are deferred to select_legal,
+    // so a node that cuts off on a capture never generates / scores / sorts them.
+    endMoves = pos.pawnCapturesAndQueenProms(endMoves);
+    endMoves = pos.knightCaptures(endMoves);
+    endMoves = pos.bishopCaptures(endMoves);
+    endMoves = pos.rookCaptures(endMoves);
+    endMoves = pos.queenCaptures(endMoves);
+    endMoves = pos.kingCaptures(endMoves);
+    // The capture generators write the QS score; re-score with the AB value so the
+    // capture ordering matches the old eager selector, then sort the small list.
+    for (ScoredMove *p = cur; p < endMoves; ++p)
+        p->score = pos.aBMoveValue(*p);
     sort_moves(cur, endMoves);
+    stage = 0;
 }
 
 // AB Search in check

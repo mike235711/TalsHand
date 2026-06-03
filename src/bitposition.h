@@ -376,6 +376,21 @@ public:
     {
         return state_info->pinnedPieces | (1ULL << m_king_position[not m_turn]);
     }
+    // True iff `m` is one of the moves the capture-only generators emit: a
+    // non-promotion capture, or a queen promotion (push or capture). The staged AB
+    // selector searches captures first, then generates the all-moves list lazily and
+    // drops from it the moves for which this returns true (already searched), so the
+    // two phases together cover every move exactly once. Mirrors the split between
+    // pawnCapturesAndQueenProms / {knight..king}Captures and the all-moves generators.
+    inline bool isCaptureStageMove(Move m) const
+    {
+        const int dest = m.getDestinationSquare();
+        if (!m.isSpecial())
+            return m_board[dest] != 7; // plain capture (enemy on destination); else a quiet
+        // special = promotion / en passant / castling
+        const bool backRank = (dest <= 7 || dest >= 56);
+        return backRank && m.getPromotingPiece() == 3; // only QUEEN promotions are in the capture stage
+    }
     uint64_t getPieces(int color, int pieceType) const
     {
         return m_pieces[pieceType] & m_bitboard_by_color[color];
