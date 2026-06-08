@@ -1347,6 +1347,7 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
         m_king_position[not m_turn] = destination_square;
 
         state_info->isCheck = isDiscoverCheck(origin_square, destination_square);
+        state_info->reversibleMovesMade++; // Move is reversible
 
         if (move.isSpecial()) 
         {
