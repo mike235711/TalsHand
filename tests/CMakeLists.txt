@@ -50,6 +50,14 @@ if(CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG" AND NOT ENABLE_VERBOSE_DEBUG)
         Talshand::lib
     )
     catch_discover_tests(uci_tests)
+
+    # Threefold-repetition behaviour tests
+    add_executable(repetition_tests "test_repetition.cpp")
+    target_link_libraries(repetition_tests PRIVATE
+        Catch2::Catch2WithMain
+        Talshand::lib
+    )
+    catch_discover_tests(repetition_tests)
 endif()
 
 # Scenario 2: Debug Verbose Build (Tactics up to Depth 5)
@@ -114,4 +122,12 @@ if(CMAKE_BUILD_TYPE_UPPER STREQUAL "RELEASE")
         Talshand::lib
     )
     catch_discover_tests(uci_tests)
+
+    # Threefold-repetition behaviour tests (also run in release for speed)
+    add_executable(repetition_tests test_repetition.cpp)
+    target_link_libraries(repetition_tests PRIVATE
+        Catch2::Catch2WithMain
+        Talshand::lib
+    )
+    catch_discover_tests(repetition_tests)
 endif()
