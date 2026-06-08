@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Staged move picker** (`ABMoveSelectorNotCheck`) — captures + queen promotions
+  are generated/scored/sorted first; quiets are generated lazily only if no capture
+  caused a cutoff. Deep fixed-depth tactics **−27.5 %**, perft node counts identical,
+  perft-AB NPS neutral. Elo-neutral in a 64-game match vs 0.3.6 (a 64-game match
+  cannot resolve an NPS-only gain). Kept here as the apples-to-apples basis for the
+  LaMano-vs-Stockfish move-generation/NPS comparison, not folded into 0.3.7.
+
+## [0.3.7] - 2026-06-08
+
+Correctness + search-speed release: cheap legality filtering, and a repetition-counter
+fix that makes the engine actually claim/avoid perpetual-check draws.
+
+### Fixed
+- Threefold repetition involving king moves — `reversibleMovesMade` (the window
+  `isDraw` scans) was not incremented on normal king moves, only on other pieces.
+  A perpetual-check repetition (queen-check + king-shuffle) therefore reached the
+  3rd occurrence with the counter still below `isDraw`'s `< 8` guard, so the engine
+  failed to claim it: it would play on out of a drawn-by-repetition position and
+  lose, or could miss avoiding one. King moves now increment the counter like every
+  other reversible move (the Zobrist key already encodes castling-rights changes, so
+  no false matches). New `tests/test_repetition.cpp` guards both directions (a winning
+  side must avoid the draw; a losing side must force the perpetual).
+
+### Changed
+- Cheap legality — in a non-check node a pseudo-legal move is illegal only if its
+  origin is the king (king-safety / castling) or a pinned piece, so the AB and QS
+  selectors gate the full `isLegal` / `isCaptureLegal` behind one inline
+  `((1ULL<<from) & (pinnedPieces | kingBB)) == 0` test (en passant is pre-filtered at
+  generation). Aggregate perft NPS **+15 %** (77.6M → 89.3M at depth 5); the search
+  tree is unchanged (perft node counts identical across all 6 positions). Elo-neutral
+  but not weaker over a 64-game match vs 0.3.6 (a 64-game match cannot resolve an
+  NPS-only gain). Still ~3.9× behind Stockfish on raw `go perft` (was ~4.5×).
+
 ## [0.3.6] - 2026-06-02
 
 Search-strength release: real move ordering at interior nodes. Quiet moves are now
