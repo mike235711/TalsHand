@@ -398,6 +398,11 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
             rootMoves.push_back(candidate);
     }
 
+    // Seed a legal move up-front so an early hard-timeout never returns Move(0)
+    // (returning the null move forfeits the game). firstMoveSearch overwrites it.
+    if (!rootMoves.empty())
+        bestRootMove = rootMoves[0];
+
     // If there is only one move in the position, we make it
     if (rootMoves.size() == 1)
     {
