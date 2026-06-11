@@ -39,8 +39,8 @@ namespace NNUEU
 
     {
         // 1. ---------------------------------------------------------------- Layer 0 (input preprocessing)
-        int8_t input8[8];
-        for (int i = 0; i < 8; ++i)
+        int8_t input8[FIRST_OUT];
+        for (int i = 0; i < FIRST_OUT; ++i)
         {
             // Same pipeline as the SIMD code: clip to int8, ReLU (negatives → 0).
             int16_t x = pInput[i];
@@ -51,10 +51,10 @@ namespace NNUEU
         int16_t l1[8];
         for (int n = 0; n < 8; ++n)
         {
-            const int8_t *w = (n < 4 ? pWeights11 + n * 8
-                                    : pWeights12 + (n - 4) * 8);
+            const int8_t *w = (n < 4 ? pWeights11 + n * FIRST_OUT
+                                    : pWeights12 + (n - 4) * FIRST_OUT);
             int32_t acc = 0;
-            for (int k = 0; k < 8; ++k)
+            for (int k = 0; k < FIRST_OUT; ++k)
                 acc += static_cast<int32_t>(input8[k]) * static_cast<int32_t>(w[k]);
 
             acc += static_cast<int32_t>(weights.secondBias[n]);

@@ -9,6 +9,19 @@ class BitPosition;
 namespace NNUEU
 {
     class Transformer;
+
+    // Accumulator width is a build-time switch. The default build is the
+    // width-32 net (w32_wdl0, v0.3.8 baseline); width-8 builds pass
+    // -DNNUEU_FIRST_OUT=8 (CMake: -DNNUEU_FIRST_OUT=8). Only 8 and 32 are
+    // supported by the forward pass (see network.cpp).
+#ifndef NNUEU_FIRST_OUT
+#define NNUEU_FIRST_OUT 32
+#endif
+    static_assert(NNUEU_FIRST_OUT == 8 || NNUEU_FIRST_OUT == 32,
+                  "NNUEU_FIRST_OUT must be 8 or 32");
+    static constexpr int F_MAP = 640;
+    static constexpr int FIRST_OUT = NNUEU_FIRST_OUT;
+    static constexpr int SECOND_OUT = FIRST_OUT * 4;
     // NNUEUChange structure: holds the incremental change info
     struct NNUEUChange
     {
@@ -35,7 +48,7 @@ namespace NNUEU
     // AccumulatorState structure: holds the NNUEU accumulators for one node.
     struct AccumulatorState
     {
-        int16_t inputTurn[2][8]; // [0] white, [1] black NNUEU input arrays.
+        int16_t inputTurn[2][FIRST_OUT]; // [0] white, [1] black NNUEU input arrays.
         bool computed[2];           // True if the state is fully updated for whites/blacks perspective.
         NNUEUChange changes;     // The incremental change that led to this state.
         void newAcc(const NNUEUChange &chngs)
@@ -99,10 +112,6 @@ namespace NNUEU
         void applyIncrementalChanges(AccumulatorState &curr, const AccumulatorState &prev, bool turn, const Transformer &transformer);
     };
     
-    static constexpr int F_MAP = 640;
-    static constexpr int FIRST_OUT = 8;
-    static constexpr int SECOND_OUT = 8 * 4;
-
     // Transformer class contains the weights necessary to update accumulators (first and second layers)
     class Transformer
     {
