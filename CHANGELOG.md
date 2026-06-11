@@ -14,6 +14,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot resolve an NPS-only gain). Kept here as the apples-to-apples basis for the
   LaMano-vs-Stockfish move-generation/NPS comparison, not folded into 0.3.7.
 
+## [0.3.8] - 2026-06-11
+
+NNUEU evaluation upgrade: a wider network (width-32 accumulator, `w32_wdl0`) plus a
+null-move forfeit fix. `w32_wdl0` becomes the new evaluation baseline, replacing the
+width-8 `v4` net.
+
+### Added
+- **Width-32 NNUEU** (`w32_wdl0`) — the first hidden accumulator is widened from 8 to
+  32 neurons, giving the evaluation more capacity (layers 2/3 are unchanged). The
+  accumulator width is now a build-time switch: `NNUEU_FIRST_OUT` (default 32; CMake
+  `-DNNUEU_FIRST_OUT=8` rebuilds the legacy width-8 net), and both the default net
+  path and the SIMD kernel follow it. The net is trained on quiet **and** non-quiet
+  positions (WDL-blended target). Worth **+54.7 ± 61 Elo** over the 0.3.7 net in a
+  64-game rolling-baseline match (21-32-11, 57.8 %, positive in all four time
+  controls, 0 time losses), strongest at the longer controls (blitz-3+2 +112,
+  blitz-5+2 +66) where the stronger eval has time to pay off.
+
+### Fixed
+- **Move(0) forfeit** — `iterativeSearch` never seeded `bestRootMove` in the
+  multi-move branch; it relied on `firstMoveSearch` completing to set it. If the hard
+  time limit fired first (e.g. the slower width-32 net in bullet), the engine returned
+  the null move `a1a1` and forfeited the game. `bestRootMove` is now seeded with the
+  first root move up-front, so an early timeout always returns a legal move.
+
+### Performance
+- The width-32 layer-1 dot product accumulates in int32: the width-8 int16
+  `vmull`/`vaddvq_s16` path overflows over 32 products (~±8k each), so the wide kernel
+  uses NEON SDOT (`vdotq_s32`, requires `-march=armv8.2-a+dotprod`). Validated against
+  a scalar int32 reference (bit-identical over 100k random inputs, ~3× faster than
+  scalar in the NNUEU_Optim micro-bench) and in-engine via the `forwardPassDebug`
+  SIMD==scalar assertion on every evaluation in debug builds. The width-8 path is
+  unchanged (`if constexpr (FIRST_OUT == 8)`), so width-8 0.3.8 builds remain
+  bit-identical to 0.3.7.
+
 ## [0.3.7] - 2026-06-08
 
 Correctness + search-speed release: cheap legality filtering, and a repetition-counter

@@ -25,6 +25,19 @@ Evaluation is performed by an NNUE (Efficiently Updatable Neural Network) type n
   - The engine's worker `src/worker.h` has an NNUEU::AccumulatorStack whose deifinition is inside `src/accumulation.h`. This stack stacks up the incremental changes NNUEU::NNUEUChange, and stores the state of the last evaluated position in a NNUEU::AccumulatorState object defined in `src/accumulation.h`. If we want to evaluate a position, the AccumulatorStack will got to the closest previously evaluated position and update the state incrementally based on the NNUEU::NNUEUChange's that had been stored leading to the new position we want to evaluate now.
   - The theory behind NNUEU is detailed in `README.md`. But basically NNUEU::Transformer, NNUEU::AccumulatorStack, NNUEU::AccumulatorState and NNUEUChange are in charge of updating efficiently the output of our NNUEU's first layer. We then have in `network.cpp` and `network.h` defined the rest of the NNUEU. This takes care of performing the forward pass with SIMD instructions (very fast) of the rest of the NNUEU which consists of 3 layers. The output of this will be the static evaluation of the position, where a high value is good for the engine and low is bad for the engine, see NNUEU::Network.evaluate in `src/network.cpp`.
   - The trained neural network models are in the `models/` directory.
+  - **Accumulator width (build switch).** The first-layer accumulator width is a
+    compile-time constant `NNUEU::FIRST_OUT` (`src/accumulation.h`), driven by the
+    CMake cache variable `NNUEU_FIRST_OUT` (default **32**, the v0.3.8 `w32_wdl0`
+    baseline; pass `-DNNUEU_FIRST_OUT=8` to rebuild the legacy width-8 net, which
+    defaults to the proven v4 net and reproduces v0.3.7's eval). The default net path
+    follows the width. Layers 2 and 3 are unchanged across widths — only the first
+    accumulator and the layer-1 dot product scale. The forward pass branches on the
+    width with `if constexpr (FIRST_OUT == 8)`: width-8 keeps the original int16
+    `vmull`/`vaddvq_s16` kernel, while width-32 must accumulate in int32 (32 products
+    of ~±8k overflow int16) and uses NEON **SDOT** (`vdotq_s32`, requires
+    `-march=armv8.2-a+dotprod`). Both paths are checked bit-for-bit against the scalar
+    reference by `forwardPassDebug` (the SIMD==scalar assert on every eval in debug
+    builds) and, for width-32, by `NNUEU_Optim/nnueu_bench_w32.cpp`.
 
 ## Search Algorithm
 The engine uses an alpha-beta search with iterative deepening as its main algorithm.
