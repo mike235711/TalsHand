@@ -288,6 +288,18 @@ public:
     template <typename T>
     void unmakeCapture(T move);
 
+    // Null move (for null-move pruning): pass the turn without moving a piece.
+    NNUEU::NNUEUChange makeNullMove(StateInfo &new_state_info);
+    void unmakeNullMove();
+
+    // True if the side to move has any non-pawn, non-king material. Used as the
+    // zugzwang guard for null-move pruning (passing is unsafe in pawn endgames).
+    inline bool hasNonPawnMaterial() const
+    {
+        const uint64_t own = m_bitboard_by_color[not m_turn]; // side to move
+        return ((m_pieces[1] | m_pieces[2] | m_pieces[3] | m_pieces[4]) & own) != 0;
+    }
+
     bool isDraw() const;
 
     inline bool givesCheck(int origin_square, int destination_square, int moved_piece) const

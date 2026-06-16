@@ -57,6 +57,16 @@ private:
         currentPos.unmakeCapture(move);
         accumulatorStack.pop();
     }
+    // Null move (for null-move pruning): pushes a no-op accumulator change.
+    inline void makeNullMove(StateInfo &st)
+    {
+        accumulatorStack.push(currentPos.makeNullMove(st));
+    }
+    inline void unmakeNullMove()
+    {
+        currentPos.unmakeNullMove();
+        accumulatorStack.pop();
+    }
     // Record a quiet beta-cutoff move as a killer for this ply (captures/promotions,
     // which score != 0 in aBMoveValue, are ignored).
     inline void storeKiller(int ply, Move m)
@@ -75,7 +85,7 @@ private:
     void firstMoveSearch(int8_t depth);
 
     // Calls quisence when depth 0 is reached
-    int16_t alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int ply);
+    int16_t alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int ply, bool allowNull = true);
 
     // Only captures are searched making sure there is no mate in the end
     int16_t quiesenceSearch(int16_t alpha, int16_t beta);

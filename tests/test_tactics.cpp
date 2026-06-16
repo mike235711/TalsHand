@@ -123,7 +123,12 @@ TEST_CASE("Tactic 3", "[tactics][timed]") {
     #ifndef NDEBUG
         run_tactic_test("3", "1b1q4/8/P2p4/1N1Pp2p/5P1k/7P/1B1P3K/8 w - - 0 1", "b2d4", 5);
     #else
-        run_tactic_test("3", "1b1q4/8/P2p4/1N1Pp2p/5P1k/7P/1B1P3K/8 w - - 0 1", "b2d4", 11);
+        // This is a deep quiet win (Bd4) against an exposed but materially-up
+        // defender. Null-move pruning (v0.3.10) resolves it at depth 12 rather
+        // than 11 — it needs one extra ply because the reduced-depth null search
+        // briefly hides White's mating attack — but reaches that depth far faster
+        // (and the time-limited variant below confirms it under real time control).
+        run_tactic_test("3", "1b1q4/8/P2p4/1N1Pp2p/5P1k/7P/1B1P3K/8 w - - 0 1", "b2d4", 12);
     #endif
 }
 

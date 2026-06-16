@@ -140,7 +140,7 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta)
     return value;
 }
 
-int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int ply)
+int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int ply, bool allowNull)
 // This search is done when depth is more than 0 and considers all moves and stores positions in the transposition table
 {
     assert(alpha <= beta);
@@ -184,6 +184,37 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
                 || (ttBound == BOUND_LOWER && ttValue >= beta)
                 || (ttBound == BOUND_UPPER && ttValue <= alpha))
                 return ttValue;
+        }
+    }
+
+    // Null-move pruning. If we are not in check and have non-pawn material
+    // (zugzwang guard), give the opponent a free move and search to reduced depth.
+    // If even then the score still fails high, the position is good enough to prune.
+    // Gated on a static eval >= beta so we only spend the null search on promising
+    // nodes, skipped near mate scores so we never return an unproven mate, and
+    // disabled (allowNull) right after a null move and inside verification searches.
+    if (allowNull && depth >= 3 && beta < 29000 && !currentPos.getIsCheck() && currentPos.hasNonPawnMaterial())
+    {
+        const int16_t staticEval = network.evaluate(currentPos, accumulatorStack, *transformer);
+        if (staticEval >= beta)
+        {
+            const int8_t R = static_cast<int8_t>(2 + depth / 6);
+            StateInfo null_state;
+            makeNullMove(null_state);
+            // The opponent may not immediately null back (allowNull = false).
+            const int16_t nullValue = -alphaBetaSearch(static_cast<int8_t>(depth - 1 - R),
+                                                        static_cast<int16_t>(-beta),
+                                                        static_cast<int16_t>(-beta + 1), ply + 1, false);
+            unmakeNullMove();
+            if (nullValue >= beta)
+            {
+                // Verification search (NMP disabled at this node) guards against
+                // zugzwang and tactical lines where the free move is misleading
+                // (e.g. a defender that is up material but actually getting mated).
+                const int16_t verify = alphaBetaSearch(static_cast<int8_t>(depth - R), beta - 1, beta, ply, false);
+                if (verify >= beta)
+                    return beta; // confirmed fail-high prune (never an unproven mate)
+            }
         }
     }
 
