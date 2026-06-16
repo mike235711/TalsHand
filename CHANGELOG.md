@@ -7,12 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Staged move picker** (`ABMoveSelectorNotCheck`) — captures + queen promotions
-  are generated/scored/sorted first; quiets are generated lazily only if no capture
-  caused a cutoff. Deep fixed-depth tactics **−27.5 %**, perft node counts identical,
-  perft-AB NPS neutral. Elo-neutral in a 64-game match vs 0.3.6 (a 64-game match
-  cannot resolve an NPS-only gain). Kept here as the apples-to-apples basis for the
-  LaMano-vs-Stockfish move-generation/NPS comparison, not folded into 0.3.7.
+## [0.3.9] - 2026-06-15
+
+Search-speed release: the staged move picker, now the default. Same evaluation net
+as 0.3.8 (`w32_wdl0`); this is a pure search-efficiency change.
+
+### Changed
+- **Staged move picker** (`ABMoveSelectorNotCheck`) — captures + queen promotions are
+  generated/scored/sorted first; the quiets are generated, scored and sorted lazily
+  **only if no capture produced a beta cutoff** (Stockfish `MovePicker` style). A node
+  that cuts off on a capture — very common in tactical search — never generates/scores/
+  sorts its ~30+ quiet moves. Profiling 0.3.8 showed eager move generation
+  (`init_all`, 18.5 %) was the single largest hotspot (move-gen ≈ 34 % of search time
+  vs Stockfish's ≈ 5 %); this targets exactly that.
+  - **~26 % faster** on the fixed-depth tactics suite (115 s → 85 s, order-independent
+    across thermal interleaving), perft node counts identical, all 32 tests pass.
+  - Worth **≈ +55 Elo** over 0.3.8 in a 64-game match with the **same** net
+    (23-28-13, 57.8 %), positive in three of four time controls:
+    bullet-1+1 **+160** (71.9 %), blitz-3+2 +44, blitz-5+2 +66; bullet-1+3 −44 (a noisy
+    outlier, ±153). The gain scales with node-starvation, so it is largest at 1+1.
+  - This change was Elo-neutral when measured on the older width-8 net (50.0 % vs
+    0.3.6) — the speed gain only became visible against the slower, more
+    node-starved width-32 net of 0.3.8.
 
 ## [0.3.8] - 2026-06-11
 
