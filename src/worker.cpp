@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <limits>
 #include <utility>
 
@@ -252,11 +253,38 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
             Move move;
             ABMoveSelectorNotCheck move_selector(currentPos, tt_move, killers[ply][0], killers[ply][1]);
             move_selector.init_all();
+            // Count of moves already searched at this node (the TT move, if any, was
+            // searched at full depth above). Used for late-move reductions.
+            int movesSearched = (tt_move.getData() != 0) ? 1 : 0;
             while ((move = move_selector.select_legal()) != Move(0))
             {
                 no_moves = false;
+                ++movesSearched;
+                // Quiet moves score 0 in aBMoveValue (captures/promotions score != 0).
+                const bool isQuiet = (currentPos.aBMoveValue(move) == 0);
                 makeMove(move, state_info);
-                child_value = -alphaBetaSearch(depth - 1, -beta, -alpha, ply + 1);
+                // Late move reductions: a quiet, non-checking move ordered late is
+                // unlikely to be best, so search it shallower with a zero window. If
+                // it unexpectedly beats alpha, re-search at full depth and window.
+                if (depth >= 3 && movesSearched >= 4 && isQuiet && !currentPos.getIsCheck())
+                {
+                    // Conservative reduction: 1 ply for moderately-late moves, 2 for
+                    // very late or deep nodes. Kept gentle so deep quiet wins are not
+                    // hidden (the zero-window re-search below restores any move that
+                    // beats alpha).
+                    int R = (movesSearched >= 8 || depth >= 8) ? 2 : 1;
+                    if (R > depth - 2)
+                        R = depth - 2; // keep the reduced depth >= 1
+                    child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1 - R),
+                                                   static_cast<int16_t>(-(alpha + 1)),
+                                                   static_cast<int16_t>(-alpha), ply + 1);
+                    if (child_value > alpha)
+                        child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1), -beta, -alpha, ply + 1);
+                }
+                else
+                {
+                    child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1), -beta, -alpha, ply + 1);
+                }
                 unmakeMove(move);
                 if (child_value > value)
                 {
