@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.10] - 2026-06-17
+
+Search-strength release: null-move pruning. Same evaluation net as 0.3.8/0.3.9
+(`w32_wdl0`) — a pure search change that lets the engine reach much greater depth
+in the same time.
+
+### Added
+- **Null-move pruning** (`alphaBetaSearch`). When the side to move is not in
+  check, has non-pawn material (zugzwang guard), and the static eval is already
+  `>= beta`, the opponent is given a free move and the position is searched to
+  reduced depth (`R = 2 + depth/6`); if that still fails high, a **verification
+  search** (NMP disabled at that node) confirms it before pruning.
+  `makeNullMove`/`unmakeNullMove` pass the turn (flip side-to-move + zobrist key,
+  clear en passant, no-op accumulator change). Consecutive null moves are
+  disallowed and mate scores are never returned from a prune.
+  - **~10x faster** on the fixed-depth tactics suite — it prunes large quiet
+    subtrees, so far fewer nodes per depth (the #1 lever from the v0.3.9 profile).
+  - Worth **+54.7 Elo** over 0.3.9 in a 64-game match with the **same** net
+    (25-24-15, 57.8 %), positive in three of four time controls: bullet-1+1 **+44**,
+    bullet-1+3 **+89**, blitz-3+2 **+89**; blitz-5+2 even (+0).
+  - Deep Tactic 3 (a quiet win, `b2d4`, vs a materially-up defender) now resolves
+    at depth 12 instead of 11 — the reduced-depth null search briefly hides White's
+    mating attack; the fixed-depth regression test was re-calibrated to depth 12,
+    and the time-limited variant confirms it under real time control. All 30
+    correctness tests pass.
+
 ## [0.3.9] - 2026-06-15
 
 Search-speed release: the staged move picker, now the default. Same evaluation net
