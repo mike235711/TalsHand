@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.11] - 2026-06-18
+
+Search-strength release: late move reductions (LMR). Same evaluation net as
+0.3.8–0.3.10 (`w32_wdl0`) — a pure search change on top of null-move pruning.
+
+### Added
+- **Late move reductions** (`alphaBetaSearch`). In the not-in-check move loop, late
+  (`movesSearched >= 4`) quiet (`aBMoveValue == 0`) non-checking moves at depth >= 3
+  are first searched at reduced depth with a **zero window** (R = 1, or 2 for very
+  late / deep nodes); if the reduced search beats alpha the move is **re-searched at
+  full depth and window**. The reduction is deliberately conservative — an aggressive
+  log-based R left a clearly-winning quiet move (Tactic 3 `b2d4`) unfindable even at
+  fixed depth 28, so a gentle reduction is used instead.
+  - Combined with NMP (0.3.10): fixed-depth tactics suite **~1.9s** (was ~85s at
+    0.3.9, ~8s at 0.3.10) — ~44x faster than 0.3.9.
+  - Worth **+38.2 Elo** over 0.3.10 in a 64-game match with the **same** net
+    (17-37-10, 55.5 %), positive in **all four** time controls: bullet-1+1 +22,
+    bullet-1+3 +44, blitz-3+2 +66, blitz-5+2 +22. (Draw-heavy — 37 of 64 — as
+    expected for an increment layered on an already-strong NMP engine.)
+  - Deep Tactic 3 resolves at depth 13 (NMP needed 12); the fixed-depth test was
+    re-calibrated and the time-limited variant confirms `b2d4` under real time
+    control. All 30 correctness tests pass.
+
 ## [0.3.10] - 2026-06-17
 
 Search-strength release: null-move pruning. Same evaluation net as 0.3.8/0.3.9
