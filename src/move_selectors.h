@@ -81,8 +81,9 @@ class ABMoveSelectorNotCheck
 public:
     ABMoveSelectorNotCheck(const ABMoveSelectorNotCheck &) = delete;
     ABMoveSelectorNotCheck &operator=(const ABMoveSelectorNotCheck &) = delete;
-    ABMoveSelectorNotCheck(BitPosition & p, Move m, Move k0 = Move(0), Move k1 = Move(0))
-        : pos(p), ttMove(m), killer0(k0), killer1(k1) {};
+    ABMoveSelectorNotCheck(BitPosition & p, Move m, Move k0 = Move(0), Move k1 = Move(0),
+                           const int32_t (*hist)[64] = nullptr)
+        : pos(p), ttMove(m), killer0(k0), killer1(k1), history(hist) {};
     // AB Search (PV nodes)
     void init_all();
     Move select_legal();
@@ -95,6 +96,7 @@ private:
     BitPosition &pos;
     Move ttMove;
     Move killer0, killer1; // quiet killer moves for this ply (Move(0) = none)
+    const int32_t (*history)[64]; // butterfly-history sub-table for the side to move (nullptr = none)
     uint64_t needLegalityMask = 0; // pinned pieces | side-to-move king: only these need full isLegal
     int stage = 0;                 // 0 = captures, 1 = quiets (generated lazily), 2 = exhausted
     ScoredMove *cur, *endMoves;

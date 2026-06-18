@@ -165,6 +165,10 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
     currentPos.setBlockersAndPinsInAB(); // For discovered checks and move generators
     currentPos.setCheckBits();           // For direct checks
 
+    const bool stm = currentPos.getTurn(); // side to move: indexes the butterfly history
+    Move quietsTried[64];                  // quiet moves searched at this node (history malus on cutoff)
+    int nQuiets = 0;
+
     // Check if we have stored this position in ttable
     TTEntry *ttEntry = tt.probe(currentPos.getZobristKey());
     Move tt_move{0};
@@ -228,6 +232,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
     #endif
 #endif
         no_moves = false;
+        const bool ttQuiet = (currentPos.aBMoveValue(tt_move) == 0);
         makeMove(tt_move, state_info);
         child_value = -alphaBetaSearch(depth - 1, -beta, -alpha, ply + 1);
         unmakeMove(tt_move);
@@ -242,7 +247,11 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
         {
             cutoff = true; // Fail high
             storeKiller(ply, tt_move);
+            if (ttQuiet)
+                updateHistory(stm, tt_move, depth, quietsTried, nQuiets); // nQuiets == 0: bonus only
         }
+        else if (ttQuiet)
+            quietsTried[nQuiets++] = tt_move;
     }
 
     // We only search if tt_move didn't produce a cutoff in the search tree
@@ -251,7 +260,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
         if (not currentPos.getIsCheck()) // Not in check
         {
             Move move;
-            ABMoveSelectorNotCheck move_selector(currentPos, tt_move, killers[ply][0], killers[ply][1]);
+            ABMoveSelectorNotCheck move_selector(currentPos, tt_move, killers[ply][0], killers[ply][1], mainHistory[stm]);
             move_selector.init_all();
             // Count of moves already searched at this node (the TT move, if any, was
             // searched at full depth above). Used for late-move reductions.
@@ -269,10 +278,16 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
                 if (depth >= 3 && movesSearched >= 4 && isQuiet && !currentPos.getIsCheck())
                 {
                     // Conservative reduction: 1 ply for moderately-late moves, 2 for
-                    // very late or deep nodes. Kept gentle so deep quiet wins are not
-                    // hidden (the zero-window re-search below restores any move that
-                    // beats alpha).
+                    // very late or deep nodes, nudged by the move's butterfly history
+                    // (reduce a poor-history quiet one extra ply, a strong-history one
+                    // one fewer). Kept gentle so deep quiet wins are not hidden (the
+                    // zero-window re-search below restores any move that beats alpha).
                     int R = (movesSearched >= 8 || depth >= 8) ? 2 : 1;
+                    const int h = historyScore(stm, move);
+                    if (h < -4000)
+                        ++R;
+                    else if (h > 8000 && R > 1)
+                        --R;
                     if (R > depth - 2)
                         R = depth - 2; // keep the reduced depth >= 1
                     child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1 - R),
@@ -297,8 +312,12 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
                 {
                     cutoff = true;
                     storeKiller(ply, move);
+                    if (isQuiet)
+                        updateHistory(stm, move, depth, quietsTried, nQuiets);
                     break; // Fail high
                 }
+                if (isQuiet && nQuiets < 64)
+                    quietsTried[nQuiets++] = move;
             }
         }
         else // In check
@@ -433,7 +452,8 @@ void Worker::firstMoveSearch(int8_t depth)
 
 void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
 {
-    std::memset(killers, 0, sizeof(killers)); // fresh killer table per search
+    std::memset(killers, 0, sizeof(killers));         // fresh killer table per search
+    std::memset(mainHistory, 0, sizeof(mainHistory)); // fresh butterfly history per search
 
     rootPos.setBlockersAndPinsInAB(); // For discovered checks and move generators
     rootPos.setCheckBits();           // For direct checks
