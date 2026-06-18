@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.12] - 2026-06-18
+
+Search-strength release: butterfly history move ordering + history-aware LMR.
+Same evaluation net as 0.3.8–0.3.11 (`w32_wdl0`) — a pure search change on top
+of LMR (0.3.11).
+
+### Added
+- **Butterfly history heuristic** for quiet-move ordering. A
+  `mainHistory[sideToMove][from][to]` table is updated on every quiet beta cutoff
+  with the standard history-gravity rule (the cutting move gets a `depth²` bonus,
+  the quiet moves tried before it an equal malus, saturating towards ±16384). The
+  staged AB move selector (`ABMoveSelectorNotCheck`) now orders quiets by this
+  table — killers still rank above, captures remain a separate earlier stage —
+  replacing the old generation-order fallback. This is the first concrete fix for
+  the "bushy tree" finding: LaMano searched ~25× more nodes/sec than Stockfish yet
+  reached less than half the depth, i.e. its move ordering left too many quiet
+  moves un-prioritised.
+- **History-aware LMR.** The late-move reduction is nudged by the move's history
+  score: a clearly poor-history quiet (`< -4000`) is reduced one extra ply, a
+  strong-history one (`> 8000`) one fewer.
+
+### Result
+- **+38.2 ± 59.7 Elo** vs 0.3.11 over 64 games (19-33-12, 55.5 %), zero time
+  losses on either side. Per time control: bullet-1+1 −21.7, bullet-1+3 +112.3,
+  blitz-3+2 +88.7, blitz-5+2 −21.7. Correctness gate green (nnueu eval, mate,
+  repetition, 14/14 tactics).
+
 ## [0.3.11] - 2026-06-18
 
 Search-strength release: late move reductions (LMR). Same evaluation net as
