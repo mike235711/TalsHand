@@ -41,7 +41,8 @@ def run(exe: str, fen: str, depth: int, cwd: str | None) -> dict:
     p = subprocess.Popen([exe], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                          text=True, bufsize=1, cwd=cwd)
     setup = "startpos" if fen == POSITIONS["startpos"] else f"fen {fen}"
-    p.stdin.write(f"uci\nposition {setup}\ngo depth {depth}\n")
+    # Threads=1 keeps the instrumented-Stockfish counters single-threaded (and is LaMano's default).
+    p.stdin.write(f"uci\nsetoption name Threads value 1\nposition {setup}\ngo depth {depth}\n")
     p.stdin.flush()
     per_depth: dict[int, int] = {}
     bestmove, breakdown = None, None
@@ -51,8 +52,8 @@ def run(exe: str, fen: str, depth: int, cwd: str | None) -> dict:
         if m:
             d, n = int(m.group(1)), int(m.group(2))
             per_depth[d] = max(per_depth.get(d, 0), n)  # final/max line for that depth
-        if line.startswith("info string nodes"):       # LaMano pruning breakdown
-            breakdown = line[len("info string "):]
+        if line.startswith("info string nodes") or line.startswith("info string lm"):
+            breakdown = line[len("info string "):]       # LaMano or instrumented-SF pruning breakdown
         if line.startswith("bestmove"):
             bestmove = line.split()[1] if len(line.split()) > 1 else None
             break
@@ -85,7 +86,8 @@ def main() -> int:
         for name, fen in POSITIONS.items():
             r = run(args.sf, fen, args.depth, cwd=None)
             ref["positions"][name] = {"fen": fen, "per_depth": r["per_depth"],
-                                       "ebf": ebf(r["per_depth"], args.depth), "bestmove": r["bestmove"]}
+                                       "ebf": ebf(r["per_depth"], args.depth), "bestmove": r["bestmove"],
+                                       "breakdown": r["breakdown"]}
             print(f"[sf] {name:<16} d{args.depth} nodes {r['per_depth'].get(args.depth,'?'):>10} "
                   f"ebf {ref['positions'][name]['ebf']}")
         Path(args.out).write_text(json.dumps(ref, indent=2))
