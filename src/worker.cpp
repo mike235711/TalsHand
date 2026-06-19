@@ -11,6 +11,18 @@
 #include "move_selectors.h"
 #include "ttable.h"
 
+// Late-move-reduction table (Stockfish-style): Reductions[i] ~ K*log(i). The per-move
+// reduction is R = Reductions[depth] * Reductions[movesSearched] / LMR_SCALE, so it grows
+// with both depth and move count. Lower LMR_SCALE = more aggressive reductions.
+static int Reductions[256];
+static constexpr int LMR_SCALE = 1024;
+static const bool reductionsInit = [] {
+    Reductions[0] = 0;
+    for (int i = 1; i < 256; ++i)
+        Reductions[i] = static_cast<int>(23.0 * std::log(static_cast<double>(i)));
+    return true;
+}();
+
 //  Constructor (only *definition* lives here; prototype in header)
 Worker::Worker(TranspositionTable &ttable,
                ThreadPool &threadpool,
@@ -286,26 +298,30 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
                 // Late move reductions: a quiet, non-checking move ordered late is
                 // unlikely to be best, so search it shallower with a zero window. If
                 // it unexpectedly beats alpha, re-search at full depth and window.
-                if (depth >= 3 && movesSearched >= 4 && isQuiet && !currentPos.getIsCheck())
+                if (depth >= 2 && movesSearched >= 2 && isQuiet && !currentPos.getIsCheck())
                 {
-                    ++cntLMR;
-                    // Conservative reduction: 1 ply for moderately-late moves, 2 for
-                    // very late or deep nodes, nudged by the move's butterfly history
-                    // (reduce a poor-history quiet one extra ply, a strong-history one
-                    // one fewer). Kept gentle so deep quiet wins are not hidden (the
-                    // zero-window re-search below restores any move that beats alpha).
-                    int R = (movesSearched >= 8 || depth >= 8) ? 2 : 1;
-                    const int h = historyScore(stm, move);
-                    if (h < -4000)
-                        ++R;
-                    else if (h > 8000 && R > 1)
-                        --R;
-                    if (R > depth - 2)
-                        R = depth - 2; // keep the reduced depth >= 1
-                    child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1 - R),
-                                                   static_cast<int16_t>(-(alpha + 1)),
-                                                   static_cast<int16_t>(-alpha), ply + 1);
-                    if (child_value > alpha)
+                    // Formula reduction: R grows with depth x moveCount (log table), nudged
+                    // by butterfly history (good-history quiets reduced less, bad ones more).
+                    // Late quiets after the TT move / captures / killers are unlikely to be
+                    // best, so most reductions stick; the zero-window re-search restores any
+                    // move that beats alpha.
+                    int R = (Reductions[depth < 256 ? depth : 255]
+                             * Reductions[movesSearched < 256 ? movesSearched : 255]) / LMR_SCALE;
+                    R -= historyScore(stm, move) / 8000; // +/- up to ~2 plies
+                    if (R < 0)
+                        R = 0;
+                    if (R > depth - 1)
+                        R = depth - 1; // keep the reduced depth >= 1
+                    if (R > 0)
+                    {
+                        ++cntLMR;
+                        child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1 - R),
+                                                       static_cast<int16_t>(-(alpha + 1)),
+                                                       static_cast<int16_t>(-alpha), ply + 1);
+                        if (child_value > alpha)
+                            child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1), -beta, -alpha, ply + 1);
+                    }
+                    else
                         child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1), -beta, -alpha, ply + 1);
                 }
                 else
