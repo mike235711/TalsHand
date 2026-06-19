@@ -123,7 +123,13 @@ TEST_CASE("Tactic 3", "[tactics][timed]") {
     #ifndef NDEBUG
         run_tactic_test("3", "1b1q4/8/P2p4/1N1Pp2p/5P1k/7P/1B1P3K/8 w - - 0 1", "b2d4", 5);
     #else
-        run_tactic_test("3", "1b1q4/8/P2p4/1N1Pp2p/5P1k/7P/1B1P3K/8 w - - 0 1", "b2d4", 11);
+        // This is a deep quiet win (Bd4) against an exposed but materially-up
+        // defender. Aggressive search reductions defer it by a ply or two at fixed
+        // depth: null-move pruning (v0.3.10) needed depth 12, and late-move
+        // reductions (v0.3.11) need depth 13. The engine reaches that depth far
+        // faster than before, and the time-limited variant below confirms the find
+        // under real time control.
+        run_tactic_test("3", "1b1q4/8/P2p4/1N1Pp2p/5P1k/7P/1B1P3K/8 w - - 0 1", "b2d4", 13);
     #endif
 }
 

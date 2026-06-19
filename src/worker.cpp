@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <limits>
 #include <utility>
 
@@ -140,7 +141,7 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta)
     return value;
 }
 
-int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int ply)
+int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int ply, bool allowNull)
 // This search is done when depth is more than 0 and considers all moves and stores positions in the transposition table
 {
     assert(alpha <= beta);
@@ -163,6 +164,10 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
 
     currentPos.setBlockersAndPinsInAB(); // For discovered checks and move generators
     currentPos.setCheckBits();           // For direct checks
+
+    const bool stm = currentPos.getTurn(); // side to move: indexes the butterfly history
+    Move quietsTried[64];                  // quiet moves searched at this node (history malus on cutoff)
+    int nQuiets = 0;
 
     // Check if we have stored this position in ttable
     TTEntry *ttEntry = tt.probe(currentPos.getZobristKey());
@@ -187,6 +192,37 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
         }
     }
 
+    // Null-move pruning. If we are not in check and have non-pawn material
+    // (zugzwang guard), give the opponent a free move and search to reduced depth.
+    // If even then the score still fails high, the position is good enough to prune.
+    // Gated on a static eval >= beta so we only spend the null search on promising
+    // nodes, skipped near mate scores so we never return an unproven mate, and
+    // disabled (allowNull) right after a null move and inside verification searches.
+    if (allowNull && depth >= 3 && beta < 29000 && !currentPos.getIsCheck() && currentPos.hasNonPawnMaterial())
+    {
+        const int16_t staticEval = network.evaluate(currentPos, accumulatorStack, *transformer);
+        if (staticEval >= beta)
+        {
+            const int8_t R = static_cast<int8_t>(2 + depth / 6);
+            StateInfo null_state;
+            makeNullMove(null_state);
+            // The opponent may not immediately null back (allowNull = false).
+            const int16_t nullValue = -alphaBetaSearch(static_cast<int8_t>(depth - 1 - R),
+                                                        static_cast<int16_t>(-beta),
+                                                        static_cast<int16_t>(-beta + 1), ply + 1, false);
+            unmakeNullMove();
+            if (nullValue >= beta)
+            {
+                // Verification search (NMP disabled at this node) guards against
+                // zugzwang and tactical lines where the free move is misleading
+                // (e.g. a defender that is up material but actually getting mated).
+                const int16_t verify = alphaBetaSearch(static_cast<int8_t>(depth - R), beta - 1, beta, ply, false);
+                if (verify >= beta)
+                    return beta; // confirmed fail-high prune (never an unproven mate)
+            }
+        }
+    }
+
     // Transposition table move search
     if (tt_move.getData() != 0)
     {
@@ -196,6 +232,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
     #endif
 #endif
         no_moves = false;
+        const bool ttQuiet = (currentPos.aBMoveValue(tt_move) == 0);
         makeMove(tt_move, state_info);
         child_value = -alphaBetaSearch(depth - 1, -beta, -alpha, ply + 1);
         unmakeMove(tt_move);
@@ -210,7 +247,11 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
         {
             cutoff = true; // Fail high
             storeKiller(ply, tt_move);
+            if (ttQuiet)
+                updateHistory(stm, tt_move, depth, quietsTried, nQuiets); // nQuiets == 0: bonus only
         }
+        else if (ttQuiet)
+            quietsTried[nQuiets++] = tt_move;
     }
 
     // We only search if tt_move didn't produce a cutoff in the search tree
@@ -219,13 +260,46 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
         if (not currentPos.getIsCheck()) // Not in check
         {
             Move move;
-            ABMoveSelectorNotCheck move_selector(currentPos, tt_move, killers[ply][0], killers[ply][1]);
+            ABMoveSelectorNotCheck move_selector(currentPos, tt_move, killers[ply][0], killers[ply][1], mainHistory[stm]);
             move_selector.init_all();
+            // Count of moves already searched at this node (the TT move, if any, was
+            // searched at full depth above). Used for late-move reductions.
+            int movesSearched = (tt_move.getData() != 0) ? 1 : 0;
             while ((move = move_selector.select_legal()) != Move(0))
             {
                 no_moves = false;
+                ++movesSearched;
+                // Quiet moves score 0 in aBMoveValue (captures/promotions score != 0).
+                const bool isQuiet = (currentPos.aBMoveValue(move) == 0);
                 makeMove(move, state_info);
-                child_value = -alphaBetaSearch(depth - 1, -beta, -alpha, ply + 1);
+                // Late move reductions: a quiet, non-checking move ordered late is
+                // unlikely to be best, so search it shallower with a zero window. If
+                // it unexpectedly beats alpha, re-search at full depth and window.
+                if (depth >= 3 && movesSearched >= 4 && isQuiet && !currentPos.getIsCheck())
+                {
+                    // Conservative reduction: 1 ply for moderately-late moves, 2 for
+                    // very late or deep nodes, nudged by the move's butterfly history
+                    // (reduce a poor-history quiet one extra ply, a strong-history one
+                    // one fewer). Kept gentle so deep quiet wins are not hidden (the
+                    // zero-window re-search below restores any move that beats alpha).
+                    int R = (movesSearched >= 8 || depth >= 8) ? 2 : 1;
+                    const int h = historyScore(stm, move);
+                    if (h < -4000)
+                        ++R;
+                    else if (h > 8000 && R > 1)
+                        --R;
+                    if (R > depth - 2)
+                        R = depth - 2; // keep the reduced depth >= 1
+                    child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1 - R),
+                                                   static_cast<int16_t>(-(alpha + 1)),
+                                                   static_cast<int16_t>(-alpha), ply + 1);
+                    if (child_value > alpha)
+                        child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1), -beta, -alpha, ply + 1);
+                }
+                else
+                {
+                    child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1), -beta, -alpha, ply + 1);
+                }
                 unmakeMove(move);
                 if (child_value > value)
                 {
@@ -238,8 +312,12 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
                 {
                     cutoff = true;
                     storeKiller(ply, move);
+                    if (isQuiet)
+                        updateHistory(stm, move, depth, quietsTried, nQuiets);
                     break; // Fail high
                 }
+                if (isQuiet && nQuiets < 64)
+                    quietsTried[nQuiets++] = move;
             }
         }
         else // In check
@@ -374,7 +452,8 @@ void Worker::firstMoveSearch(int8_t depth)
 
 void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
 {
-    std::memset(killers, 0, sizeof(killers)); // fresh killer table per search
+    std::memset(killers, 0, sizeof(killers));         // fresh killer table per search
+    std::memset(mainHistory, 0, sizeof(mainHistory)); // fresh butterfly history per search
 
     rootPos.setBlockersAndPinsInAB(); // For discovered checks and move generators
     rootPos.setCheckBits();           // For direct checks
@@ -397,6 +476,11 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
         while ((candidate = msel.select_legal()) != Move(0))
             rootMoves.push_back(candidate);
     }
+
+    // Seed a legal move up-front so an early hard-timeout never returns Move(0)
+    // (returning the null move forfeits the game). firstMoveSearch overwrites it.
+    if (!rootMoves.empty())
+        bestRootMove = rootMoves[0];
 
     // If there is only one move in the position, we make it
     if (rootMoves.size() == 1)

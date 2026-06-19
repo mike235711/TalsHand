@@ -23,12 +23,14 @@ void ABMoveSelectorNotCheck::score()
     for (auto &move : *this)
     {
         int s = pos.aBMoveValue(move);
-        if (s == 0) // a plain quiet move: rank killer moves above the rest
+        if (s == 0) // a plain quiet move: killers on top, then by butterfly history
         {
             if (move == killer0)
                 s = BitPosition::KILLER_SCORE;
             else if (move == killer1)
                 s = BitPosition::KILLER_SCORE - 1;
+            else if (history)
+                s = history[move.getOriginSquare()][move.getDestinationSquare()];
         }
         move.score = s;
     }
@@ -149,12 +151,14 @@ Move ABMoveSelectorNotCheck::select_legal()
             if (pos.isCaptureStageMove(*p))
                 continue; // already searched as a capture in stage 1
             int s = pos.aBMoveValue(*p);
-            if (s == 0) // plain quiet: rank killers above the rest
+            if (s == 0) // plain quiet: killers on top, then by butterfly history
             {
                 if (*p == killer0)
                     s = BitPosition::KILLER_SCORE;
                 else if (*p == killer1)
                     s = BitPosition::KILLER_SCORE - 1;
+                else if (history)
+                    s = history[p->getOriginSquare()][p->getDestinationSquare()];
             }
             *w = *p;
             w->score = s;

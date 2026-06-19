@@ -90,7 +90,7 @@ int16_t load_int16(const std::string &file_path)
 namespace NNUEU
 {
 
-    bool Network::load(const std::string &modelDir = "models/NNUEU_quantized_model_v4_param_350_epoch_10/")
+    bool Network::load(const std::string &modelDir = (FIRST_OUT == 32) ? "models/w32_wdl0/" : "models/NNUEU_quantized_model_v4_param_350_epoch_10/")
     {
         try
         {
@@ -180,31 +180,51 @@ namespace NNUEU
     {
 #if defined(__ARM_NEON)
 
-        // Load inputs
-        int16x8_t input_vector = vld1q_s16(pInput);               // Load 8 int16_t elements into an int16x8_t
-        int8x8_t narrowed_vector = vqmovn_s16(input_vector);      // Narrow to int8x8_t with saturation
-        int8x8_t vector = vmax_s8(narrowed_vector, vdup_n_s8(0)); // Clip negatives to 0
-
-        // Layer 1
-        int8x8_t weight1[8];
-        for (int i = 0; i < 4; ++i)
+        // ---- Layer 1: FIRST_OUT-wide accumulator -> 8 neurons (4 from each block) ----
+        int8x8_t input2;
+        if constexpr (FIRST_OUT == 8)
         {
-            weight1[i] = vld1_s8(pWeights11 + i * 8);
-            weight1[i + 4] = vld1_s8(pWeights12 + i * 8);
+            // Width-8 path: int16 vmull. Kept bit-identical for the w8 nets.
+            int8x8_t vector = vmax_s8(vqmovn_s16(vld1q_s16(pInput)), vdup_n_s8(0));
+            int8x8_t weight1[8];
+            for (int i = 0; i < 4; ++i)
+            {
+                weight1[i] = vld1_s8(pWeights11 + i * 8);
+                weight1[i + 4] = vld1_s8(pWeights12 + i * 8);
+            }
+            int16x8_t output1 = {0};
+            for (int i = 0; i < 8; ++i)
+                output1[i] = vaddvq_s16(vmull_s8(vector, weight1[i]));
+            int16x8_t bias1 = vld1q_s16(weights.secondBias);
+            output1 = vmaxq_s16(vshrq_n_s16(vaddq_s16(bias1, output1), 6), vdupq_n_s16(0));
+            input2 = vqmovn_s16(output1);
         }
-
-        int16x8_t output1 = {0};
-        for (int i = 0; i < 8; ++i)
+        else
         {
-            output1[i] = vaddvq_s16(vmull_s8(vector, weight1[i]));
+            // Width-32 path: int32 SDOT (int16 would overflow over 32 elements).
+            // Narrow the 32-wide int16 accumulator to int8 ONCE via SIMD and keep it in
+            // two registers reused by all 8 neurons; each neuron is then two SDOTs.
+            // Validated bit-exact vs the scalar pass (forwardPassDebug assert) and
+            // NNUEU_Optim/nnueu_bench_w32.cpp. This branch is specialised for
+            // FIRST_OUT==32 (the only non-8 width allowed by accumulation.h's
+            // top-level static_assert), so it reads pInput[0..31] unconditionally.
+            const int8x16_t in0 = vmaxq_s8(vcombine_s8(vqmovn_s16(vld1q_s16(pInput)),
+                                                       vqmovn_s16(vld1q_s16(pInput + 8))), vdupq_n_s8(0));
+            const int8x16_t in1 = vmaxq_s8(vcombine_s8(vqmovn_s16(vld1q_s16(pInput + 16)),
+                                                       vqmovn_s16(vld1q_s16(pInput + 24))), vdupq_n_s8(0));
+            int8_t l1[8];
+            for (int r = 0; r < 8; ++r)
+            {
+                const int8_t *w = (r < 4 ? pWeights11 : pWeights12) + (r & 3) * FIRST_OUT;
+                int32x4_t acc = vdotq_s32(vdupq_n_s32(0), in0, vld1q_s8(w));
+                acc = vdotq_s32(acc, in1, vld1q_s8(w + 16));
+                int32_t s = vaddvq_s32(acc) + weights.secondBias[r];
+                l1[r] = static_cast<int8_t>(std::min<int>(127, std::max<int>(0, s >> 6)));
+            }
+            input2 = vld1_s8(l1);
         }
-
-        int16x8_t bias1 = vld1q_s16(weights.secondBias);
-
-        output1 = vmaxq_s16(vshrq_n_s16(vaddq_s16(bias1, output1), 6), vdupq_n_s16(0));
 
         // Layer 2
-        int8x8_t input2 = vqmovn_s16(output1);
 
         int8x8_t weight2[4];
 

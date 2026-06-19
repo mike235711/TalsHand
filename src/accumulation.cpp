@@ -17,7 +17,7 @@
 #include "network.h"
 
 // Function to load a 2D int8_t array from a file
-void load_int8_2D_array1(const std::string &file_path, int8_t weights[64][8 * 4])
+void load_int8_2D_array1(const std::string &file_path, int8_t weights[64][NNUEU::SECOND_OUT])
 {
     std::ifstream file(file_path);
     std::string line;
@@ -29,27 +29,27 @@ void load_int8_2D_array1(const std::string &file_path, int8_t weights[64][8 * 4]
         std::string value;
         size_t col = 0;
 
-        while (std::getline(ss, value, ',') && col < 64 * 8)
+        while (std::getline(ss, value, ',') && col < 64 * NNUEU::FIRST_OUT)
         {
-            weights[col / 8][(col % 8) + row * 8] = static_cast<int8_t>(std::stoi(value));
+            weights[col / NNUEU::FIRST_OUT][(col % NNUEU::FIRST_OUT) + row * NNUEU::FIRST_OUT] = static_cast<int8_t>(std::stoi(value));
             col++;
         }
         row++;
     }
 }
-void load_int16_2D_array1(const std::string &file_path, int16_t weights[640][8])
+void load_int16_2D_array1(const std::string &file_path, int16_t weights[NNUEU::F_MAP][NNUEU::FIRST_OUT])
 {
     std::ifstream file(file_path);
     std::string line;
     size_t row = 0;
 
-    while (std::getline(file, line) && row < 8)
+    while (std::getline(file, line) && row < NNUEU::FIRST_OUT)
     {
         std::stringstream ss(line);
         std::string value;
         size_t col = 0;
 
-        while (std::getline(ss, value, ',') && col < 640)
+        while (std::getline(ss, value, ',') && col < NNUEU::F_MAP)
         {
             weights[col][row] = static_cast<int16_t>(std::stoi(value));
             col++;
@@ -58,19 +58,19 @@ void load_int16_2D_array1(const std::string &file_path, int16_t weights[640][8])
     }
 }
 
-void load_inverted_int16_2D_array1(const std::string &file_path, int16_t weights[640][8])
+void load_inverted_int16_2D_array1(const std::string &file_path, int16_t weights[NNUEU::F_MAP][NNUEU::FIRST_OUT])
 {
     std::ifstream file(file_path);
     std::string line;
     size_t row = 0;
 
-    while (std::getline(file, line) && row < 8)
+    while (std::getline(file, line) && row < NNUEU::FIRST_OUT)
     {
         std::stringstream ss(line);
         std::string value;
         size_t col = 0;
 
-        while (std::getline(ss, value, ',') && col < 640)
+        while (std::getline(ss, value, ',') && col < NNUEU::F_MAP)
         {
             int pieceType = col / 64;
             int square = col % 64;
@@ -169,10 +169,8 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
     inline void NNUEU::AccumulatorState::add_8_int16(int16_t *a, const int16_t *b)
     {
 #if defined(__ARM_NEON)
-        int16x8_t v1 = vld1q_s16(a); // Load 8 int16_t values from array a
-        int16x8_t v2 = vld1q_s16(b); // Load 8 int16_t values from array b
-
-        vst1q_s16(a, vaddq_s16(v1, v2)); // Store the result back to array a
+        for (int k = 0; k < FIRST_OUT; k += 8)
+            vst1q_s16(a + k, vaddq_s16(vld1q_s16(a + k), vld1q_s16(b + k)));
 #elif defined(__AVX2__) || defined(__SSE2__) || defined(__SSE4_1__)
         __m128i v1 = _mm_loadu_si128((__m128i *)a);
         __m128i v2 = _mm_loadu_si128((__m128i *)b);
@@ -180,7 +178,7 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
         _mm_storeu_si128((__m128i *)a, sum);
 #else
         // Fallback scalar code
-        for (int i = 0; i < 8; i++)
+        for (int i = 0; i < FIRST_OUT; i++)
             a[i] += b[i];
 #endif
     }
@@ -188,10 +186,8 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
     inline void NNUEU::AccumulatorState::substract_8_int16(int16_t *a, const int16_t *b) // For NNUE accumulation
     {
 #if defined(__ARM_NEON)
-        int16x8_t v1 = vld1q_s16(a); // Load 8 int16_t values from array a
-        int16x8_t v2 = vld1q_s16(b); // Load 8 int16_t values from array b
-
-        vst1q_s16(a, vsubq_s16(v1, v2)); // Store the result back to array a
+        for (int k = 0; k < FIRST_OUT; k += 8)
+            vst1q_s16(a + k, vsubq_s16(vld1q_s16(a + k), vld1q_s16(b + k)));
 
 #elif defined(__AVX2__) || defined(__SSE2__) || defined(__SSE4_1__)
         __m128i v1 = _mm_loadu_si128((const __m128i *)a);
@@ -200,7 +196,7 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
         _mm_storeu_si128((__m128i *)a, v_sub);
 #else
         // Fallback scalar code
-        for (int i = 0; i < 8; i++)
+        for (int i = 0; i < FIRST_OUT; i++)
             a[i] -= b[i];
 
 #endif
@@ -384,7 +380,7 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
     {
         assert(prev.computed[turn]);
         // Copy previous accumulators
-        std::memcpy(curr.inputTurn[turn], prev.inputTurn[turn], 16);
+        std::memcpy(curr.inputTurn[turn], prev.inputTurn[turn], sizeof(curr.inputTurn[turn]));
 
         const NNUEUChange &c = curr.changes;
 
@@ -395,7 +391,7 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
         curr.computed[turn] = true;
     }
 
-    bool NNUEU::Transformer::load(const std::string &modelDir = "models/NNUEU_quantized_model_v4_param_350_epoch_10/")
+    bool NNUEU::Transformer::load(const std::string &modelDir = (FIRST_OUT == 32) ? "models/w32_wdl0/" : "models/NNUEU_quantized_model_v4_param_350_epoch_10/")
     {
         try
         {
@@ -407,8 +403,8 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
             load_int8_2D_array1(modelDir + "second_layer_not_turn_weights.csv", weights.second2);
 
             // Load biases
-            auto tempFirstLayerBiases = load_int16_array(modelDir + "first_linear_biases.csv", 8);
-            std::memcpy(weights.firstBias, tempFirstLayerBiases, sizeof(int16_t) * 8);
+            auto tempFirstLayerBiases = load_int16_array(modelDir + "first_linear_biases.csv", FIRST_OUT);
+            std::memcpy(weights.firstBias, tempFirstLayerBiases, sizeof(int16_t) * FIRST_OUT);
             delete[] tempFirstLayerBiases;
 
         }
@@ -419,11 +415,11 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
         }
 
         // Initialze double weights for addAndRemoveFromInput
-        for (int i = 0; i < 640; i++)
+        for (int i = 0; i < F_MAP; i++)
         {
-            for (int j = 0; j < 640; j++)
+            for (int j = 0; j < F_MAP; j++)
             {
-                for (int k = 0; k < 8; k++)
+                for (int k = 0; k < FIRST_OUT; k++)
                 {
                     // Sum with overflow handling for weights.firstW2
                     int32_t sum1 = (int32_t)weights.firstW[i][k] - (int32_t)weights.firstW[j][k];

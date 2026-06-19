@@ -9,6 +9,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(TALSHAND_BUILD_TESTS "Build unit tests with Catch2" ON)
 option(ENABLE_VERBOSE_DEBUG "Enable verbose (Level 2) debugging. Requires a Debug build." OFF)
 
+# NNUEU accumulator width (8 or 32). Default 32 = w32_wdl0 baseline (v0.3.8).
+# Build the legacy width-8 net with -DNNUEU_FIRST_OUT=8.
+set(NNUEU_FIRST_OUT 32 CACHE STRING "NNUEU accumulator width: 8 or 32")
+add_compile_definitions(NNUEU_FIRST_OUT=${NNUEU_FIRST_OUT})
+
 add_subdirectory(src)
 
 if(TALSHAND_BUILD_TESTS AND EXISTS ${CMAKE_SOURCE_DIR}/tests)

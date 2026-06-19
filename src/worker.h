@@ -57,6 +57,16 @@ private:
         currentPos.unmakeCapture(move);
         accumulatorStack.pop();
     }
+    // Null move (for null-move pruning): pushes a no-op accumulator change.
+    inline void makeNullMove(StateInfo &st)
+    {
+        accumulatorStack.push(currentPos.makeNullMove(st));
+    }
+    inline void unmakeNullMove()
+    {
+        currentPos.unmakeNullMove();
+        accumulatorStack.pop();
+    }
     // Record a quiet beta-cutoff move as a killer for this ply (captures/promotions,
     // which score != 0 in aBMoveValue, are ignored).
     inline void storeKiller(int ply, Move m)
@@ -75,7 +85,7 @@ private:
     void firstMoveSearch(int8_t depth);
 
     // Calls quisence when depth 0 is reached
-    int16_t alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int ply);
+    int16_t alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int ply, bool allowNull = true);
 
     // Only captures are searched making sure there is no mate in the end
     int16_t quiesenceSearch(int16_t alpha, int16_t beta);
@@ -110,6 +120,35 @@ private:
     // Move ordering: 2 killer moves (quiet moves that produced a beta cutoff) per ply.
     static constexpr int MAX_SEARCH_PLY = 128;
     Move killers[MAX_SEARCH_PLY][2];
+
+    // Butterfly history: [sideToMove][from][to]. "How often has this quiet move produced
+    // a beta cutoff." Orders quiet moves (only killers rank above) and scales LMR. Reset
+    // to 0 at the start of every search.
+    int32_t mainHistory[2][64][64];
+    static constexpr int HISTORY_MAX = 16384;
+
+    inline int historyScore(bool stm, Move m) const
+    {
+        return mainHistory[stm][m.getOriginSquare()][m.getDestinationSquare()];
+    }
+
+    // On a quiet beta cutoff: reward the cutting move and penalise the quiet moves tried
+    // before it that failed to cut. Uses the standard "history gravity" update so entries
+    // saturate towards +/-HISTORY_MAX instead of growing without bound.
+    inline void updateHistory(bool stm, Move cutMove, int depth, const Move *tried, int nTried)
+    {
+        const int bonus = depth * depth < 400 ? depth * depth : 400;
+        auto bump = [&](Move m, int b)
+        {
+            int32_t &e = mainHistory[stm][m.getOriginSquare()][m.getDestinationSquare()];
+            const int ab = b < 0 ? -b : b;
+            e += b - e * ab / HISTORY_MAX;
+        };
+        bump(cutMove, bonus);
+        for (int i = 0; i < nTried; ++i)
+            if (!(tried[i] == cutMove))
+                bump(tried[i], -bonus);
+    }
 
     // Threading (to implement)
     size_t threadIdx;

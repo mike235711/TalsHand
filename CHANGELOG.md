@@ -7,12 +7,138 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Staged move picker** (`ABMoveSelectorNotCheck`) — captures + queen promotions
-  are generated/scored/sorted first; quiets are generated lazily only if no capture
-  caused a cutoff. Deep fixed-depth tactics **−27.5 %**, perft node counts identical,
-  perft-AB NPS neutral. Elo-neutral in a 64-game match vs 0.3.6 (a 64-game match
-  cannot resolve an NPS-only gain). Kept here as the apples-to-apples basis for the
-  LaMano-vs-Stockfish move-generation/NPS comparison, not folded into 0.3.7.
+## [0.3.12] - 2026-06-18
+
+Search-strength release: butterfly history move ordering + history-aware LMR.
+Same evaluation net as 0.3.8–0.3.11 (`w32_wdl0`) — a pure search change on top
+of LMR (0.3.11).
+
+### Added
+- **Butterfly history heuristic** for quiet-move ordering. A
+  `mainHistory[sideToMove][from][to]` table is updated on every quiet beta cutoff
+  with the standard history-gravity rule (the cutting move gets a `depth²` bonus,
+  the quiet moves tried before it an equal malus, saturating towards ±16384). The
+  staged AB move selector (`ABMoveSelectorNotCheck`) now orders quiets by this
+  table — killers still rank above, captures remain a separate earlier stage —
+  replacing the old generation-order fallback. This is the first concrete fix for
+  the "bushy tree" finding: LaMano searched ~25× more nodes/sec than Stockfish yet
+  reached less than half the depth, i.e. its move ordering left too many quiet
+  moves un-prioritised.
+- **History-aware LMR.** The late-move reduction is nudged by the move's history
+  score: a clearly poor-history quiet (`< -4000`) is reduced one extra ply, a
+  strong-history one (`> 8000`) one fewer.
+
+### Result
+- **+38.2 ± 59.7 Elo** vs 0.3.11 over 64 games (19-33-12, 55.5 %), zero time
+  losses on either side. Per time control: bullet-1+1 −21.7, bullet-1+3 +112.3,
+  blitz-3+2 +88.7, blitz-5+2 −21.7. Correctness gate green (nnueu eval, mate,
+  repetition, 14/14 tactics).
+
+## [0.3.11] - 2026-06-18
+
+Search-strength release: late move reductions (LMR). Same evaluation net as
+0.3.8–0.3.10 (`w32_wdl0`) — a pure search change on top of null-move pruning.
+
+### Added
+- **Late move reductions** (`alphaBetaSearch`). In the not-in-check move loop, late
+  (`movesSearched >= 4`) quiet (`aBMoveValue == 0`) non-checking moves at depth >= 3
+  are first searched at reduced depth with a **zero window** (R = 1, or 2 for very
+  late / deep nodes); if the reduced search beats alpha the move is **re-searched at
+  full depth and window**. The reduction is deliberately conservative — an aggressive
+  log-based R left a clearly-winning quiet move (Tactic 3 `b2d4`) unfindable even at
+  fixed depth 28, so a gentle reduction is used instead.
+  - Combined with NMP (0.3.10): fixed-depth tactics suite **~1.9s** (was ~85s at
+    0.3.9, ~8s at 0.3.10) — ~44x faster than 0.3.9.
+  - Worth **+38.2 Elo** over 0.3.10 in a 64-game match with the **same** net
+    (17-37-10, 55.5 %), positive in **all four** time controls: bullet-1+1 +22,
+    bullet-1+3 +44, blitz-3+2 +66, blitz-5+2 +22. (Draw-heavy — 37 of 64 — as
+    expected for an increment layered on an already-strong NMP engine.)
+  - Deep Tactic 3 resolves at depth 13 (NMP needed 12); the fixed-depth test was
+    re-calibrated and the time-limited variant confirms `b2d4` under real time
+    control. All 30 correctness tests pass.
+
+## [0.3.10] - 2026-06-17
+
+Search-strength release: null-move pruning. Same evaluation net as 0.3.8/0.3.9
+(`w32_wdl0`) — a pure search change that lets the engine reach much greater depth
+in the same time.
+
+### Added
+- **Null-move pruning** (`alphaBetaSearch`). When the side to move is not in
+  check, has non-pawn material (zugzwang guard), and the static eval is already
+  `>= beta`, the opponent is given a free move and the position is searched to
+  reduced depth (`R = 2 + depth/6`); if that still fails high, a **verification
+  search** (NMP disabled at that node) confirms it before pruning.
+  `makeNullMove`/`unmakeNullMove` pass the turn (flip side-to-move + zobrist key,
+  clear en passant, no-op accumulator change). Consecutive null moves are
+  disallowed and mate scores are never returned from a prune.
+  - **~10x faster** on the fixed-depth tactics suite — it prunes large quiet
+    subtrees, so far fewer nodes per depth (the #1 lever from the v0.3.9 profile).
+  - Worth **+54.7 Elo** over 0.3.9 in a 64-game match with the **same** net
+    (25-24-15, 57.8 %), positive in three of four time controls: bullet-1+1 **+44**,
+    bullet-1+3 **+89**, blitz-3+2 **+89**; blitz-5+2 even (+0).
+  - Deep Tactic 3 (a quiet win, `b2d4`, vs a materially-up defender) now resolves
+    at depth 12 instead of 11 — the reduced-depth null search briefly hides White's
+    mating attack; the fixed-depth regression test was re-calibrated to depth 12,
+    and the time-limited variant confirms it under real time control. All 30
+    correctness tests pass.
+
+## [0.3.9] - 2026-06-15
+
+Search-speed release: the staged move picker, now the default. Same evaluation net
+as 0.3.8 (`w32_wdl0`); this is a pure search-efficiency change.
+
+### Changed
+- **Staged move picker** (`ABMoveSelectorNotCheck`) — captures + queen promotions are
+  generated/scored/sorted first; the quiets are generated, scored and sorted lazily
+  **only if no capture produced a beta cutoff** (Stockfish `MovePicker` style). A node
+  that cuts off on a capture — very common in tactical search — never generates/scores/
+  sorts its ~30+ quiet moves. Profiling 0.3.8 showed eager move generation
+  (`init_all`, 18.5 %) was the single largest hotspot (move-gen ≈ 34 % of search time
+  vs Stockfish's ≈ 5 %); this targets exactly that.
+  - **~26 % faster** on the fixed-depth tactics suite (115 s → 85 s, order-independent
+    across thermal interleaving), perft node counts identical, all 32 tests pass.
+  - Worth **≈ +55 Elo** over 0.3.8 in a 64-game match with the **same** net
+    (23-28-13, 57.8 %), positive in three of four time controls:
+    bullet-1+1 **+160** (71.9 %), blitz-3+2 +44, blitz-5+2 +66; bullet-1+3 −44 (a noisy
+    outlier, ±153). The gain scales with node-starvation, so it is largest at 1+1.
+  - This change was Elo-neutral when measured on the older width-8 net (50.0 % vs
+    0.3.6) — the speed gain only became visible against the slower, more
+    node-starved width-32 net of 0.3.8.
+
+## [0.3.8] - 2026-06-11
+
+NNUEU evaluation upgrade: a wider network (width-32 accumulator, `w32_wdl0`) plus a
+null-move forfeit fix. `w32_wdl0` becomes the new evaluation baseline, replacing the
+width-8 `v4` net.
+
+### Added
+- **Width-32 NNUEU** (`w32_wdl0`) — the first hidden accumulator is widened from 8 to
+  32 neurons, giving the evaluation more capacity (layers 2/3 are unchanged). The
+  accumulator width is now a build-time switch: `NNUEU_FIRST_OUT` (default 32; CMake
+  `-DNNUEU_FIRST_OUT=8` rebuilds the legacy width-8 net), and both the default net
+  path and the SIMD kernel follow it. The net is trained on quiet **and** non-quiet
+  positions (WDL-blended target). Worth **+54.7 ± 61 Elo** over the 0.3.7 net in a
+  64-game rolling-baseline match (21-32-11, 57.8 %, positive in all four time
+  controls, 0 time losses), strongest at the longer controls (blitz-3+2 +112,
+  blitz-5+2 +66) where the stronger eval has time to pay off.
+
+### Fixed
+- **Move(0) forfeit** — `iterativeSearch` never seeded `bestRootMove` in the
+  multi-move branch; it relied on `firstMoveSearch` completing to set it. If the hard
+  time limit fired first (e.g. the slower width-32 net in bullet), the engine returned
+  the null move `a1a1` and forfeited the game. `bestRootMove` is now seeded with the
+  first root move up-front, so an early timeout always returns a legal move.
+
+### Performance
+- The width-32 layer-1 dot product accumulates in int32: the width-8 int16
+  `vmull`/`vaddvq_s16` path overflows over 32 products (~±8k each), so the wide kernel
+  uses NEON SDOT (`vdotq_s32`, requires `-march=armv8.2-a+dotprod`). Validated against
+  a scalar int32 reference (bit-identical over 100k random inputs, ~3× faster than
+  scalar in the NNUEU_Optim micro-bench) and in-engine via the `forwardPassDebug`
+  SIMD==scalar assertion on every evaluation in debug builds. The width-8 path is
+  unchanged (`if constexpr (FIRST_OUT == 8)`), so width-8 0.3.8 builds remain
+  bit-identical to 0.3.7.
 
 ## [0.3.7] - 2026-06-08
 

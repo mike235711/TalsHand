@@ -1292,6 +1292,40 @@ bool BitPosition::isDraw() const
     return false;
 }
 
+NNUEU::NNUEUChange BitPosition::makeNullMove(StateInfo &new_state_info)
+// Pass the turn without moving a piece (for null-move pruning). No board change,
+// so the NNUEU accumulator is unchanged; only the side to move and the en-passant
+// right flip. Must only be called when the side to move is NOT in check.
+{
+    // Save irreversible state and advance the StateInfo list (mirrors makeMove).
+    std::memcpy(&new_state_info, state_info, offsetof(StateInfo, straightPinnedPieces));
+    new_state_info.previous = state_info;
+    state_info->next = &new_state_info;
+    state_info = &new_state_info;
+
+    // Clear the en-passant square (passing forfeits it) and flip side-to-move.
+    state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[state_info->previous->pSquare];
+    state_info->pSquare = 0;
+    state_info->zobristKey ^= zobrist_keys::passantSquaresZobristNumbers[0];
+    state_info->zobristKey ^= zobrist_keys::blackToMoveZobristNumber;
+
+    state_info->reversibleMovesMade++; // passing is a reversible ply
+    state_info->capturedPiece = 7;     // nothing captured
+    state_info->isCheck = false;       // a legal position never leaves the side-not-to-move in check
+
+    m_turn = not m_turn;
+    m_ply++;
+
+    return NNUEU::NNUEUChange(); // no piece moved -> no-op accumulator change
+}
+
+void BitPosition::unmakeNullMove()
+{
+    m_ply--;
+    state_info = state_info->previous;
+    m_turn = not m_turn;
+}
+
 template <typename T>
 NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 // Move piece and switch white and black roles, without rotating the board.
