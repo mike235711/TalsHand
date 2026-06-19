@@ -433,6 +433,7 @@ void THEngine::readUci()
         {
             int ourTime = 0;    // milliseconds left on our clock
             int ourInc = 0;     // increment per move
+            int goDepth = 0;    // "go depth N": fixed-depth search for the introspection harness
 
             std::string rest;
             std::getline(std::cin >> std::ws, rest); // read the rest of the line
@@ -457,9 +458,18 @@ void THEngine::readUci()
                 {
                     iss >> ourInc;
                 }
+                else if (kw == "depth")
+                {
+                    iss >> goDepth;
+                }
             }
-            settimeLeft(ourTime, ourInc);
-            goSearch();
+            if (goDepth > 0)
+                goSearchDepth(goDepth); // fixed-depth, prints per-depth info (harness)
+            else
+            {
+                settimeLeft(ourTime, ourInc);
+                goSearch();
+            }
         }
         else if (token == "stop")
         {
@@ -519,7 +529,14 @@ void THEngine::resizeThreads()
 void THEngine::setTTSize()
 {
     waitToFinishSearch();
-    tt.resize(ttSize);
+    // ttSize is a hash size in MB (the UCI "Hash" option). resize() takes a *count of
+    // entries*, so convert MB -> entries. Previously ttSize was passed straight to
+    // resize(), allocating a 16-*entry* table instead of 16 MB — i.e. the transposition
+    // table was effectively disabled (≈16 cutoffs in a 30 M-node search).
+    size_t entries = (ttSize * 1024ULL * 1024ULL) / sizeof(TTEntry);
+    if (entries < 1)
+        entries = 1;
+    tt.resize(entries);
 }
 
 void THEngine::loadNNUEU()
@@ -548,6 +565,17 @@ void THEngine::goSearch()
 {
     resizeThreads();
     threadpool.startThinking(pos, stateInfos, timeLeft, ponder, 99);
+}
+
+void THEngine::goSearchDepth(int depth)
+{
+    // Fixed-depth search to exactly `depth` (no time / streak early-stop), used by the
+    // search-tree / EBF comparison harness. iterativeSearch prints "info depth … nodes …"
+    // per depth plus an "info string … betafirst …" pruning breakdown at the end.
+    resizeThreads();
+    threadpool.setMainNoEarlyStop(true);
+    threadpool.startThinking(pos, stateInfos, std::numeric_limits<int>::max(), ponder, static_cast<int8_t>(depth));
+    threadpool.setMainNoEarlyStop(false);
 }
 
 void THEngine::stopSearch()

@@ -34,6 +34,13 @@ public:
 
     bool isMainThread() const { return threadIdx == 0; }
 
+    // --- search introspection (for the search-tree / EBF comparison harness) ---
+    // Reset at the start of every search; counted in alphaBetaSearch / quiesenceSearch.
+    uint64_t nodes = 0, qnodes = 0;                 // total / quiescence nodes this search
+    uint64_t cntTTcut = 0, cntNMP = 0, cntLMR = 0;  // TT-cutoffs / null-move prunes / LMR reductions
+    uint64_t cntBeta = 0, cntBetaFirst = 0;         // beta cutoffs total / on the first move (ordering quality)
+    bool infoNoEarlyStop = false;                   // "go depth N": run every depth to N + print per-depth info
+
 private:
     // Makes move and pushes on the accumulator
     inline void makeMove(Move move, StateInfo &st)

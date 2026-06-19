@@ -79,6 +79,9 @@ public:
 
     Thread *main_thread() const { return threads.front().get(); }
 
+    // Fixed-depth "go depth N" introspection mode for the main worker (harness).
+    void setMainNoEarlyStop(bool b) { main_thread()->worker->infoNoEarlyStop = b; }
+
     auto cbegin() const noexcept { return threads.cbegin(); }
     auto begin() noexcept { return threads.begin(); }
     auto end() noexcept { return threads.end(); }
