@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.13] - 2026-06-19
+
+Search-strength release: **transposition-table sizing fix** (the TT was effectively
+disabled) plus a search-tree comparison harness. Same evaluation net as 0.3.8–0.3.12
+(`w32_wdl0`) — a pure search change.
+
+### Fixed
+- **Transposition table was allocating 16 *entries*, not 16 MB.** `setTTSize()` sized the
+  table in entries but was fed the "Hash MB" number, so the default 16 "MB" produced a
+  16-entry (256-byte) table. The TT was effectively off for the entire 0.3.7–0.3.12 history
+  (~16 cutoffs in a 30 M-node search). `setTTSize()` now converts MB → entry count. Measured
+  at depth 13: TT cutoffs **~16 → 50k–978k**, nodes-to-depth **3–17× fewer**, mean effective
+  branching factor **3.72 → 3.30** (Stockfish ≈ 2.25).
+
+### Added
+- **Search-tree comparison harness** (`scripts/search_tree_compare.py` +
+  `version_test_results/sf_search_tree_ref.json`): records Stockfish's nodes-per-depth / EBF
+  and compares LaMano's. The engine now supports `go depth N` (fixed-depth, no early-stop)
+  and prints per-depth `info depth … nodes …` plus an end-of-search `info string … betafirst …`
+  pruning breakdown (ttcut/nmp/lmr/beta counters). Fixed-depth searches clear the TT per call
+  so tactic tests are reproducible. Includes a patch instrumenting Stockfish with the same
+  counter set (`version_test_results/stockfish_instrumentation.patch`).
+
+### Result
+- **+49.2 ± 43.4 Elo** vs 0.3.12 over 64 games (13-47-4, 57.0 %; lower bound +5.8), zero time
+  losses. Per TC: bullet-1+1 +112, bullet-1+3 −22, blitz-3+2 +112, blitz-5+2 ±0.
+
 ## [0.3.12] - 2026-06-18
 
 Search-strength release: butterfly history move ordering + history-aware LMR.
