@@ -294,6 +294,13 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
                 ++movesSearched;
                 // Quiet moves score 0 in aBMoveValue (captures/promotions score != 0).
                 const bool isQuiet = (currentPos.aBMoveValue(move) == 0);
+                // SEE pruning: at shallow depth, skip clearly-losing captures (the
+                // exchange drops material badly) — they rarely justify themselves before
+                // quiescence. Conservative threshold, scaled with depth; guarded so we
+                // never prune when the best score so far is still a near-mate loss.
+                if (depth <= 6 && currentPos.isCaptureStageMove(move) && value > -29000
+                    && !currentPos.see_ge(move, -75 * depth))
+                    continue;
                 makeMove(move, state_info);
                 // Late move reductions: a quiet, non-checking move ordered late is
                 // unlikely to be best, so search it shallower with a zero window. If
