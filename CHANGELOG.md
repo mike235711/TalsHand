@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.14] - 2026-06-19
+
+Search release: formula-based late move reductions. Same net (`w32_wdl0`).
+
+### Changed
+- **LMR is now a depth×movecount log formula** (Stockfish-style) instead of the conservative
+  `R = 1|2`: `Reductions[i] ≈ 23·log(i)`, `R = Reductions[depth]·Reductions[movesSearched]/1024`,
+  nudged ±~2 plies by butterfly history, applied to quiet non-checking moves at depth ≥ 2,
+  movesSearched ≥ 2; zero-window reduced search with a full-depth re-search on fail-high.
+
+### Result
+- **Marginal / neutral: +5.4 ± 32.2 Elo** vs 0.3.13 over 64 games (5-55-4, 50.8 %, lower bound
+  −26.7), zero time losses — extremely draw-heavy (55/64). Kept under the agreed "harness-positive
+  + match-flat → keep and stack" rule: the EBF harness confirms **~24 % fewer nodes to depth 13**
+  (mean EBF 3.30 → 3.24), and aggressive reductions are the substrate the upcoming futility/LMP
+  pruning suite needs. The neutrality fits the eval-bound pattern (depth-buying alone converts to
+  draws on the small net), same as PVS earlier.
+
 ## [0.3.13] - 2026-06-19
 
 Search-strength release: **transposition-table sizing fix** (the TT was effectively
