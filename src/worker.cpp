@@ -210,36 +210,47 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
         }
     }
 
+    // Static evaluation of this node, computed once (when not in check) — the basis for
+    // reverse futility, the null-move gate, and later forward pruning. Eval is meaningless
+    // in check, so it is left at 0 there and all eval-based pruning is skipped.
+    const bool inCheck = currentPos.getIsCheck();
+    const int16_t staticEval = inCheck ? static_cast<int16_t>(0)
+                                       : network.evaluate(currentPos, accumulatorStack, *transformer);
+
+    // Reverse futility (static null move): if the static eval clears beta by a generous
+    // depth-scaled margin, the node almost certainly fails high, so return it without
+    // searching. Skipped in check and near mate scores.
+    if (!inCheck && depth <= 3 && beta < 29000 && beta > -29000
+        && staticEval < 20000 && staticEval >= beta + 175 * depth)
+        return staticEval;
+
     // Null-move pruning. If we are not in check and have non-pawn material
     // (zugzwang guard), give the opponent a free move and search to reduced depth.
     // If even then the score still fails high, the position is good enough to prune.
-    // Gated on a static eval >= beta so we only spend the null search on promising
+    // Gated on the static eval >= beta so we only spend the null search on promising
     // nodes, skipped near mate scores so we never return an unproven mate, and
     // disabled (allowNull) right after a null move and inside verification searches.
-    if (allowNull && depth >= 3 && beta < 29000 && !currentPos.getIsCheck() && currentPos.hasNonPawnMaterial())
+    if (allowNull && depth >= 3 && beta < 29000 && !inCheck && currentPos.hasNonPawnMaterial()
+        && staticEval >= beta)
     {
-        const int16_t staticEval = network.evaluate(currentPos, accumulatorStack, *transformer);
-        if (staticEval >= beta)
+        const int8_t R = static_cast<int8_t>(2 + depth / 6);
+        StateInfo null_state;
+        makeNullMove(null_state);
+        // The opponent may not immediately null back (allowNull = false).
+        const int16_t nullValue = -alphaBetaSearch(static_cast<int8_t>(depth - 1 - R),
+                                                    static_cast<int16_t>(-beta),
+                                                    static_cast<int16_t>(-beta + 1), ply + 1, false);
+        unmakeNullMove();
+        if (nullValue >= beta)
         {
-            const int8_t R = static_cast<int8_t>(2 + depth / 6);
-            StateInfo null_state;
-            makeNullMove(null_state);
-            // The opponent may not immediately null back (allowNull = false).
-            const int16_t nullValue = -alphaBetaSearch(static_cast<int8_t>(depth - 1 - R),
-                                                        static_cast<int16_t>(-beta),
-                                                        static_cast<int16_t>(-beta + 1), ply + 1, false);
-            unmakeNullMove();
-            if (nullValue >= beta)
+            // Verification search (NMP disabled at this node) guards against
+            // zugzwang and tactical lines where the free move is misleading
+            // (e.g. a defender that is up material but actually getting mated).
+            const int16_t verify = alphaBetaSearch(static_cast<int8_t>(depth - R), beta - 1, beta, ply, false);
+            if (verify >= beta)
             {
-                // Verification search (NMP disabled at this node) guards against
-                // zugzwang and tactical lines where the free move is misleading
-                // (e.g. a defender that is up material but actually getting mated).
-                const int16_t verify = alphaBetaSearch(static_cast<int8_t>(depth - R), beta - 1, beta, ply, false);
-                if (verify >= beta)
-                {
-                    ++cntNMP;
-                    return beta; // confirmed fail-high prune (never an unproven mate)
-                }
+                ++cntNMP;
+                return beta; // confirmed fail-high prune (never an unproven mate)
             }
         }
     }
