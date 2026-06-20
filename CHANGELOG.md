@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.17] - 2026-06-19
+
+Search release: per-node static evaluation + reverse futility. Same net (`w32_wdl0`).
+
+### Added
+- **Static eval computed once per non-check node** (reused as the null-move gate) — the
+  enabler for eval-based forward pruning.
+- **Reverse futility (static null move)**: at depth <= 3, when the static eval clears beta
+  by 175*depth eval-units and is not near-winning (< 20000), return it without searching.
+  Kept deliberately conservative: the engine is not PVS, so eval-pruning full-window nodes
+  is risky (an aggressive margin broke mate + tactics in testing).
+
+### Result
+- **+5.4 Elo** vs 0.3.16 over 64 games (9-47-8, 50.8 %), zero time losses — marginal but
+  kept (gate green; it is also the eval enabler the futility step builds on).
+
 ## [0.3.16] - 2026-06-19
 
 Search release: SEE pruning of losing captures in the main search. Same net (`w32_wdl0`).
