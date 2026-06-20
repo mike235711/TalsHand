@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.18] - 2026-06-19
+
+Search release: principal variation search (PVS). Same net (`w32_wdl0`).
+
+### Added
+- **PVS**: the first move at a node is searched full depth + full window; every later move is
+  searched first with a zero window (formula-LMR-reduced for late quiet non-checking moves) and
+  re-searched at full depth/window only on a fail-high. Applied to the not-in-check and in-check
+  loops. Value-exact (same tree, cheaper scouts). It was Elo-neutral back on the broken-TT engine,
+  but on the lean v0.3.17 tree (TT fix + LMR + SEE) it is a clear gain — and, crucially, it creates
+  the zero-window (non-PV) nodes where eval-based forward pruning is safe.
+
+### Result
+- **+16.3 Elo** vs 0.3.17 over 64 games (5-57-2, 52.3 %), zero time losses; positive in both
+  bullet controls (+22, +44), even in blitz. Gate green (nnueu, mate, repetition, 14/14 tactics).
+
 ## [0.3.17] - 2026-06-19
 
 Search release: per-node static evaluation + reverse futility. Same net (`w32_wdl0`).
