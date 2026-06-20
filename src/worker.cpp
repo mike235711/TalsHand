@@ -313,38 +313,35 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
                     && !currentPos.see_ge(move, -75 * depth))
                     continue;
                 makeMove(move, state_info);
-                // Late move reductions: a quiet, non-checking move ordered late is
-                // unlikely to be best, so search it shallower with a zero window. If
-                // it unexpectedly beats alpha, re-search at full depth and window.
-                if (depth >= 2 && movesSearched >= 2 && isQuiet && !currentPos.getIsCheck())
+                // Principal variation search. The first move is searched full depth + full
+                // window; every later move is searched first with a zero window — reduced
+                // (formula LMR) when it is a late quiet non-checking move — and re-searched
+                // at full depth and window only if the scout beats alpha (an LMR-reduced
+                // scout that beats alpha is always confirmed at full depth).
+                if (movesSearched == 1)
                 {
-                    // Formula reduction: R grows with depth x moveCount (log table), nudged
-                    // by butterfly history (good-history quiets reduced less, bad ones more).
-                    // Late quiets after the TT move / captures / killers are unlikely to be
-                    // best, so most reductions stick; the zero-window re-search restores any
-                    // move that beats alpha.
-                    int R = (Reductions[depth < 256 ? depth : 255]
-                             * Reductions[movesSearched < 256 ? movesSearched : 255]) / LMR_SCALE;
-                    R -= historyScore(stm, move) / 8000; // +/- up to ~2 plies
-                    if (R < 0)
-                        R = 0;
-                    if (R > depth - 1)
-                        R = depth - 1; // keep the reduced depth >= 1
-                    if (R > 0)
-                    {
-                        ++cntLMR;
-                        child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1 - R),
-                                                       static_cast<int16_t>(-(alpha + 1)),
-                                                       static_cast<int16_t>(-alpha), ply + 1);
-                        if (child_value > alpha)
-                            child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1), -beta, -alpha, ply + 1);
-                    }
-                    else
-                        child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1), -beta, -alpha, ply + 1);
+                    child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1), -beta, -alpha, ply + 1);
                 }
                 else
                 {
-                    child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1), -beta, -alpha, ply + 1);
+                    int R = 0;
+                    if (depth >= 2 && isQuiet && !currentPos.getIsCheck())
+                    {
+                        R = (Reductions[depth < 256 ? depth : 255]
+                             * Reductions[movesSearched < 256 ? movesSearched : 255]) / LMR_SCALE;
+                        R -= historyScore(stm, move) / 8000; // +/- up to ~2 plies
+                        if (R < 0)
+                            R = 0;
+                        if (R > depth - 1)
+                            R = depth - 1; // keep the reduced depth >= 1
+                        if (R > 0)
+                            ++cntLMR;
+                    }
+                    child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1 - R),
+                                                   static_cast<int16_t>(-(alpha + 1)),
+                                                   static_cast<int16_t>(-alpha), ply + 1);
+                    if (child_value > alpha && (R > 0 || child_value < beta))
+                        child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1), -beta, -alpha, ply + 1);
                 }
                 unmakeMove(move);
                 if (child_value > value)
@@ -375,11 +372,24 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
             Move move;
             ABMoveSelectorCheck move_selector(currentPos, tt_move);
             move_selector.init();
+            int movesSearched = (tt_move.getData() != 0) ? 1 : 0;
             while ((move = move_selector.select_legal()) != Move(0))
             {
                 no_moves = false;
+                ++movesSearched;
                 makeMove(move, state_info);
-                child_value = -alphaBetaSearch(depth - 1, -beta, -alpha, ply + 1);
+                // PVS for check evasions (no reduction in check): first move full window,
+                // later moves a zero-window scout re-searched on alpha < value < beta.
+                if (movesSearched == 1)
+                    child_value = -alphaBetaSearch(depth - 1, -beta, -alpha, ply + 1);
+                else
+                {
+                    child_value = -alphaBetaSearch(static_cast<int8_t>(depth - 1),
+                                                   static_cast<int16_t>(-(alpha + 1)),
+                                                   static_cast<int16_t>(-alpha), ply + 1);
+                    if (child_value > alpha && child_value < beta)
+                        child_value = -alphaBetaSearch(depth - 1, -beta, -alpha, ply + 1);
+                }
                 unmakeMove(move);
                 if (child_value > value)
                 {
