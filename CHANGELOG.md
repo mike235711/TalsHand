@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.16] - 2026-06-19
+
+Search release: SEE pruning of losing captures in the main search. Same net (`w32_wdl0`).
+(0.3.15 was a late-move-pruning attempt — a clear regression, −49 Elo, not released.)
+
+### Added
+- **SEE pruning in the main search**: at depth ≤ 6, skip capture-stage moves whose static
+  exchange evaluation is worse than `−75·depth` (checked before the move is made), guarded
+  by `value > −29000`. Extends the quiescence-only SEE filter into the main tree. Kept
+  conservative (captures only, depth-scaled threshold) because the modest eval makes
+  aggressive lossy pruning risky — unlike LMP, this only discards clearly material-losing
+  captures, which almost never matter, so it is safe.
+
+### Result
+- **+10.9 Elo** vs 0.3.14 over 64 games (7-52-5, 51.6 %), zero time losses; positive in both
+  bullet controls (+22 each), even in blitz. Mildly positive and gate-green (nnueu, mate,
+  repetition, 14/14 tactics) — kept per the harness-positive/match-positive rule.
+
 ## [0.3.14] - 2026-06-19
 
 Search release: formula-based late move reductions. Same net (`w32_wdl0`).
