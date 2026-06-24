@@ -176,14 +176,52 @@ namespace NNUEU
     // The input is int16, and the weights are int8. So before multiplying we reduce int16 to int8
     // (by clipping to max int8) and clip negatives to zero before each layer pass.
     {
-        // Generalized scalar head for the wide nets (e.g. N512: acc(512) -> HEAD_CONCAT -> THIRD_OUT_W -> 1).
-        // Bit-exact with the numpy/torch quantised reference. Correctness-first; NEON to follow.
+        // Wide-net head (e.g. N512: acc(512) -> HEAD_CONCAT -> THIRD_OUT_W -> 1). FIRST_OUT,
+        // HEAD_CONCAT and THIRD_OUT_W are all multiples of 16, so the dot loops are remainder-free.
+        // NEON (SDOT) path; scalar fallback. Both bit-exact with the numpy/torch quant reference.
         if constexpr (FIRST_OUT == 512)
         {
+#if defined(__ARM_NEON)
+            // activations: narrow the int16 accumulator to int8 with ReLU clamp [0,127]
+            alignas(16) int8_t a[FIRST_OUT];
+            for (int i = 0; i < FIRST_OUT; i += 16)
+            {
+                int8x16_t v = vcombine_s8(vqmovn_s16(vld1q_s16(pInput + i)),
+                                          vqmovn_s16(vld1q_s16(pInput + i + 8)));
+                vst1q_s8(a + i, vmaxq_s8(v, vdupq_n_s8(0)));
+            }
+            // layer 1 (second): HEAD_CONCAT neurons, each a dot over the 512 activations
+            alignas(16) int8_t l1[HEAD_CONCAT];
+            for (int o = 0; o < HEAD_CONCAT; ++o)
+            {
+                const int8_t *w = (o < SECOND_OUT_W) ? pWeights11 + o * FIRST_OUT
+                                                     : pWeights12 + (o - SECOND_OUT_W) * FIRST_OUT;
+                int32x4_t acc = vdupq_n_s32(0);
+                for (int i = 0; i < FIRST_OUT; i += 16)
+                    acc = vdotq_s32(acc, vld1q_s8(a + i), vld1q_s8(w + i));
+                int32_t s = vaddvq_s32(acc) + weights.secondBias[o];
+                l1[o] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(s >> 6))));
+            }
+            // layer 2 (third): THIRD_OUT_W neurons, dot over HEAD_CONCAT
+            alignas(16) int8_t l2[THIRD_OUT_W];
+            for (int o = 0; o < THIRD_OUT_W; ++o)
+            {
+                const int8_t *w = weights.thirdW + o * HEAD_CONCAT;
+                int32x4_t acc = vdupq_n_s32(0);
+                for (int i = 0; i < HEAD_CONCAT; i += 16)
+                    acc = vdotq_s32(acc, vld1q_s8(l1 + i), vld1q_s8(w + i));
+                int32_t s = vaddvq_s32(acc) + weights.thirdBias[o];
+                l2[o] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(s >> 6))));
+            }
+            // layer 3 (final): 1 output, dot over THIRD_OUT_W
+            int32x4_t accf = vdupq_n_s32(0);
+            for (int i = 0; i < THIRD_OUT_W; i += 16)
+                accf = vdotq_s32(accf, vld1q_s8(l2 + i), vld1q_s8(weights.finalW + i));
+            return static_cast<int16_t>(vaddvq_s32(accf) + weights.finalBias);
+#else
             int8_t a[FIRST_OUT];
             for (int i = 0; i < FIRST_OUT; ++i)
                 a[i] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(pInput[i]))));
-
             int8_t l1[HEAD_CONCAT];
             for (int o = 0; o < HEAD_CONCAT; ++o)
             {
@@ -194,7 +232,6 @@ namespace NNUEU
                     s += static_cast<int32_t>(a[i]) * static_cast<int32_t>(w[i]);
                 l1[o] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(s >> 6))));
             }
-
             int8_t l2[THIRD_OUT_W];
             for (int o = 0; o < THIRD_OUT_W; ++o)
             {
@@ -203,11 +240,11 @@ namespace NNUEU
                     s += static_cast<int32_t>(l1[i]) * static_cast<int32_t>(weights.thirdW[o * HEAD_CONCAT + i]);
                 l2[o] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(s >> 6))));
             }
-
             int32_t s = weights.finalBias;
             for (int i = 0; i < THIRD_OUT_W; ++i)
                 s += static_cast<int32_t>(l2[i]) * static_cast<int32_t>(weights.finalW[i]);
             return static_cast<int16_t>(s);
+#endif
         }
 #if defined(__ARM_NEON)
 
