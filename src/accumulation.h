@@ -17,11 +17,22 @@ namespace NNUEU
 #ifndef NNUEU_FIRST_OUT
 #define NNUEU_FIRST_OUT 32
 #endif
-    static_assert(NNUEU_FIRST_OUT == 8 || NNUEU_FIRST_OUT == 32,
-                  "NNUEU_FIRST_OUT must be 8 or 32");
+    // Head widths: 2nd-layer output (per perspective) and 3rd-layer output. Default 4/4 =
+    // the w8/w32 nets; the N512 net uses 32/32 (-DNNUEU_SECOND_OUT=32 -DNNUEU_THIRD_OUT=32).
+#ifndef NNUEU_SECOND_OUT
+#define NNUEU_SECOND_OUT 4
+#endif
+#ifndef NNUEU_THIRD_OUT
+#define NNUEU_THIRD_OUT 4
+#endif
+    static_assert(NNUEU_FIRST_OUT == 8 || NNUEU_FIRST_OUT == 32 || NNUEU_FIRST_OUT == 512,
+                  "NNUEU_FIRST_OUT must be 8, 32 or 512");
     static constexpr int F_MAP = 640;
     static constexpr int FIRST_OUT = NNUEU_FIRST_OUT;
-    static constexpr int SECOND_OUT = FIRST_OUT * 4;
+    static constexpr int SECOND_OUT_W = NNUEU_SECOND_OUT;       // 2nd-layer output width per perspective
+    static constexpr int THIRD_OUT_W = NNUEU_THIRD_OUT;         // 3rd-layer output width
+    static constexpr int HEAD_CONCAT = 2 * SECOND_OUT_W;        // concat(turn, not_turn)
+    static constexpr int SECOND_OUT = FIRST_OUT * SECOND_OUT_W; // bucketed 2nd-layer weights per king square
     // NNUEUChange structure: holds the incremental change info
     struct NNUEUChange
     {
@@ -127,11 +138,11 @@ namespace NNUEU
             // For initializing accumulators
             int16_t firstBias[FIRST_OUT] = {0};
 
-            // For accumulating non-king moves
-            alignas(64) int16_t firstW[F_MAP][FIRST_OUT] = {0}; // removeOnInput()
-            alignas(64) int16_t firstWInv[F_MAP][FIRST_OUT] = {0}; // removeOnInput()
-            alignas(64) int16_t firstW2Indices[F_MAP][F_MAP][FIRST_OUT] = {0}; // addAndRemoveOnInput()
-            alignas(64) int16_t firstW2IndicesInv[F_MAP][F_MAP][FIRST_OUT] = {0}; // addAndRemoveOnInput()
+            // For accumulating moves: add/removeOnInput use firstW/firstWInv directly.
+            // (The old fused firstW2Indices[F_MAP][F_MAP][FIRST_OUT] table is gone — it was
+            //  quadratic in F_MAP and ~838 MB at width 512; addAndRemove now does add+remove.)
+            alignas(64) int16_t firstW[F_MAP][FIRST_OUT] = {0};
+            alignas(64) int16_t firstWInv[F_MAP][FIRST_OUT] = {0};
 
             // For king moves
             alignas(64) int8_t second1[64][SECOND_OUT] = {0};

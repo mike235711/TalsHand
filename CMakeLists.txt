@@ -11,8 +11,13 @@ option(ENABLE_VERBOSE_DEBUG "Enable verbose (Level 2) debugging. Requires a Debu
 
 # NNUEU accumulator width (8 or 32). Default 32 = w32_wdl0 baseline (v0.3.8).
 # Build the legacy width-8 net with -DNNUEU_FIRST_OUT=8.
-set(NNUEU_FIRST_OUT 32 CACHE STRING "NNUEU accumulator width: 8 or 32")
+set(NNUEU_FIRST_OUT 32 CACHE STRING "NNUEU accumulator width: 8, 32 or 512")
 add_compile_definitions(NNUEU_FIRST_OUT=${NNUEU_FIRST_OUT})
+# Head widths: 2nd-/3rd-layer output. Default 4/4 (w8/w32 nets); N512 uses 32/32.
+set(NNUEU_SECOND_OUT 4 CACHE STRING "NNUEU 2nd-layer output width")
+set(NNUEU_THIRD_OUT 4 CACHE STRING "NNUEU 3rd-layer output width")
+add_compile_definitions(NNUEU_SECOND_OUT=${NNUEU_SECOND_OUT})
+add_compile_definitions(NNUEU_THIRD_OUT=${NNUEU_THIRD_OUT})
 
 add_subdirectory(src)
 

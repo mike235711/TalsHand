@@ -23,7 +23,7 @@ void load_int8_2D_array1(const std::string &file_path, int8_t weights[64][NNUEU:
     std::string line;
     size_t row = 0;
 
-    while (std::getline(file, line) && row < 4)
+    while (std::getline(file, line) && row < static_cast<size_t>(NNUEU::SECOND_OUT_W))
     {
         std::stringstream ss(line);
         std::string value;
@@ -160,10 +160,18 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
     inline void NNUEU::AccumulatorState::addAndRemoveOnInput(int subIndexAdd, int subIndexRemove, bool turn, const Transformer &transformer)
     {
         assert(subIndexAdd >= 0 && subIndexAdd < 640 && subIndexRemove >= 0 && subIndexRemove < 640);
+        // Equivalent to the old fused firstW2Indices[add][remove] = firstW[add] - firstW[remove],
+        // done as two passes so no quadratic table is needed (essential at width 512).
         if (not turn)
-            add_8_int16(inputTurn[0], transformer.weights.firstW2Indices[subIndexAdd][subIndexRemove]);
+        {
+            add_8_int16(inputTurn[0], transformer.weights.firstW[subIndexAdd]);
+            substract_8_int16(inputTurn[0], transformer.weights.firstW[subIndexRemove]);
+        }
         else
-            add_8_int16(inputTurn[1], transformer.weights.firstW2IndicesInv[subIndexAdd][subIndexRemove]);
+        {
+            add_8_int16(inputTurn[1], transformer.weights.firstWInv[subIndexAdd]);
+            substract_8_int16(inputTurn[1], transformer.weights.firstWInv[subIndexRemove]);
+        }
     }
 
     inline void NNUEU::AccumulatorState::add_8_int16(int16_t *a, const int16_t *b)
@@ -362,7 +370,7 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
     // From top down to 0, find the first node that has both sides computed
     int NNUEU::AccumulatorStack::findLastComputedNode(bool turn) const
     {
-        for (std::size_t curr_idx = m_current_idx - 2; curr_idx > 0; curr_idx--)
+        for (int curr_idx = static_cast<int>(m_current_idx) - 2; curr_idx > 0; curr_idx--)
         {
             if (stack[curr_idx].computed[not turn])
                 return curr_idx;
@@ -414,45 +422,6 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
             return false;
         }
 
-        // Initialze double weights for addAndRemoveFromInput
-        for (int i = 0; i < F_MAP; i++)
-        {
-            for (int j = 0; j < F_MAP; j++)
-            {
-                for (int k = 0; k < FIRST_OUT; k++)
-                {
-                    // Sum with overflow handling for weights.firstW2
-                    int32_t sum1 = (int32_t)weights.firstW[i][k] - (int32_t)weights.firstW[j][k];
-                    if (sum1 > INT16_MAX)
-                    {
-                        weights.firstW2Indices[i][j][k] = INT16_MAX;
-                    }
-                    else if (sum1 < INT16_MIN)
-                    {
-                        weights.firstW2Indices[i][j][k] = INT16_MIN;
-                    }
-                    else
-                    {
-                        weights.firstW2Indices[i][j][k] = (int16_t)sum1;
-                    }
-
-                    // Sum with overflow handling for firstLayerInvertedWeights2Indices
-                    int32_t sum2 = (int32_t)weights.firstWInv[i][k] - (int32_t)weights.firstWInv[j][k];
-                    if (sum2 > INT16_MAX)
-                    {
-                        weights.firstW2IndicesInv[i][j][k] = INT16_MAX;
-                    }
-                    else if (sum2 < INT16_MIN)
-                    {
-                        weights.firstW2IndicesInv[i][j][k] = INT16_MIN;
-                    }
-                    else
-                    {
-                        weights.firstW2IndicesInv[i][j][k] = (int16_t)sum2;
-                    }
-                }
-            }
-        }
-
+        // (No fused firstW2Indices table to build — addAndRemoveOnInput does add+remove.)
         return true;
     }

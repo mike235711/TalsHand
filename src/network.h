@@ -29,10 +29,11 @@ namespace NNUEU
     private:
         struct Weight
         {
-            alignas(64) int8_t thirdW[SECOND_OUT] = {0};
-            alignas(64) int8_t finalW[8] = {0}; // For this one only the first 4 elements are weights, the rest are left as zero so that the forward pass works fine
-            int16_t secondBias[FIRST_OUT] = {0};
-            int16_t thirdBias[4] = {0};
+            // Head: 2nd layer (acc -> HEAD_CONCAT) -> 3rd layer (HEAD_CONCAT -> THIRD_OUT_W) -> final (-> 1).
+            alignas(64) int8_t thirdW[THIRD_OUT_W * HEAD_CONCAT] = {0};
+            alignas(64) int8_t finalW[THIRD_OUT_W + 8] = {0}; // +8 pad so NEON 8-byte loads never over-read
+            int16_t secondBias[HEAD_CONCAT] = {0};
+            int16_t thirdBias[THIRD_OUT_W] = {0};
             int16_t finalBias = {0};
         };
         Weight weights;
