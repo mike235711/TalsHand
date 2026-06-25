@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-21
+
+Evaluation release: the **N512_h32** net — a much larger, more accurate NNUEU
+(`640->512->(32 (+) 32)->32->1`, vs the 32-wide `w32_wdl0`). First gain from the *eval frontier*,
+opened after the search-pruning levers were exhausted (LMR/SEE/rev-fut/PVS won; everything
+lossy failed because the tiny eval was too noisy for sound pruning — a better eval was the
+predicted next lever).
+
+### Added
+- **N512_h32 net** (width 512, head 32/32; `models/n512_h32`). Build with
+  `-DNNUEU_FIRST_OUT=512 -DNNUEU_SECOND_OUT=32 -DNNUEU_THIRD_OUT=32`. The head widths
+  (2nd-/3rd-layer output) are now compile-time parametric (default 4/4 = the w8/w32 nets).
+- Generalized **scalar + NEON (SDOT) forward pass** for the wide head; **bit-exact** vs the
+  PyTorch/numpy quantised reference; incremental accumulation verified (`verifyTopAgainstFresh`).
+
+### Changed
+- **Dropped the fused `firstW2Indices` accumulation table** (~838 MB at width 512) —
+  `addAndRemoveOnInput` now does add+remove via `firstW`/`firstWInv` (mathematically identical).
+  This was the prerequisite for widening past 32.
+
+### Result
+- **+66 Elo** vs 0.3.18 over 64 games (16-44-4, 59.4 %; 95% CI [+20, +114]), **zero time losses**.
+  Strongly positive in bullet (+163, +112), neutral in blitz (-22, +22): the ~6.5x nps cost
+  (inherent to the 16x wider accumulator) costs depth, which matters more at longer TC. Gate
+  green (mate, repetition, 14/14 tactics). Speed optimization is tracked as follow-up work.
+
 ## [0.3.18] - 2026-06-19
 
 Search release: principal variation search (PVS). Same net (`w32_wdl0`).

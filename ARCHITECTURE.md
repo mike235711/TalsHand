@@ -38,6 +38,17 @@ Evaluation is performed by an NNUE (Efficiently Updatable Neural Network) type n
     `-march=armv8.2-a+dotprod`). Both paths are checked bit-for-bit against the scalar
     reference by `forwardPassDebug` (the SIMD==scalar assert on every eval in debug
     builds) and, for width-32, by `NNUEU_Optim/nnueu_bench_w32.cpp`.
+  - **Wide net (v0.4.0, `N512_h32`).** The default release net since v0.4.0 is the much larger
+    `models/n512_h32` (`640->512->(32+32)->32->1`), built with `-DNNUEU_FIRST_OUT=512
+    -DNNUEU_SECOND_OUT=32 -DNNUEU_THIRD_OUT=32`. The head's 2nd-/3rd-layer output widths are now
+    compile-time parametric (`NNUEU_SECOND_OUT`/`NNUEU_THIRD_OUT`, default 4/4 = the w8/w32 nets;
+    `SECOND_OUT = FIRST_OUT * NNUEU_SECOND_OUT`, `HEAD_CONCAT = 2*NNUEU_SECOND_OUT`). Widening past
+    32 required **dropping the fused `firstW2Indices` table** (`firstW[add]-firstW[remove]`, ~838 MB
+    at width 512): `addAndRemoveOnInput` now does add+remove via `firstW`/`firstWInv`. The width-512
+    forward pass is a separate `if constexpr (FIRST_OUT == 512)` branch (scalar + NEON SDOT, dims are
+    multiples of 16), bit-exact vs the PyTorch/numpy quantised reference. It is **~6.5x slower in nps**
+    than w32 (inherent: the accumulator is 16x wider) but **+66 Elo** — eval accuracy outweighs the
+    depth lost. Reducing that speed cost is open follow-up work.
 
 ## Search Algorithm
 The engine uses an alpha-beta search with iterative deepening as its main algorithm.
