@@ -84,6 +84,7 @@ private:
     std::unique_ptr<std::deque<StateInfo>> stateInfos;
     // timeLeft is ourInc + ourTime, the Worker will then manage the time based on improving strikes
     int timeLeft;
+    int ourClock = 0; // our remaining base clock (ms); used to set the safe per-move hard cap
 
     // Manages threads but for the moment we will keep it simple only with the main_thread()
     ThreadPool threadpool;

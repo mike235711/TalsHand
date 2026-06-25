@@ -85,6 +85,8 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta)
     // Stand pat
     ++nodes;
     ++qnodes;
+    if (threads.stop) // hard time-out: unwind immediately (value is discarded by the caller)
+        return 0;
     int16_t value = network.evaluate(currentPos, accumulatorStack, *transformer);
 
     // Fail high when making no moves
@@ -159,6 +161,18 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
 // This search is done when depth is more than 0 and considers all moves and stores positions in the transposition table
 {
     ++nodes;
+    // Hard time-out: once tripped, every node unwinds immediately. The main thread polls the
+    // clock every 2048 nodes; the cap (maxTimeLimit) is kept safely below the remaining clock
+    // (see goSearch), so the engine never flags even if a single deep iteration runs long.
+    if (threads.stop)
+        return 0;
+    if (isMainThread() && (nodes & 2047) == 0
+        && std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::high_resolution_clock::now() - startTime) >= maxTimeLimit)
+    {
+        threads.stop = true;
+        return 0;
+    }
     assert(alpha <= beta);
     if (currentPos.isDraw())
         return 0;
@@ -467,6 +481,8 @@ void Worker::firstMoveSearch(int8_t depth)
     // Main loop over candidate moves
     for (std::size_t i = 0; i < rootMoves.size(); ++i)
     {
+        if (threads.stop) // hard time-out: stop searching further root moves
+            break;
         Move currentMove = rootMoves[i];
 
         makeMove(currentMove, state_info);
@@ -554,12 +570,19 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
         isEndgame = rootPos.isEndgame();
         moveDepthValues = {};
 
-        softTimeLimit = hardTimeLimit / (32 + rootPos.countStartPieces() + rootPos.countAllPieces());
+        // Soft budget per move ~ remaining/(16..48): roughly 2x the old (32 + pieces) divisor, so
+        // the engine actually converts its clock into depth instead of banking it. Safe because the
+        // mid-search hard abort (maxTimeLimit) caps each move below the remaining clock regardless.
+        softTimeLimit = hardTimeLimit / (21 + (rootPos.countStartPieces() + rootPos.countAllPieces()) * 2 / 3);
 
         startTime = std::chrono::high_resolution_clock::now();
+        threads.stop = false;                    // clear any prior abort / UCI "stop"
         Move bestMovePreviousDepth{};
         bestRootValue = static_cast<int16_t>(-30001);
         int streak = 1;                          // To keep track of the improvement streak
+        // Last fully-completed iteration's result, restored if a deeper one is aborted mid-flight.
+        Move lastGoodMove = bestRootMove;
+        int16_t lastGoodValue = 0;
 
         // A finite target depth (fixed_max_depth < 99, i.e. searchFixedDepth / "go depth N")
         // or the introspection flag means: run every depth to the target with no time- or
@@ -572,6 +595,17 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
         {
             // Search
             firstMoveSearch(depth);
+
+            // Hard time-out hit mid-iteration: the partial result is unreliable, so fall back
+            // to the last fully-completed depth and stop.
+            if (threads.stop)
+            {
+                bestRootMove = lastGoodMove;
+                bestRootValue = lastGoodValue;
+                break;
+            }
+            lastGoodMove = bestRootMove; // this depth completed
+            lastGoodValue = bestRootValue;
 
             completedDepth = static_cast<int>(depth);
 

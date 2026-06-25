@@ -569,12 +569,19 @@ void THEngine::loadNNUEU()
 void THEngine::settimeLeft(int ourTime, int ourInc)
 {
     timeLeft = ourTime + ourInc;
+    ourClock = ourTime;
 }
 
 void THEngine::goSearch()
 {
     resizeThreads();
-    threadpool.startThinking(pos, stateInfos, timeLeft, ponder, 99);
+    // Per-move hard cap for the mid-search abort: never spend more than the remaining base
+    // clock minus a safety buffer (max(50ms, 5%)), so the engine cannot flag. With no clock
+    // given (analysis), leave it unbounded.
+    const int maxMs = (ourClock > 0)
+                          ? std::max(10, ourClock - std::max(50, ourClock / 20))
+                          : 2147483647;
+    threadpool.startThinking(pos, stateInfos, timeLeft, ponder, 99, maxMs);
 }
 
 void THEngine::goSearchDepth(int depth)

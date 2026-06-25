@@ -106,6 +106,9 @@ private:
     std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
     std::chrono::milliseconds softTimeLimit;
     std::chrono::milliseconds hardTimeLimit;
+    // Absolute per-move ceiling for the mid-search hard abort; kept safely below the remaining
+    // clock so the engine never flags. Defaults to "infinite" (fixed-depth / infinite searches).
+    std::chrono::milliseconds maxTimeLimit{std::chrono::milliseconds::max()};
 
     // Root‑level bookkeeping
     bool ponder;
