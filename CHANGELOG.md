@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-06-21
+
+Time-management release. Same net (`N512_h32`).
+
+### Fixed
+- **Mid-search hard time abort.** `threadpool.stop` was never checked in the search, so the
+  engine could only stop *between* iterations — a single deep iteration (likely on the slow N512
+  net) could overrun the clock and flag. Now the main thread polls every 2048 nodes and trips the
+  stop flag once a per-move hard cap (`ourTime - max(50ms, 5%)`, set in `goSearch`) is reached; all
+  nodes unwind and the last fully-completed iteration's move is kept (never a partial / `Move(0)`).
+  Verified: search time always lands below the remaining clock under time pressure, so it cannot flag.
+
+### Changed
+- **Less conservative time budget.** Soft-time divisor cut ~1.5x (`remaining / (21 + pieces*2/3)`)
+  so the engine converts its banked clock into depth instead of moving near-instantly (a quiet
+  middlegame now thinks ~1.35s vs ~0.76s on a 60s clock). The easy-move early stop is gated on
+  >= 50% of the soft budget — it fired almost instantly in stable positions since v0.3.17 (when
+  reverse-futility/NMP made the best move move-stable). Both are safe thanks to the hard abort.
+
+### Result
+- **+72 Elo** vs 0.4.0 over 64 games (15-47-2, 60.2%, 95% CI [+30, +115]), **0 time losses**.
+  Positive in bullet (+89, +89) and blitz-3+2 (+112); blitz-5+2 all draws (neutral). Gate 14/14.
+
 ## [0.4.0] - 2026-06-21
 
 Evaluation release: the **N512_h32** net — a much larger, more accurate NNUEU
