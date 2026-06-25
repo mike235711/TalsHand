@@ -90,32 +90,30 @@ int16_t load_int16(const std::string &file_path)
 namespace NNUEU
 {
 
-    bool Network::load(const std::string &modelDir = (FIRST_OUT == 32) ? "models/w32_wdl0/" : "models/NNUEU_quantized_model_v4_param_350_epoch_10/")
+    bool Network::load(const std::string &modelDir = (FIRST_OUT == 512) ? "models/n512_h32/" : (FIRST_OUT == 32) ? "models/w32_wdl0/" : "models/NNUEU_quantized_model_v4_param_350_epoch_10/")
     {
         try
         {
-            auto tempThirdLayerWeights = load_int8_1D_array(modelDir + "third_layer_weights.csv", 8 * 4);
-            std::memcpy(weights.thirdW, tempThirdLayerWeights, sizeof(int8_t) * 8 * 4);
+            // third layer: THIRD_OUT_W neurons x HEAD_CONCAT inputs (flat row-major)
+            auto tempThirdLayerWeights = load_int8_1D_array(modelDir + "third_layer_weights.csv", THIRD_OUT_W * HEAD_CONCAT);
+            std::memcpy(weights.thirdW, tempThirdLayerWeights, sizeof(int8_t) * THIRD_OUT_W * HEAD_CONCAT);
             delete[] tempThirdLayerWeights;
 
-            auto tempFinalLayerWeights = load_int8_1D_array(modelDir + "final_layer_weights.csv", 4);
-            std::memcpy(weights.finalW, tempFinalLayerWeights, sizeof(int8_t) * 4);
-            // std::memset(finalLayerWeights + 4, 0, sizeof(int8_t) * 4);
+            // final layer: THIRD_OUT_W weights (buffer padded +8 for NEON over-read, pad stays 0)
+            auto tempFinalLayerWeights = load_int8_1D_array(modelDir + "final_layer_weights.csv", THIRD_OUT_W);
+            std::memcpy(weights.finalW, tempFinalLayerWeights, sizeof(int8_t) * THIRD_OUT_W);
             delete[] tempFinalLayerWeights;
 
-            // Load biases
-            auto tempSecondLayer1Biases = load_int16_array(modelDir + "second_layer_turn_biases.csv", 4);
-            auto tempSecondLayer2Biases = load_int16_array(modelDir + "second_layer_not_turn_biases.csv", 4);
-
-            // Concatenate biases directly
-            std::memcpy(weights.secondBias, tempSecondLayer1Biases, sizeof(int16_t) * 4);
-            std::memcpy(weights.secondBias + 4, tempSecondLayer2Biases, sizeof(int16_t) * 4);
-
+            // second-layer biases: turn (SECOND_OUT_W) then not-turn (SECOND_OUT_W) -> HEAD_CONCAT
+            auto tempSecondLayer1Biases = load_int16_array(modelDir + "second_layer_turn_biases.csv", SECOND_OUT_W);
+            auto tempSecondLayer2Biases = load_int16_array(modelDir + "second_layer_not_turn_biases.csv", SECOND_OUT_W);
+            std::memcpy(weights.secondBias, tempSecondLayer1Biases, sizeof(int16_t) * SECOND_OUT_W);
+            std::memcpy(weights.secondBias + SECOND_OUT_W, tempSecondLayer2Biases, sizeof(int16_t) * SECOND_OUT_W);
             delete[] tempSecondLayer1Biases;
             delete[] tempSecondLayer2Biases;
 
-            auto tempThirdLayerBiases = load_int16_array(modelDir + "third_layer_biases.csv", 4);
-            std::memcpy(weights.thirdBias, tempThirdLayerBiases, sizeof(int16_t) * 4);
+            auto tempThirdLayerBiases = load_int16_array(modelDir + "third_layer_biases.csv", THIRD_OUT_W);
+            std::memcpy(weights.thirdBias, tempThirdLayerBiases, sizeof(int16_t) * THIRD_OUT_W);
             delete[] tempThirdLayerBiases;
 
             weights.finalBias = load_int16(modelDir + "final_layer_biases.csv");
@@ -178,6 +176,76 @@ namespace NNUEU
     // The input is int16, and the weights are int8. So before multiplying we reduce int16 to int8
     // (by clipping to max int8) and clip negatives to zero before each layer pass.
     {
+        // Wide-net head (e.g. N512: acc(512) -> HEAD_CONCAT -> THIRD_OUT_W -> 1). FIRST_OUT,
+        // HEAD_CONCAT and THIRD_OUT_W are all multiples of 16, so the dot loops are remainder-free.
+        // NEON (SDOT) path; scalar fallback. Both bit-exact with the numpy/torch quant reference.
+        if constexpr (FIRST_OUT == 512)
+        {
+#if defined(__ARM_NEON)
+            // activations: narrow the int16 accumulator to int8 with ReLU clamp [0,127]
+            alignas(16) int8_t a[FIRST_OUT];
+            for (int i = 0; i < FIRST_OUT; i += 16)
+            {
+                int8x16_t v = vcombine_s8(vqmovn_s16(vld1q_s16(pInput + i)),
+                                          vqmovn_s16(vld1q_s16(pInput + i + 8)));
+                vst1q_s8(a + i, vmaxq_s8(v, vdupq_n_s8(0)));
+            }
+            // layer 1 (second): HEAD_CONCAT neurons, each a dot over the 512 activations
+            alignas(16) int8_t l1[HEAD_CONCAT];
+            for (int o = 0; o < HEAD_CONCAT; ++o)
+            {
+                const int8_t *w = (o < SECOND_OUT_W) ? pWeights11 + o * FIRST_OUT
+                                                     : pWeights12 + (o - SECOND_OUT_W) * FIRST_OUT;
+                int32x4_t acc = vdupq_n_s32(0);
+                for (int i = 0; i < FIRST_OUT; i += 16)
+                    acc = vdotq_s32(acc, vld1q_s8(a + i), vld1q_s8(w + i));
+                int32_t s = vaddvq_s32(acc) + weights.secondBias[o];
+                l1[o] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(s >> 6))));
+            }
+            // layer 2 (third): THIRD_OUT_W neurons, dot over HEAD_CONCAT
+            alignas(16) int8_t l2[THIRD_OUT_W];
+            for (int o = 0; o < THIRD_OUT_W; ++o)
+            {
+                const int8_t *w = weights.thirdW + o * HEAD_CONCAT;
+                int32x4_t acc = vdupq_n_s32(0);
+                for (int i = 0; i < HEAD_CONCAT; i += 16)
+                    acc = vdotq_s32(acc, vld1q_s8(l1 + i), vld1q_s8(w + i));
+                int32_t s = vaddvq_s32(acc) + weights.thirdBias[o];
+                l2[o] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(s >> 6))));
+            }
+            // layer 3 (final): 1 output, dot over THIRD_OUT_W
+            int32x4_t accf = vdupq_n_s32(0);
+            for (int i = 0; i < THIRD_OUT_W; i += 16)
+                accf = vdotq_s32(accf, vld1q_s8(l2 + i), vld1q_s8(weights.finalW + i));
+            return static_cast<int16_t>(vaddvq_s32(accf) + weights.finalBias);
+#else
+            int8_t a[FIRST_OUT];
+            for (int i = 0; i < FIRST_OUT; ++i)
+                a[i] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(pInput[i]))));
+            int8_t l1[HEAD_CONCAT];
+            for (int o = 0; o < HEAD_CONCAT; ++o)
+            {
+                const int8_t *w = (o < SECOND_OUT_W) ? pWeights11 + o * FIRST_OUT
+                                                     : pWeights12 + (o - SECOND_OUT_W) * FIRST_OUT;
+                int32_t s = weights.secondBias[o];
+                for (int i = 0; i < FIRST_OUT; ++i)
+                    s += static_cast<int32_t>(a[i]) * static_cast<int32_t>(w[i]);
+                l1[o] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(s >> 6))));
+            }
+            int8_t l2[THIRD_OUT_W];
+            for (int o = 0; o < THIRD_OUT_W; ++o)
+            {
+                int32_t s = weights.thirdBias[o];
+                for (int i = 0; i < HEAD_CONCAT; ++i)
+                    s += static_cast<int32_t>(l1[i]) * static_cast<int32_t>(weights.thirdW[o * HEAD_CONCAT + i]);
+                l2[o] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(s >> 6))));
+            }
+            int32_t s = weights.finalBias;
+            for (int i = 0; i < THIRD_OUT_W; ++i)
+                s += static_cast<int32_t>(l2[i]) * static_cast<int32_t>(weights.finalW[i]);
+            return static_cast<int16_t>(s);
+#endif
+        }
 #if defined(__ARM_NEON)
 
         // ---- Layer 1: FIRST_OUT-wide accumulator -> 8 neurons (4 from each block) ----

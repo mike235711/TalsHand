@@ -49,6 +49,11 @@ void run_tactic_test(const std::string& name, const std::string& fen, const std:
     std::cout << "FEN: " << fen << std::endl;
 
     for (int depth = 2; depth <= maxDepth; ++depth) {
+        // Clear the transposition table so each fixed-depth search is a clean,
+        // reproducible measurement of true depth-N strength — not one polluted by the
+        // shallower searches that ran before it (which, on a deep quiet-win-vs-draw
+        // position like Tactic 3, can graft misleading shallow draw scores).
+        engine.setTTSize();
         auto start_time = std::chrono::high_resolution_clock::now();
         moveFound = engine.searchFixedDepth(depth);
         auto end_time = std::chrono::high_resolution_clock::now();

@@ -72,12 +72,15 @@ public:
 
     bool stop;
 
-    std::pair<Move, int16_t> startThinking(BitPosition &pos, std::unique_ptr<std::deque<StateInfo>> &stateInfos, int timeLimit, bool pondering, int8_t max_depth);
+    std::pair<Move, int16_t> startThinking(BitPosition &pos, std::unique_ptr<std::deque<StateInfo>> &stateInfos, int timeLimit, bool pondering, int8_t max_depth, int maxTimeMs = 2147483647);
     void waitToFinishSearch();
     void clear();
     void set(int numThreads, TranspositionTable &tt, NNUEU::Network &network, const NNUEU::Transformer &transformer);
 
     Thread *main_thread() const { return threads.front().get(); }
+
+    // Fixed-depth "go depth N" introspection mode for the main worker (harness).
+    void setMainNoEarlyStop(bool b) { main_thread()->worker->infoNoEarlyStop = b; }
 
     auto cbegin() const noexcept { return threads.cbegin(); }
     auto begin() noexcept { return threads.begin(); }

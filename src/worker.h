@@ -34,6 +34,13 @@ public:
 
     bool isMainThread() const { return threadIdx == 0; }
 
+    // --- search introspection (for the search-tree / EBF comparison harness) ---
+    // Reset at the start of every search; counted in alphaBetaSearch / quiesenceSearch.
+    uint64_t nodes = 0, qnodes = 0;                 // total / quiescence nodes this search
+    uint64_t cntTTcut = 0, cntNMP = 0, cntLMR = 0;  // TT-cutoffs / null-move prunes / LMR reductions
+    uint64_t cntBeta = 0, cntBetaFirst = 0;         // beta cutoffs total / on the first move (ordering quality)
+    bool infoNoEarlyStop = false;                   // "go depth N": run every depth to N + print per-depth info
+
 private:
     // Makes move and pushes on the accumulator
     inline void makeMove(Move move, StateInfo &st)
@@ -99,6 +106,9 @@ private:
     std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
     std::chrono::milliseconds softTimeLimit;
     std::chrono::milliseconds hardTimeLimit;
+    // Absolute per-move ceiling for the mid-search hard abort; kept safely below the remaining
+    // clock so the engine never flags. Defaults to "infinite" (fixed-depth / infinite searches).
+    std::chrono::milliseconds maxTimeLimit{std::chrono::milliseconds::max()};
 
     // Root‑level bookkeeping
     bool ponder;

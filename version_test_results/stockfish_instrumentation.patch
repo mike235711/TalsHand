@@ -1,0 +1,180 @@
+diff --git a/src/search.cpp b/src/search.cpp
+index 92998b02..2d646340 100644
+--- a/src/search.cpp
++++ b/src/search.cpp
+@@ -62,6 +62,18 @@ void syzygy_extend_pv(const OptionsMap&            options,
+ 
+ using namespace Search;
+ 
++// --- LaMano-comparison search-tree instrumentation (run with Threads=1). ---
++// Counts the same cutoff/prune categories the LaMano harness reports, so the two
++// engines' trees can be compared apples-to-apples. Printed as an "info string lm …"
++// line at the end of the main-thread search.
++namespace {
++struct LMStats {
++    uint64_t qnodes = 0, ttcut = 0, nullcut = 0, razor = 0,
++             futility = 0, lmp = 0, histprune = 0, seeprune = 0, lmr = 0;
++};
++LMStats g_lm;
++}
++
+ namespace {
+ 
+ // (*Scalers):
+@@ -262,6 +274,12 @@ void Search::Worker::start_searching() {
+         || bestThread->rootMoves[0].extract_ponder_from_tt(tt, rootPos))
+         ponder = UCIEngine::move(bestThread->rootMoves[0].pv[1], rootPos.is_chess960());
+ 
++    sync_cout << "info string lm qnodes " << g_lm.qnodes << " ttcut " << g_lm.ttcut
++              << " nullcut " << g_lm.nullcut << " razor " << g_lm.razor
++              << " futility " << g_lm.futility << " lmp " << g_lm.lmp
++              << " histprune " << g_lm.histprune << " seeprune " << g_lm.seeprune
++              << " lmr " << g_lm.lmr << sync_endl;
++
+     auto bestmove = UCIEngine::move(bestThread->rootMoves[0].pv[0], rootPos.is_chess960());
+     main_manager()->updates.onBestmove(bestmove, ponder);
+ }
+@@ -272,6 +290,8 @@ void Search::Worker::start_searching() {
+ void Search::Worker::iterative_deepening() {
+ 
+     SearchManager* mainThread = (is_mainthread() ? main_manager() : nullptr);
++    if (is_mainthread())
++        g_lm = {}; // reset comparison counters at the start of each search
+ 
+     Move pv[MAX_PLY + 1];
+ 
+@@ -729,7 +749,10 @@ Value Search::Worker::search(
+         // Partial workaround for the graph history interaction problem
+         // For high rule50 counts don't produce transposition table cutoffs.
+         if (pos.rule50_count() < 90)
++        {
++            g_lm.ttcut++;
+             return ttData.value;
++        }
+     }
+ 
+     // Step 5. Tablebases probe
+@@ -851,7 +874,10 @@ Value Search::Worker::search(
+     // If eval is really low, skip search entirely and return the qsearch value.
+     // For PvNodes, we must have a guard against mates being returned.
+     if (!PvNode && eval < alpha - 461 - 315 * depth * depth)
++    {
++        g_lm.razor++;
+         return qsearch<NonPV>(pos, ss, alpha, beta);
++    }
+ 
+     // Step 8. Futility pruning: child node
+     // The depth condition is important for mate finding.
+@@ -861,7 +887,10 @@ Value Search::Worker::search(
+                - std::abs(correctionValue) / 139878
+              >= beta
+         && eval >= beta && (!ttData.move || ttCapture) && !is_loss(beta) && !is_win(eval))
++    {
++        g_lm.futility++;
+         return beta + (eval - beta) / 3;
++    }
+ 
+     // Step 9. Null move search with verification search
+     if (cutNode && (ss - 1)->currentMove != Move::null() && eval >= beta
+@@ -887,7 +916,10 @@ Value Search::Worker::search(
+         if (nullValue >= beta && !is_win(nullValue))
+         {
+             if (thisThread->nmpMinPly || depth < 16)
++            {
++                g_lm.nullcut++;
+                 return nullValue;
++            }
+ 
+             assert(!thisThread->nmpMinPly);  // Recursive verification is not allowed
+ 
+@@ -900,7 +932,10 @@ Value Search::Worker::search(
+             thisThread->nmpMinPly = 0;
+ 
+             if (v >= beta)
++            {
++                g_lm.nullcut++;
+                 return nullValue;
++            }
+         }
+     }
+ 
+@@ -1048,7 +1083,10 @@ moves_loop:  // When in check, search starts here
+         {
+             // Skip quiet moves if movecount exceeds our FutilityMoveCount threshold
+             if (moveCount >= futility_move_count(improving, depth))
++            {
++                g_lm.lmp++;
+                 mp.skip_quiet_moves();
++            }
+ 
+             // Reduced depth of the next LMR search
+             int lmrDepth = newDepth - r / 1024;
+@@ -1065,7 +1103,10 @@ moves_loop:  // When in check, search starts here
+                     Value futilityValue = ss->staticEval + 242 + 230 * lmrDepth
+                                         + PieceValue[capturedPiece] + 133 * captHist / 1024;
+                     if (futilityValue <= alpha)
++                    {
++                        g_lm.futility++;
+                         continue;
++                    }
+                 }
+ 
+                 // SEE based pruning for captures and checks
+@@ -1082,7 +1123,10 @@ moves_loop:  // When in check, search starts here
+                           capturesSearched);  // if the opponent captures last mobile piece it might be stalemate
+ 
+                     if (skip)
++                    {
++                        g_lm.seeprune++;
+                         continue;
++                    }
+                 }
+             }
+             else
+@@ -1094,7 +1138,10 @@ moves_loop:  // When in check, search starts here
+ 
+                 // Continuation history based pruning
+                 if (history < -4348 * depth)
++                {
++                    g_lm.histprune++;
+                     continue;
++                }
+ 
+                 history += 68 * thisThread->mainHistory[us][move.from_to()] / 32;
+ 
+@@ -1108,6 +1155,7 @@ moves_loop:  // When in check, search starts here
+                 // scales well with respect to time and threads
+                 if (!ss->inCheck && lmrDepth < 12 && futilityValue <= alpha)
+                 {
++                    g_lm.futility++;
+                     if (bestValue <= futilityValue && !is_decisive(bestValue)
+                         && !is_win(futilityValue))
+                         bestValue = futilityValue;
+@@ -1118,7 +1166,10 @@ moves_loop:  // When in check, search starts here
+ 
+                 // Prune moves with negative SEE
+                 if (!pos.see_ge(move, -27 * lmrDepth * lmrDepth))
++                {
++                    g_lm.seeprune++;
+                     continue;
++                }
+             }
+         }
+ 
+@@ -1266,6 +1317,8 @@ moves_loop:  // When in check, search starts here
+               1, std::min(newDepth - r / 1024, newDepth + !allNode + (PvNode && !bestMove)));
+ 
+             ss->reduction = newDepth - d;
++            if (d < newDepth)
++                g_lm.lmr++;
+ 
+             value         = -search<NonPV>(pos, ss + 1, -(alpha + 1), -alpha, d, true);
+             ss->reduction = 0;
+@@ -1532,6 +1585,7 @@ Value Search::Worker::qsearch(Position& pos, Stack* ss, Value alpha, Value beta)
+ 
+     static_assert(nodeType != Root);
+     constexpr bool PvNode = nodeType == PV;
++    g_lm.qnodes++; // quiescence node
+ 
+     assert(alpha >= -VALUE_INFINITE && alpha < beta && beta <= VALUE_INFINITE);
+     assert(PvNode || (alpha == beta - 1));

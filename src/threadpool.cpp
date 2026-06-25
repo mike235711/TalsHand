@@ -93,11 +93,16 @@ std::pair<Move, int16_t> ThreadPool::startThinking(BitPosition &pos,
                                                    std::unique_ptr<std::deque<StateInfo>> &stateInfos,
                                                    int timeLimit,
                                                    bool pondering,
-                                                   int8_t max_depth = 99)
+                                                   int8_t max_depth = 99,
+                                                   int maxTimeMs)
 {
+    const std::chrono::milliseconds maxTime =
+        (maxTimeMs >= 2147483647) ? std::chrono::milliseconds::max()
+                                  : std::chrono::milliseconds(maxTimeMs);
     main_thread()->waitToFinishSearch();
     main_thread()->worker->ponder = pondering;
     main_thread()->worker->hardTimeLimit = std::chrono::milliseconds(timeLimit);
+    main_thread()->worker->maxTimeLimit = maxTime;
 
     // If we received a fresh move list, take ownership of its history
     assert(stateInfos || setupStates);
@@ -108,12 +113,13 @@ std::pair<Move, int16_t> ThreadPool::startThinking(BitPosition &pos,
     {
         StateInfo *const sharedTail = &setupStates->back(); // immutable tail
 
-        thPtr->run_custom_job([&, sharedTail, timeLimit]
+        thPtr->run_custom_job([&, sharedTail, timeLimit, maxTime]
                               {
             thPtr->worker->rootPos.fromFen(pos.toFenString(), &thPtr->worker->rootState);
             thPtr->worker->rootState = setupStates->back();
 
-            thPtr->worker->hardTimeLimit = std::chrono::milliseconds(timeLimit); });
+            thPtr->worker->hardTimeLimit = std::chrono::milliseconds(timeLimit);
+            thPtr->worker->maxTimeLimit = maxTime; });
     }
 
     for (auto &thPtr : threads)

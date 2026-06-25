@@ -50,6 +50,8 @@ public:
 
     // non blocking call to start searching
     void goSearch();
+    // fixed-depth search ("go depth N") for the search-tree / EBF comparison harness
+    void goSearchDepth(int depth);
     // non blocking call to stop searching
     void stopSearch();
 
@@ -82,6 +84,7 @@ private:
     std::unique_ptr<std::deque<StateInfo>> stateInfos;
     // timeLeft is ourInc + ourTime, the Worker will then manage the time based on improving strikes
     int timeLeft;
+    int ourClock = 0; // our remaining base clock (ms); used to set the safe per-move hard cap
 
     // Manages threads but for the moment we will keep it simple only with the main_thread()
     ThreadPool threadpool;

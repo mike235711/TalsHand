@@ -319,8 +319,9 @@ int MaxThreads = std::min<int>(HardThreadCap, int(HardwareCores * 4)); // 4× ov
 // for the default build, or the proven width-8 v4 net (the 0.3.7 baseline) for
 // legacy -DNNUEU_FIRST_OUT=8 builds, so a width-8 build reproduces 0.3.7's eval.
 constexpr auto DefaultNNUEFile =
-    (NNUEU::FIRST_OUT == 32) ? "models/w32_wdl0/"
-                             : "models/NNUEU_quantized_model_v4_param_350_epoch_10/";
+    (NNUEU::FIRST_OUT == 512) ? "models/n512_h32/"
+    : (NNUEU::FIRST_OUT == 32) ? "models/w32_wdl0/"
+                              : "models/NNUEU_quantized_model_v4_param_350_epoch_10/";
 constexpr std::size_t DefaultHashMB = 16; // Stockfish defaults to 16 MB
 
 THEngine::THEngine(std::optional<std::string> path)
@@ -433,6 +434,7 @@ void THEngine::readUci()
         {
             int ourTime = 0;    // milliseconds left on our clock
             int ourInc = 0;     // increment per move
+            int goDepth = 0;    // "go depth N": fixed-depth search for the introspection harness
 
             std::string rest;
             std::getline(std::cin >> std::ws, rest); // read the rest of the line
@@ -457,13 +459,31 @@ void THEngine::readUci()
                 {
                     iss >> ourInc;
                 }
+                else if (kw == "depth")
+                {
+                    iss >> goDepth;
+                }
             }
-            settimeLeft(ourTime, ourInc);
-            goSearch();
+            if (goDepth > 0)
+                goSearchDepth(goDepth); // fixed-depth, prints per-depth info (harness)
+            else
+            {
+                settimeLeft(ourTime, ourInc);
+                goSearch();
+            }
         }
         else if (token == "stop")
         {
             stopSearch();
+        }
+        else if (token == "eval")
+        {
+            // Static NNUEU eval of the current position (raw forwardPass minus the 2048 offset),
+            // used to verify the C++ net against the PyTorch/numpy reference oracle.
+            static NNUEU::AccumulatorStack evalStack;
+            evalStack.reset(pos, *transformer);
+            int16_t v = network.evaluate(pos, evalStack, *transformer);
+            std::cout << "eval " << static_cast<int>(v) << std::endl;
         }
         else if (token == "quit")
         {
@@ -519,7 +539,14 @@ void THEngine::resizeThreads()
 void THEngine::setTTSize()
 {
     waitToFinishSearch();
-    tt.resize(ttSize);
+    // ttSize is a hash size in MB (the UCI "Hash" option). resize() takes a *count of
+    // entries*, so convert MB -> entries. Previously ttSize was passed straight to
+    // resize(), allocating a 16-*entry* table instead of 16 MB — i.e. the transposition
+    // table was effectively disabled (≈16 cutoffs in a 30 M-node search).
+    size_t entries = (ttSize * 1024ULL * 1024ULL) / sizeof(TTEntry);
+    if (entries < 1)
+        entries = 1;
+    tt.resize(entries);
 }
 
 void THEngine::loadNNUEU()
@@ -542,12 +569,30 @@ void THEngine::loadNNUEU()
 void THEngine::settimeLeft(int ourTime, int ourInc)
 {
     timeLeft = ourTime + ourInc;
+    ourClock = ourTime;
 }
 
 void THEngine::goSearch()
 {
     resizeThreads();
-    threadpool.startThinking(pos, stateInfos, timeLeft, ponder, 99);
+    // Per-move hard cap for the mid-search abort: never spend more than the remaining base
+    // clock minus a safety buffer (max(50ms, 5%)), so the engine cannot flag. With no clock
+    // given (analysis), leave it unbounded.
+    const int maxMs = (ourClock > 0)
+                          ? std::max(10, ourClock - std::max(50, ourClock / 20))
+                          : 2147483647;
+    threadpool.startThinking(pos, stateInfos, timeLeft, ponder, 99, maxMs);
+}
+
+void THEngine::goSearchDepth(int depth)
+{
+    // Fixed-depth search to exactly `depth` (no time / streak early-stop), used by the
+    // search-tree / EBF comparison harness. iterativeSearch prints "info depth … nodes …"
+    // per depth plus an "info string … betafirst …" pruning breakdown at the end.
+    resizeThreads();
+    threadpool.setMainNoEarlyStop(true);
+    threadpool.startThinking(pos, stateInfos, std::numeric_limits<int>::max(), ponder, static_cast<int8_t>(depth));
+    threadpool.setMainNoEarlyStop(false);
 }
 
 void THEngine::stopSearch()

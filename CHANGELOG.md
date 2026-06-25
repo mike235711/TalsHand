@@ -7,6 +7,150 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-06-21
+
+Time-management release. Same net (`N512_h32`).
+
+### Fixed
+- **Mid-search hard time abort.** `threadpool.stop` was never checked in the search, so the
+  engine could only stop *between* iterations — a single deep iteration (likely on the slow N512
+  net) could overrun the clock and flag. Now the main thread polls every 2048 nodes and trips the
+  stop flag once a per-move hard cap (`ourTime - max(50ms, 5%)`, set in `goSearch`) is reached; all
+  nodes unwind and the last fully-completed iteration's move is kept (never a partial / `Move(0)`).
+  Verified: search time always lands below the remaining clock under time pressure, so it cannot flag.
+
+### Changed
+- **Less conservative time budget.** Soft-time divisor cut ~1.5x (`remaining / (21 + pieces*2/3)`)
+  so the engine converts its banked clock into depth instead of moving near-instantly (a quiet
+  middlegame now thinks ~1.35s vs ~0.76s on a 60s clock). The easy-move early stop is gated on
+  >= 50% of the soft budget — it fired almost instantly in stable positions since v0.3.17 (when
+  reverse-futility/NMP made the best move move-stable). Both are safe thanks to the hard abort.
+
+### Result
+- **+72 Elo** vs 0.4.0 over 64 games (15-47-2, 60.2%, 95% CI [+30, +115]), **0 time losses**.
+  Positive in bullet (+89, +89) and blitz-3+2 (+112); blitz-5+2 all draws (neutral). Gate 14/14.
+
+## [0.4.0] - 2026-06-21
+
+Evaluation release: the **N512_h32** net — a much larger, more accurate NNUEU
+(`640->512->(32 (+) 32)->32->1`, vs the 32-wide `w32_wdl0`). First gain from the *eval frontier*,
+opened after the search-pruning levers were exhausted (LMR/SEE/rev-fut/PVS won; everything
+lossy failed because the tiny eval was too noisy for sound pruning — a better eval was the
+predicted next lever).
+
+### Added
+- **N512_h32 net** (width 512, head 32/32; `models/n512_h32`). Build with
+  `-DNNUEU_FIRST_OUT=512 -DNNUEU_SECOND_OUT=32 -DNNUEU_THIRD_OUT=32`. The head widths
+  (2nd-/3rd-layer output) are now compile-time parametric (default 4/4 = the w8/w32 nets).
+- Generalized **scalar + NEON (SDOT) forward pass** for the wide head; **bit-exact** vs the
+  PyTorch/numpy quantised reference; incremental accumulation verified (`verifyTopAgainstFresh`).
+
+### Changed
+- **Dropped the fused `firstW2Indices` accumulation table** (~838 MB at width 512) —
+  `addAndRemoveOnInput` now does add+remove via `firstW`/`firstWInv` (mathematically identical).
+  This was the prerequisite for widening past 32.
+
+### Result
+- **+66 Elo** vs 0.3.18 over 64 games (16-44-4, 59.4 %; 95% CI [+20, +114]), **zero time losses**.
+  Strongly positive in bullet (+163, +112), neutral in blitz (-22, +22): the ~6.5x nps cost
+  (inherent to the 16x wider accumulator) costs depth, which matters more at longer TC. Gate
+  green (mate, repetition, 14/14 tactics). Speed optimization is tracked as follow-up work.
+
+## [0.3.18] - 2026-06-19
+
+Search release: principal variation search (PVS). Same net (`w32_wdl0`).
+
+### Added
+- **PVS**: the first move at a node is searched full depth + full window; every later move is
+  searched first with a zero window (formula-LMR-reduced for late quiet non-checking moves) and
+  re-searched at full depth/window only on a fail-high. Applied to the not-in-check and in-check
+  loops. Value-exact (same tree, cheaper scouts). It was Elo-neutral back on the broken-TT engine,
+  but on the lean v0.3.17 tree (TT fix + LMR + SEE) it is a clear gain — and, crucially, it creates
+  the zero-window (non-PV) nodes where eval-based forward pruning is safe.
+
+### Result
+- **+16.3 Elo** vs 0.3.17 over 64 games (5-57-2, 52.3 %), zero time losses; positive in both
+  bullet controls (+22, +44), even in blitz. Gate green (nnueu, mate, repetition, 14/14 tactics).
+
+## [0.3.17] - 2026-06-19
+
+Search release: per-node static evaluation + reverse futility. Same net (`w32_wdl0`).
+
+### Added
+- **Static eval computed once per non-check node** (reused as the null-move gate) — the
+  enabler for eval-based forward pruning.
+- **Reverse futility (static null move)**: at depth <= 3, when the static eval clears beta
+  by 175*depth eval-units and is not near-winning (< 20000), return it without searching.
+  Kept deliberately conservative: the engine is not PVS, so eval-pruning full-window nodes
+  is risky (an aggressive margin broke mate + tactics in testing).
+
+### Result
+- **+5.4 Elo** vs 0.3.16 over 64 games (9-47-8, 50.8 %), zero time losses — marginal but
+  kept (gate green; it is also the eval enabler the futility step builds on).
+
+## [0.3.16] - 2026-06-19
+
+Search release: SEE pruning of losing captures in the main search. Same net (`w32_wdl0`).
+(0.3.15 was a late-move-pruning attempt — a clear regression, −49 Elo, not released.)
+
+### Added
+- **SEE pruning in the main search**: at depth ≤ 6, skip capture-stage moves whose static
+  exchange evaluation is worse than `−75·depth` (checked before the move is made), guarded
+  by `value > −29000`. Extends the quiescence-only SEE filter into the main tree. Kept
+  conservative (captures only, depth-scaled threshold) because the modest eval makes
+  aggressive lossy pruning risky — unlike LMP, this only discards clearly material-losing
+  captures, which almost never matter, so it is safe.
+
+### Result
+- **+10.9 Elo** vs 0.3.14 over 64 games (7-52-5, 51.6 %), zero time losses; positive in both
+  bullet controls (+22 each), even in blitz. Mildly positive and gate-green (nnueu, mate,
+  repetition, 14/14 tactics) — kept per the harness-positive/match-positive rule.
+
+## [0.3.14] - 2026-06-19
+
+Search release: formula-based late move reductions. Same net (`w32_wdl0`).
+
+### Changed
+- **LMR is now a depth×movecount log formula** (Stockfish-style) instead of the conservative
+  `R = 1|2`: `Reductions[i] ≈ 23·log(i)`, `R = Reductions[depth]·Reductions[movesSearched]/1024`,
+  nudged ±~2 plies by butterfly history, applied to quiet non-checking moves at depth ≥ 2,
+  movesSearched ≥ 2; zero-window reduced search with a full-depth re-search on fail-high.
+
+### Result
+- **Marginal / neutral: +5.4 ± 32.2 Elo** vs 0.3.13 over 64 games (5-55-4, 50.8 %, lower bound
+  −26.7), zero time losses — extremely draw-heavy (55/64). Kept under the agreed "harness-positive
+  + match-flat → keep and stack" rule: the EBF harness confirms **~24 % fewer nodes to depth 13**
+  (mean EBF 3.30 → 3.24), and aggressive reductions are the substrate the upcoming futility/LMP
+  pruning suite needs. The neutrality fits the eval-bound pattern (depth-buying alone converts to
+  draws on the small net), same as PVS earlier.
+
+## [0.3.13] - 2026-06-19
+
+Search-strength release: **transposition-table sizing fix** (the TT was effectively
+disabled) plus a search-tree comparison harness. Same evaluation net as 0.3.8–0.3.12
+(`w32_wdl0`) — a pure search change.
+
+### Fixed
+- **Transposition table was allocating 16 *entries*, not 16 MB.** `setTTSize()` sized the
+  table in entries but was fed the "Hash MB" number, so the default 16 "MB" produced a
+  16-entry (256-byte) table. The TT was effectively off for the entire 0.3.7–0.3.12 history
+  (~16 cutoffs in a 30 M-node search). `setTTSize()` now converts MB → entry count. Measured
+  at depth 13: TT cutoffs **~16 → 50k–978k**, nodes-to-depth **3–17× fewer**, mean effective
+  branching factor **3.72 → 3.30** (Stockfish ≈ 2.25).
+
+### Added
+- **Search-tree comparison harness** (`scripts/search_tree_compare.py` +
+  `version_test_results/sf_search_tree_ref.json`): records Stockfish's nodes-per-depth / EBF
+  and compares LaMano's. The engine now supports `go depth N` (fixed-depth, no early-stop)
+  and prints per-depth `info depth … nodes …` plus an end-of-search `info string … betafirst …`
+  pruning breakdown (ttcut/nmp/lmr/beta counters). Fixed-depth searches clear the TT per call
+  so tactic tests are reproducible. Includes a patch instrumenting Stockfish with the same
+  counter set (`version_test_results/stockfish_instrumentation.patch`).
+
+### Result
+- **+49.2 ± 43.4 Elo** vs 0.3.12 over 64 games (13-47-4, 57.0 %; lower bound +5.8), zero time
+  losses. Per TC: bullet-1+1 +112, bullet-1+3 −22, blitz-3+2 +112, blitz-5+2 ±0.
+
 ## [0.3.12] - 2026-06-18
 
 Search-strength release: butterfly history move ordering + history-aware LMR.

@@ -118,8 +118,13 @@ namespace NNUEU
         int16_t fast = forwardPass(const_cast<int16_t *>(pInput), // existing SIMD routine takes non‑const
                                     pWeights11,
                                     pWeights12);
-        int16_t slow = forwardPassScalar(pInput, pWeights11, pWeights12);
-        assert(fast == slow && "NNUEU SIMD/scalar mismatch evaluation detected!");
+        // forwardPassScalar is the small-head reference for validating the NEON path; for the
+        // wide N512 net forwardPass is itself the scalar reference, so there is nothing to compare.
+        if constexpr (FIRST_OUT != 512)
+        {
+            int16_t slow = forwardPassScalar(pInput, pWeights11, pWeights12);
+            assert(fast == slow && "NNUEU SIMD/scalar mismatch evaluation detected!");
+        }
         return fast; // propagate the fast‑path result so callers remain unchanged.
     }
 } // Namespace NNUEU
