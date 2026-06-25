@@ -601,8 +601,13 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
             else if (bestRootMove.getData() == bestMovePreviousDepth.getData())
             {
                 streak++;
-                // Check stop condition based on streak and improvement pattern
-                if (!noEarlyStop && stopSearch(moveDepthValues[bestRootMove], streak, depth))
+                // "Easy move" early stop (best move stable for several plies). Gated on having
+                // spent at least half the soft-time budget: otherwise it fires almost instantly
+                // in quiet positions (best move stabilises by depth ~10) and the engine banks the
+                // clock it never converts into depth. Caps the saving without touching the max
+                // think time (still <= softTimeLimit), so it adds no time-loss risk.
+                if (!noEarlyStop && duration >= softTimeLimit / 2
+                    && stopSearch(moveDepthValues[bestRootMove], streak, depth))
                     break;
             }
             else
