@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-06-26
+
+Search release: **forward futility pruning** at non-PV nodes. Same net (`N512_h32`).
+The largest pruning technique Stockfish has and we lacked (SF ~1041 futility prunes
+per 1000 nodes vs our 0). First *lossy* eval-margin prune to succeed here — and it
+works *because* of the N512 eval (every prior lossy attempt died on the noisier w32 net).
+
+### Added
+- **Futility pruning at non-PV (zero-window) nodes.** At `beta == alpha + 1`, depth
+  `<= 6`, for a quiet non-checking move with `movesSearched >= 2`, the move is skipped
+  when `staticEval + (75 + 75*depth) <= alpha` (and the best score so far is not a
+  near-mate loss). Gating on non-PV is what makes it safe — the exact value is not
+  needed at scout nodes, so PVS (v0.3.18) unlocks it (`src/worker.cpp`).
+- The margin `75 + 75*depth` is the **N512-recalibrated** form of the w32-era
+  `100 + 100*depth` (the unreleased v0.3.19 `fut19b` candidate): the N512 eval scale is
+  ~190 units/pawn vs w32's ~270, so the pawn-equivalent margin is ~0.73x.
+
+### Result
+- **+54.7 Elo** vs 0.4.1 over 64 games (16-42-6, 57.8%, 95% CI [+6.2, +105.5]),
+  **0 time losses**, positive in all four time controls (+66/+44/+66/+44). EBF harness:
+  **−54.5% nodes to depth 13** (mean EBF 2.99 → 2.81). The same prune was Elo-neutral on
+  the w32 eval (`fut19b`: harness-lean but the noisy eval mispruned good quiets) — it
+  converts on N512, confirming the "better eval unlocks the lossy prunes" thesis.
+- **Time distributions matched 0.4.1** (clock left 74.9% vs 75.2% at the longer controls;
+  bullet-1+1 new uses slightly *more* clock) — the gain is the search change, not a
+  time-management artifact.
+- Gate: mate + repetition green; time-limited tactics 14/14 (b2d4 in ~1.06s, *faster*
+  than 0.4.1). Fixed-depth tactics 13/14 — the lone miss is the b2d4 depth-13 knife-edge
+  canary, which futility pushes one ply deeper at fixed depth but recovers under real
+  time control (the canonical "less exact per fixed depth, deeper per second" case).
+- **Caveat:** modest confidence — the CI lower bound (+6) is thin and the decisive-game
+  sample small (22, sign-test p≈0.0525); treat the +54.7 *magnitude* as soft.
+
 ## [0.4.1] - 2026-06-21
 
 Time-management release. Same net (`N512_h32`).

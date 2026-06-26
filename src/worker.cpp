@@ -327,6 +327,20 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
                     && !currentPos.see_ge(move, -75 * depth))
                     continue;
                 makeMove(move, state_info);
+                // Futility pruning, only at non-PV (zero-window) nodes where the exact value
+                // is not needed (beta == alpha + 1). At shallow depth, skip a quiet non-
+                // checking move when the parent static eval plus a depth-scaled margin still
+                // cannot reach alpha. Safe here because PVS makes these scout nodes non-PV.
+                // Margin (75 + 75*depth) is calibrated to N512 eval units (~190/pawn) — it is
+                // the pawn-equivalent of the w32-era 100+100*depth margin (the v0.3.19 fut19b
+                // candidate, which was harness-lean but Elo-neutral on the noisier w32 eval).
+                if (isQuiet && beta == alpha + 1 && depth <= 6 && movesSearched >= 2
+                    && value > -29000 && !currentPos.getIsCheck()
+                    && staticEval + (75 + 75 * depth) <= alpha)
+                {
+                    unmakeMove(move);
+                    continue;
+                }
                 // Principal variation search. The first move is searched full depth + full
                 // window; every later move is searched first with a zero window — reduced
                 // (formula LMR) when it is a late quiet non-checking move — and re-searched
