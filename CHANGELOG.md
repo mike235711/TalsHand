@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-06-28
+
+NNUEU release: a **new evaluation net** with a **dual-activation head**, swapping the
+shipped net from single-act `N512_h32` to dual-act **`N256_h16x16`**. Counter-intuitively
+the *smaller* net is stronger at real time controls — it is ~2.5x faster, so it reaches
+**~1.3 ply deeper in the same clock** and outsearches the bigger net. Selected by a
+head-to-head bullet king-of-the-hill across 8 candidate nets, then confirmed in a full
+multi-time-control gauntlet.
+
+### Added
+- **Dual-activation head (`NNUEU_DUAL_ACT`).** Each 2nd-layer projection now emits
+  `cat(CReLU(pre), SqrCReLU(pre))` (Stockfish-style), so `HEAD_CONCAT = 4*SECOND_OUT`.
+  `SqrCReLU(x) = c*c >> 7` where `c = clamp(relu(x>>6), 0, 127)`. Head order is
+  `crelu_turn ‖ sqrelu_turn ‖ crelu_nott ‖ sqrelu_nott`; the 3rd layer consumes
+  `4*SECOND_OUT`. Single-act (`NNUEU_DUAL_ACT=0`) remains the default and is unchanged
+  (`src/accumulation.h`, `src/network.cpp`, both NEON and scalar paths).
+- **Width-generic wide head.** The wide-net forward branch now covers any
+  `FIRST_OUT >= 256 && FIRST_OUT % 16 == 0` (was hard-coded `== 512`), with parametric
+  `SECOND_OUT`/`THIRD_OUT`, enabling the N256/16/16 shape (`src/network.cpp`).
+- **`NNUEU_NET` environment override** to load an arbitrary net directory at runtime
+  (absolute paths bypass the exec-dir resolution); used for net A/B testing (`src/engine.cpp`).
+- `DefaultNNUEFile` now maps `FIRST_OUT == 256` → `models/n256_h16x16_sq/`.
+
+### Result
+- **+43.7 ± 42.2 Elo** vs 0.4.2 over 64 games multi-TC (12-48-4, 56.2%), **0 time losses**.
+  Per-control Elo: bullet-1+1 **+65.9**, bullet-1+3 +21.7, blitz-3+2 −21.7 (noise),
+  blitz-5+2 **+112.3** — wins 3 of 4 controls. The edge is largest at fast controls where
+  the depth-per-second advantage bites hardest.
+- **Time distributions matched 0.4.2** (move-time mean 3312 vs 3386 ms, clock-left 70.2%
+  vs 66.8%, 0/0 time-forfeits in every control) — the gain is a genuinely stronger/faster
+  net, not a time-management artifact. The N256 reaches mean depth 17.9 vs 17.5 in the same
+  time.
+- Net selection: an 8-candidate bullet king-of-the-hill (30+0) crowned `N256_h16x16`
+  6-for-6 — it beat the incumbent and every larger dual-act net (N512/N768/N1024); the big
+  slow nets collapse at speed (N768 21.9%, N1024 ~12%). A full multi-TC gauntlet then
+  confirmed it beats N512_32_32 head-to-head (−112.3 Elo for the challenger) and leads
+  N512_16_64.
+- **Caveat:** modest confidence — the CI lower bound (+1.5) is thin, and the advantage is
+  concentrated at the faster controls (the bigger net draws nearly all slow-blitz games).
+
+### Build
+- Release: `-DNNUEU_FIRST_OUT=256 -DNNUEU_SECOND_OUT=16 -DNNUEU_THIRD_OUT=16 -DNNUEU_DUAL_ACT=1`.
+  Net `models/n256_h16x16_sq/` (on-disk asset, like prior nets).
+
 ## [0.4.2] - 2026-06-26
 
 Search release: **forward futility pruning** at non-PV nodes. Same net (`N512_h32`).

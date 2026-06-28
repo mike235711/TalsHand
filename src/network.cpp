@@ -176,10 +176,11 @@ namespace NNUEU
     // The input is int16, and the weights are int8. So before multiplying we reduce int16 to int8
     // (by clipping to max int8) and clip negatives to zero before each layer pass.
     {
-        // Wide-net head (e.g. N512: acc(512) -> HEAD_CONCAT -> THIRD_OUT_W -> 1). FIRST_OUT,
-        // HEAD_CONCAT and THIRD_OUT_W are all multiples of 16, so the dot loops are remainder-free.
-        // NEON (SDOT) path; scalar fallback. Both bit-exact with the numpy/torch quant reference.
-        if constexpr (FIRST_OUT == 512)
+        // Wide-net head (e.g. N256/512/768/1024: acc(N) -> HEAD_CONCAT -> THIRD_OUT_W -> 1).
+        // FIRST_OUT, HEAD_CONCAT and THIRD_OUT_W are all multiples of 16, so the dot loops are
+        // remainder-free for any wide width. NEON (SDOT) path; scalar fallback. Both bit-exact with
+        // the numpy/torch quant reference (re-verify per shape via the Debug forwardPassDebug assert).
+        if constexpr (FIRST_OUT >= 256)
         {
 #if defined(__ARM_NEON)
             // activations: narrow the int16 accumulator to int8 with ReLU clamp [0,127]
@@ -190,20 +191,32 @@ namespace NNUEU
                                           vqmovn_s16(vld1q_s16(pInput + i + 8)));
                 vst1q_s8(a + i, vmaxq_s8(v, vdupq_n_s8(0)));
             }
-            // layer 1 (second): HEAD_CONCAT neurons, each a dot over the 512 activations
+            // layer 1 (second): per perspective (turn, not_turn) compute SECOND_OUT_W pre-activations
+            // then activate. Single-act -> CReLU only (l1 = crelu_turn ‖ crelu_nott). Dual-act -> per
+            // perspective CReLU ‖ SqrCReLU, so l1 = crelu_turn ‖ sqrelu_turn ‖ crelu_nott ‖ sqrelu_nott
+            // (matches the "_sq" training head: cat(CReLU(pre), SqrCReLU(pre)) per projection).
             alignas(16) int8_t l1[HEAD_CONCAT];
-            for (int o = 0; o < HEAD_CONCAT; ++o)
+            for (int blk = 0; blk < 2; ++blk)
             {
-                const int8_t *w = (o < SECOND_OUT_W) ? pWeights11 + o * FIRST_OUT
-                                                     : pWeights12 + (o - SECOND_OUT_W) * FIRST_OUT;
-                int32x4_t acc = vdupq_n_s32(0);
-                for (int i = 0; i < FIRST_OUT; i += 16)
-                    acc = vdotq_s32(acc, vld1q_s8(a + i), vld1q_s8(w + i));
-                int32_t s = vaddvq_s32(acc) + weights.secondBias[o];
-                l1[o] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(s >> 6))));
+                const int8_t *pW = (blk == 0) ? pWeights11 : pWeights12;
+                const int biasBase = blk * SECOND_OUT_W;                 // secondBias: turn then not_turn
+                const int outBase = blk * (DUAL_ACT ? 2 : 1) * SECOND_OUT_W;
+                for (int o = 0; o < SECOND_OUT_W; ++o)
+                {
+                    const int8_t *w = pW + o * FIRST_OUT;
+                    int32x4_t acc = vdupq_n_s32(0);
+                    for (int i = 0; i < FIRST_OUT; i += 16)
+                        acc = vdotq_s32(acc, vld1q_s8(a + i), vld1q_s8(w + i));
+                    int32_t s = vaddvq_s32(acc) + weights.secondBias[biasBase + o];
+                    const int c = std::min(127, std::max(0, static_cast<int>(s >> 6)));
+                    l1[outBase + o] = static_cast<int8_t>(c); // CReLU
+                    if constexpr (DUAL_ACT)
+                        l1[outBase + SECOND_OUT_W + o] = static_cast<int8_t>((c * c) >> 7); // SqrCReLU = c^2/128
+                }
             }
-            // layer 2 (third): THIRD_OUT_W neurons, dot over HEAD_CONCAT
-            alignas(16) int8_t l2[THIRD_OUT_W];
+            // layer 2 (third): THIRD_OUT_W neurons, dot over HEAD_CONCAT. l2 padded up to a multiple
+            // of 16 (zero) so the final NEON 16-lane dot never over-reads when THIRD_OUT_W < 16 (h*x8).
+            alignas(16) int8_t l2[((THIRD_OUT_W + 15) / 16) * 16] = {0};
             for (int o = 0; o < THIRD_OUT_W; ++o)
             {
                 const int8_t *w = weights.thirdW + o * HEAD_CONCAT;
@@ -223,14 +236,22 @@ namespace NNUEU
             for (int i = 0; i < FIRST_OUT; ++i)
                 a[i] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(pInput[i]))));
             int8_t l1[HEAD_CONCAT];
-            for (int o = 0; o < HEAD_CONCAT; ++o)
+            for (int blk = 0; blk < 2; ++blk)
             {
-                const int8_t *w = (o < SECOND_OUT_W) ? pWeights11 + o * FIRST_OUT
-                                                     : pWeights12 + (o - SECOND_OUT_W) * FIRST_OUT;
-                int32_t s = weights.secondBias[o];
-                for (int i = 0; i < FIRST_OUT; ++i)
-                    s += static_cast<int32_t>(a[i]) * static_cast<int32_t>(w[i]);
-                l1[o] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(s >> 6))));
+                const int8_t *pW = (blk == 0) ? pWeights11 : pWeights12;
+                const int biasBase = blk * SECOND_OUT_W;
+                const int outBase = blk * (DUAL_ACT ? 2 : 1) * SECOND_OUT_W;
+                for (int o = 0; o < SECOND_OUT_W; ++o)
+                {
+                    const int8_t *w = pW + o * FIRST_OUT;
+                    int32_t s = weights.secondBias[biasBase + o];
+                    for (int i = 0; i < FIRST_OUT; ++i)
+                        s += static_cast<int32_t>(a[i]) * static_cast<int32_t>(w[i]);
+                    const int c = std::min(127, std::max(0, static_cast<int>(s >> 6)));
+                    l1[outBase + o] = static_cast<int8_t>(c); // CReLU
+                    if constexpr (DUAL_ACT)
+                        l1[outBase + SECOND_OUT_W + o] = static_cast<int8_t>((c * c) >> 7); // SqrCReLU = c^2/128
+                }
             }
             int8_t l2[THIRD_OUT_W];
             for (int o = 0; o < THIRD_OUT_W; ++o)

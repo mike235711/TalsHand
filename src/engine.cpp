@@ -319,7 +319,8 @@ int MaxThreads = std::min<int>(HardThreadCap, int(HardwareCores * 4)); // 4× ov
 // for the default build, or the proven width-8 v4 net (the 0.3.7 baseline) for
 // legacy -DNNUEU_FIRST_OUT=8 builds, so a width-8 build reproduces 0.3.7's eval.
 constexpr auto DefaultNNUEFile =
-    (NNUEU::FIRST_OUT == 512) ? "models/n512_h32/"
+    (NNUEU::FIRST_OUT == 256) ? "models/n256_h16x16_sq/"   // v0.4.3: dual-act N256/16/16
+    : (NNUEU::FIRST_OUT == 512) ? "models/n512_h32/"
     : (NNUEU::FIRST_OUT == 32) ? "models/w32_wdl0/"
                               : "models/NNUEU_quantized_model_v4_param_350_epoch_10/";
 constexpr std::size_t DefaultHashMB = 16; // Stockfish defaults to 16 MB
@@ -340,6 +341,10 @@ THEngine::THEngine(std::optional<std::string> path)
         pos.fromFen(STARTFEN, &stateInfos->back());
     resizeThreads();
     setTTSize();
+    // Per-candidate net override for the NNUEU sweep: NNUEU_NET=<dir> picks the net at startup,
+    // so a width whose compile-time default path doesn't exist still loads the right weights.
+    if (const char *envNet = std::getenv("NNUEU_NET"); envNet && *envNet)
+        NNUEUFile = envNet;
     loadNNUEU();
 }
 

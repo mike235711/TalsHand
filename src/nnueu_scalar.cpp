@@ -118,9 +118,10 @@ namespace NNUEU
         int16_t fast = forwardPass(const_cast<int16_t *>(pInput), // existing SIMD routine takes non‑const
                                     pWeights11,
                                     pWeights12);
-        // forwardPassScalar is the small-head reference for validating the NEON path; for the
-        // wide N512 net forwardPass is itself the scalar reference, so there is nothing to compare.
-        if constexpr (FIRST_OUT != 512)
+        // forwardPassScalar is the small-head (width-8) reference for validating the NEON path of the
+        // 8/32 nets only; for ALL wide nets (>=256) forwardPass is itself the scalar reference (NEON
+        // #if / scalar #else, validated externally vs the numpy/torch quant), so nothing to compare.
+        if constexpr (FIRST_OUT < 256)
         {
             int16_t slow = forwardPassScalar(pInput, pWeights11, pWeights12);
             assert(fast == slow && "NNUEU SIMD/scalar mismatch evaluation detected!");

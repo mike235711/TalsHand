@@ -18,6 +18,9 @@ set(NNUEU_SECOND_OUT 4 CACHE STRING "NNUEU 2nd-layer output width")
 set(NNUEU_THIRD_OUT 4 CACHE STRING "NNUEU 3rd-layer output width")
 add_compile_definitions(NNUEU_SECOND_OUT=${NNUEU_SECOND_OUT})
 add_compile_definitions(NNUEU_THIRD_OUT=${NNUEU_THIRD_OUT})
+# Dual activation (CReLU + SqrCReLU head) for the "_sq" cloud nets. 0 = single CReLU (default).
+set(NNUEU_DUAL_ACT 0 CACHE STRING "NNUEU dual activation head (1 = CReLU+SqrCReLU)")
+add_compile_definitions(NNUEU_DUAL_ACT=${NNUEU_DUAL_ACT})
 
 add_subdirectory(src)
 

@@ -25,13 +25,20 @@ namespace NNUEU
 #ifndef NNUEU_THIRD_OUT
 #define NNUEU_THIRD_OUT 4
 #endif
-    static_assert(NNUEU_FIRST_OUT == 8 || NNUEU_FIRST_OUT == 32 || NNUEU_FIRST_OUT == 512,
-                  "NNUEU_FIRST_OUT must be 8, 32 or 512");
+    // Dual activation (Stockfish trick): each 2nd-layer projection emits CReLU + SqrCReLU, so the
+    // head sees 4*SECOND_OUT instead of 2. The "_sq" cloud nets use this; default off (single CReLU).
+#ifndef NNUEU_DUAL_ACT
+#define NNUEU_DUAL_ACT 0
+#endif
+    static_assert(NNUEU_FIRST_OUT == 8 || NNUEU_FIRST_OUT == 32
+                      || (NNUEU_FIRST_OUT >= 256 && NNUEU_FIRST_OUT % 16 == 0),
+                  "NNUEU_FIRST_OUT must be 8, 32, or a wide width >= 256 and divisible by 16");
     static constexpr int F_MAP = 640;
     static constexpr int FIRST_OUT = NNUEU_FIRST_OUT;
     static constexpr int SECOND_OUT_W = NNUEU_SECOND_OUT;       // 2nd-layer output width per perspective
     static constexpr int THIRD_OUT_W = NNUEU_THIRD_OUT;         // 3rd-layer output width
-    static constexpr int HEAD_CONCAT = 2 * SECOND_OUT_W;        // concat(turn, not_turn)
+    static constexpr bool DUAL_ACT = (NNUEU_DUAL_ACT != 0);
+    static constexpr int HEAD_CONCAT = (DUAL_ACT ? 4 : 2) * SECOND_OUT_W; // (CReLU[+SqrCReLU]) per perspective
     static constexpr int SECOND_OUT = FIRST_OUT * SECOND_OUT_W; // bucketed 2nd-layer weights per king square
     // NNUEUChange structure: holds the incremental change info
     struct NNUEUChange
