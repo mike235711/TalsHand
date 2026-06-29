@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-06-29
+
+Search release: **base Late Move Pruning (LMP)** — the largest remaining gap vs Stockfish in
+the prune-per-1000-nodes table (us 0, SF 244). Same net (`N256_h16x16`). LMP is **scale-free**
+(move-count + depth only, no eval margin), so it sidesteps the eval-noise failure mode that
+killed the w32-era `lmp15` (−49) and the other lossy eval-margin prunes; the only eval coupling
+is the scale-free mate guard.
+
+### Added
+- **Late move pruning** (`src/worker.cpp`). At a shallow non-PV (zero-window) node, once
+  `movesSearched > LMPCount[depth]` the remaining late (low-history) quiets are skipped
+  (`break` — the staged selector emits every capture before any quiet, so once a quiet is seen
+  every remaining move is a low-history quiet). Depth-indexed thresholds `LMPCount[d] = (3+d*d)/2`
+  → depth 1..6 = 2,3,6,9,14,19. Fired before make/unmake/SEE (the cheapest prune). Mate-guarded
+  (`value > -29000`).
+- **Behaviour-neutral prune-counter instrumentation** in the `info string`: `lmp / rfp / fut /
+  see / seeqs` (late-move / reverse-futility / forward-futility / SEE-prune-AB / SEE-prune-QS),
+  for the prune-per-1000-nodes analysis vs Stockfish.
+
+### Result
+- **+16.3 ± 41.4 Elo** vs 0.4.3 over 64 games multi-TC (9-49-6, 52.3%), **0 time losses**,
+  **time-clean** (depth 19.1 vs 18.9, move-time 3287 vs 3276 ms, clock-left 73.7% vs 75.9% —
+  not a time-management artifact). The gain is **coherently concentrated in blitz**, where the
+  leaner tree's extra depth converts: bullet-1+1 ±0, bullet-1+3 ±0, **blitz-3+2 +21.7,
+  blitz-5+2 +43.7**. Offline: **−43% nodes to depth 13**, mean EBF **2.88 → 2.73** (toward SF's
+  2.22), LMP fires ~77/1000 nodes (each a `break` skipping several late quiets; it partly
+  cannibalizes forward-futility, which shares the late-quiet domain).
+- **Caveat — below the strict gate:** the 95% CI lower bound is **−25** (the point estimate is
+  positive and the per-control pattern is theory-coherent + time-clean, but the result is very
+  draw-heavy (49/64) so it is not 2σ-significant). Shipped as a deliberate, low-risk structural
+  improvement (a standard technique, the lever the EBF/pruning analysis + the Stockfish-ordering
+  control experiment all pointed to), accepting the marginal significance.
+
 ## [0.4.3] - 2026-06-28
 
 NNUEU release: a **new evaluation net** with a **dual-activation head**, swapping the

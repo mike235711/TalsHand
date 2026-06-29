@@ -39,6 +39,8 @@ public:
     uint64_t nodes = 0, qnodes = 0;                 // total / quiescence nodes this search
     uint64_t cntTTcut = 0, cntNMP = 0, cntLMR = 0;  // TT-cutoffs / null-move prunes / LMR reductions
     uint64_t cntBeta = 0, cntBetaFirst = 0;         // beta cutoffs total / on the first move (ordering quality)
+    uint64_t cntLMP = 0;                            // late-move-pruning skips (v0.4.4)
+    uint64_t cntRfp = 0, cntFut = 0, cntSee = 0, cntSeeQS = 0; // reverse-futility / forward-futility / SEE-prune (AB) / SEE-prune (QS)
     bool infoNoEarlyStop = false;                   // "go depth N": run every depth to N + print per-depth info
 
 private:

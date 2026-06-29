@@ -23,6 +23,17 @@ static const bool reductionsInit = [] {
     return true;
 }();
 
+// Late-move-pruning move-count thresholds, indexed by depth (1..6). At a shallow non-PV
+// node, once more than LMPCount[depth] moves have been searched, the remaining late (low-
+// history) quiets are skipped without searching. Scale-free — move-count + depth only, no
+// eval margin — so it sidesteps the eval-noise failure mode that killed the w32-era lmp15.
+static int LMPCount[7];
+static const bool lmpInit = [] {
+    for (int d = 1; d <= 6; ++d)
+        LMPCount[d] = (3 + d * d) / 2; // depth 1..6 -> 2,3,6,9,14,19
+    return true;
+}();
+
 //  Constructor (only *definition* lives here; prototype in header)
 Worker::Worker(TranspositionTable &ttable,
                ThreadPool &threadpool,
@@ -109,7 +120,10 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta)
             no_captures = false;
             // Do not search moves with bad enough SEE values
             if (!currentPos.see_ge(capture, -120))
+            {
+                ++cntSeeQS;
                 continue;
+            }
 
             makeCapture(capture, state_info);
             child_value = -quiesenceSearch(-beta, -alpha);
@@ -236,7 +250,10 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
     // searching. Skipped in check and near mate scores.
     if (!inCheck && depth <= 3 && beta < 29000 && beta > -29000
         && staticEval < 20000 && staticEval >= beta + 175 * depth)
+    {
+        ++cntRfp;
         return staticEval;
+    }
 
     // Null-move pruning. If we are not in check and have non-pawn material
     // (zugzwang guard), give the opponent a free move and search to reduced depth.
@@ -319,13 +336,27 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
                 ++movesSearched;
                 // Quiet moves score 0 in aBMoveValue (captures/promotions score != 0).
                 const bool isQuiet = (currentPos.aBMoveValue(move) == 0);
+                // Late move pruning: at a shallow non-PV (zero-window) node, once enough
+                // moves have been searched, skip the remaining late quiets entirely. The
+                // staged selector emits every capture before any quiet, so once isQuiet
+                // holds every remaining move is a (low-history) quiet -> break is correct.
+                // Scale-free (move-count + depth only); mate-guarded.
+                if (isQuiet && beta == alpha + 1 && depth <= 6 && value > -29000
+                    && movesSearched > LMPCount[depth])
+                {
+                    ++cntLMP;
+                    break;
+                }
                 // SEE pruning: at shallow depth, skip clearly-losing captures (the
                 // exchange drops material badly) — they rarely justify themselves before
                 // quiescence. Conservative threshold, scaled with depth; guarded so we
                 // never prune when the best score so far is still a near-mate loss.
                 if (depth <= 6 && currentPos.isCaptureStageMove(move) && value > -29000
                     && !currentPos.see_ge(move, -75 * depth))
+                {
+                    ++cntSee;
                     continue;
+                }
                 makeMove(move, state_info);
                 // Futility pruning, only at non-PV (zero-window) nodes where the exact value
                 // is not needed (beta == alpha + 1). At shallow depth, skip a quiet non-
@@ -338,6 +369,7 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
                     && value > -29000 && !currentPos.getIsCheck()
                     && staticEval + (75 + 75 * depth) <= alpha)
                 {
+                    ++cntFut;
                     unmakeMove(move);
                     continue;
                 }
@@ -544,7 +576,8 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
 {
     std::memset(killers, 0, sizeof(killers));         // fresh killer table per search
     std::memset(mainHistory, 0, sizeof(mainHistory)); // fresh butterfly history per search
-    nodes = qnodes = cntTTcut = cntNMP = cntLMR = cntBeta = cntBetaFirst = 0; // search-introspection counters
+    nodes = qnodes = cntTTcut = cntNMP = cntLMR = cntBeta = cntBetaFirst = cntLMP = 0; // search-introspection counters
+    cntRfp = cntFut = cntSee = cntSeeQS = 0;
 
     rootPos.setBlockersAndPinsInAB(); // For discovered checks and move generators
     rootPos.setCheckBits();           // For direct checks
@@ -669,6 +702,8 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
             std::cout << "info string nodes " << nodes << " qnodes " << qnodes
                       << " ttcut " << cntTTcut << " nmp " << cntNMP << " lmr " << cntLMR
                       << " betacut " << cntBeta << " betafirst " << cntBetaFirst
+                      << " lmp " << cntLMP
+                      << " rfp " << cntRfp << " fut " << cntFut << " see " << cntSee << " seeqs " << cntSeeQS
                       << '\n' << std::flush;
     }
 }
