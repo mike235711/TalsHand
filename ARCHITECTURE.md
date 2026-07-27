@@ -25,6 +25,14 @@ Evaluation is performed by an NNUE (Efficiently Updatable Neural Network) type n
   - The engine's worker `src/worker.h` has an NNUEU::AccumulatorStack whose deifinition is inside `src/accumulation.h`. This stack stacks up the incremental changes NNUEU::NNUEUChange, and stores the state of the last evaluated position in a NNUEU::AccumulatorState object defined in `src/accumulation.h`. If we want to evaluate a position, the AccumulatorStack will got to the closest previously evaluated position and update the state incrementally based on the NNUEU::NNUEUChange's that had been stored leading to the new position we want to evaluate now.
   - The theory behind NNUEU is detailed in `README.md`. But basically NNUEU::Transformer, NNUEU::AccumulatorStack, NNUEU::AccumulatorState and NNUEUChange are in charge of updating efficiently the output of our NNUEU's first layer. We then have in `network.cpp` and `network.h` defined the rest of the NNUEU. This takes care of performing the forward pass with SIMD instructions (very fast) of the rest of the NNUEU which consists of 3 layers. The output of this will be the static evaluation of the position, where a high value is good for the engine and low is bad for the engine, see NNUEU::Network.evaluate in `src/network.cpp`.
   - The trained neural network models are in the `models/` directory.
+  - **Which net a build loads.** The width -> net mapping has a single home, `NNUEU::DefaultNetDir`
+    (`src/accumulation.h`); `NNUEU_NET=<dir>` overrides it at startup for sweep candidates. Because
+    the CMake defaults are still the v0.3.8 width-32 net, *a Release build with no `NNUEU_*` flags
+    silently builds the wrong engine for every version since v0.4.0* — the flags are part of the
+    version. What each released tag was built with is recorded in `scripts/nnueu_versions.json`;
+    `scripts/nnueu_build_config.py` turns that into `-D` flags (`--flags current` for a release
+    build of the working tree), and verifies a built binary embeds the net it should
+    (`--check <binary> <ref>`). `scripts/version_match.py` uses it for every tag it builds.
   - **Accumulator width (build switch).** The first-layer accumulator width is a
     compile-time constant `NNUEU::FIRST_OUT` (`src/accumulation.h`), driven by the
     CMake cache variable `NNUEU_FIRST_OUT` (default **32**, the v0.3.8 `w32_wdl0`

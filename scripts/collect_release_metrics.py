@@ -14,8 +14,12 @@ The version label defaults to the latest entry in CHANGELOG.md (falling back to
 ``git describe``). Use --version to override and --tag to mark an uncommitted
 working tree (e.g. "0.3.2-dev").
 
-Run from the repo root after a Release build, e.g.:
-    cmake -B build_release -DCMAKE_BUILD_TYPE=Release && cmake --build build_release
+Run from the repo root after a Release build. The build needs this version's NNUEU width
+flags -- CMake's defaults are the old width-32 net, so a plain Release build measures the
+wrong engine (scripts/nnueu_versions.json is the source of truth for them):
+    cmake -B build_release -DCMAKE_BUILD_TYPE=Release \
+        $(python3 scripts/nnueu_build_config.py --flags current)
+    cmake --build build_release
     python3 scripts/collect_release_metrics.py
 """
 from __future__ import annotations

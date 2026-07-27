@@ -38,6 +38,9 @@ from pathlib import Path
 import chess
 import chess.engine
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import nnueu_build_config as nnueu  # noqa: E402  (needs the path tweak above)
+
 REPO = Path(__file__).resolve().parent.parent
 DEFAULT_NEW_BINARY = REPO / "build_release" / "src" / "talshand_exe"
 
@@ -89,14 +92,26 @@ class TCResult:
 
 
 def build_engine_from_tag(ref: str, keep: bool) -> Path:
-    """Build the given git ref in a throw-away worktree and return the binary."""
+    """Build the given git ref in a throw-away worktree and return the binary.
+
+    The NNUEU width flags are *not* optional here. CMake's defaults are the width-32 net, which is
+    committed at every tag, so a plain Release build of v0.4.0+ produces a working engine with the
+    wrong (v0.3.8) eval and no error anywhere — two such builds would play a match with identical
+    nets and report meaningless Elo. nnueu_build_config resolves what this ref shipped with, makes
+    sure that net is present in the worktree, and verifies the built binary really embeds it.
+    """
+    config, source = nnueu.config_for_ref(ref)
+    flags = nnueu.cmake_flags(config, ref)
+    print(f"[build] {ref}: {nnueu.describe(config, source)}", flush=True)
+
     workdir = Path(tempfile.mkdtemp(prefix=f"talshand-{ref.replace('/', '_')}-"))
     print(f"[build] adding worktree for {ref} at {workdir}", flush=True)
     subprocess.run(["git", "worktree", "add", "--detach", str(workdir), ref],
                    cwd=REPO, check=True)
+    print(f"[build] net {config['model_dir']}: {nnueu.ensure_model_dir(workdir, config)}", flush=True)
     build = workdir / "build_release"
     subprocess.run(["cmake", "-S", str(workdir), "-B", str(build),
-                    "-DCMAKE_BUILD_TYPE=Release", "-DENABLE_VERBOSE_DEBUG=OFF"],
+                    "-DCMAKE_BUILD_TYPE=Release", "-DENABLE_VERBOSE_DEBUG=OFF", *flags],
                    check=True)
     subprocess.run(["cmake", "--build", str(build)], check=True)
     binary = build / "src" / "talshand_exe"
@@ -105,7 +120,9 @@ def build_engine_from_tag(ref: str, keep: bool) -> Path:
     if not keep:
         # Remember the worktree path so the caller can clean it up afterwards.
         binary = binary.resolve()
-    print(f"[build] {ref} -> {binary}", flush=True)
+    nnueu.verify_binary_net(binary, config)
+    nnueu.smoke_check(binary)
+    print(f"[build] {ref} -> {binary} (loads {config['model_dir']})", flush=True)
     return binary
 
 

@@ -399,7 +399,9 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
         curr.computed[turn] = true;
     }
 
-    bool NNUEU::Transformer::load(const std::string &modelDir = (FIRST_OUT == 32) ? "models/w32_wdl0/" : "models/NNUEU_quantized_model_v4_param_350_epoch_10/")
+    // No default argument here: the declaration in accumulation.h has none (so this one was dead
+    // code anyway) and the width -> net mapping has a single home, NNUEU::DefaultNetDir.
+    bool NNUEU::Transformer::load(const std::string &modelDir)
     {
         try
         {

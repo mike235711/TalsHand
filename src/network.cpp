@@ -90,7 +90,9 @@ int16_t load_int16(const std::string &file_path)
 namespace NNUEU
 {
 
-    bool Network::load(const std::string &modelDir = (FIRST_OUT == 512) ? "models/n512_h32/" : (FIRST_OUT == 32) ? "models/w32_wdl0/" : "models/NNUEU_quantized_model_v4_param_350_epoch_10/")
+    // No default argument here: the declaration in network.h has none (so this one was dead code
+    // anyway) and the width -> net mapping has a single home, NNUEU::DefaultNetDir.
+    bool Network::load(const std::string &modelDir)
     {
         try
         {

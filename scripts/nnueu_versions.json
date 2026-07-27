@@ -1,0 +1,47 @@
+{
+  "_comment": [
+    "Which NNUEU net each released version was built with. CMake's defaults (FIRST_OUT=32,",
+    "head 4/4, DUAL_ACT=0 -> models/w32_wdl0) have never changed, so a plain Release build of a",
+    "tag from v0.4.0 on silently produces an engine with the WRONG net. Anything that builds a",
+    "git ref must take the widths from here: scripts/nnueu_build_config.py does the lookup and",
+    "turns them into -D flags. 'model_dir' is what the built binary must end up embedding (it is",
+    "verified after the build) and mirrors NNUEU::DefaultNetDir in src/accumulation.h.",
+    "'current' describes the commit that carries this file, so a future tag/branch is",
+    "self-describing even before someone adds it to 'versions'. On every release: add the tag",
+    "entry AND update 'current'."
+  ],
+  "current": {
+    "first_out": 256,
+    "second_out": 16,
+    "third_out": 16,
+    "dual_act": 1,
+    "model_dir": "models/n256_h16x16_sq/"
+  },
+  "versions": {
+    "v0.4.4": {"first_out": 256, "second_out": 16, "third_out": 16, "dual_act": 1, "model_dir": "models/n256_h16x16_sq/"},
+    "v0.4.3": {"first_out": 256, "second_out": 16, "third_out": 16, "dual_act": 1, "model_dir": "models/n256_h16x16_sq/"},
+    "v0.4.2": {"first_out": 512, "second_out": 32, "third_out": 32, "dual_act": 0, "model_dir": "models/n512_h32/"},
+    "v0.4.1": {"first_out": 512, "second_out": 32, "third_out": 32, "dual_act": 0, "model_dir": "models/n512_h32/"},
+    "v0.4.0": {"first_out": 512, "second_out": 32, "third_out": 32, "dual_act": 0, "model_dir": "models/n512_h32/"},
+    "v0.3.18": {"first_out": 32, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/w32_wdl0/"},
+    "v0.3.17": {"first_out": 32, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/w32_wdl0/"},
+    "v0.3.16": {"first_out": 32, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/w32_wdl0/"},
+    "v0.3.14": {"first_out": 32, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/w32_wdl0/"},
+    "v0.3.13": {"first_out": 32, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/w32_wdl0/"},
+    "v0.3.12": {"first_out": 32, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/w32_wdl0/"},
+    "v0.3.11": {"first_out": 32, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/w32_wdl0/"},
+    "v0.3.10": {"first_out": 32, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/w32_wdl0/"},
+    "v0.3.9": {"first_out": 32, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/w32_wdl0/"},
+    "v0.3.8": {"first_out": 32, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/w32_wdl0/"},
+    "v0.3.7": {"first_out": 8, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/NNUEU_quantized_model_v4_param_350_epoch_10/"},
+    "v0.3.6": {"first_out": 8, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/NNUEU_quantized_model_v4_param_350_epoch_10/"},
+    "v0.3.5": {"first_out": 8, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/NNUEU_quantized_model_v4_param_350_epoch_10/"},
+    "v0.3.4": {"first_out": 8, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/NNUEU_quantized_model_v4_param_350_epoch_10/"},
+    "v0.3.3": {"first_out": 8, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/NNUEU_quantized_model_v4_param_350_epoch_10/"},
+    "v0.3.2": {"first_out": 8, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/NNUEU_quantized_model_v4_param_350_epoch_10/"},
+    "v0.3.1": {"first_out": 8, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/NNUEU_quantized_model_v4_param_350_epoch_10/"},
+    "v0.3.0": {"first_out": 8, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/NNUEU_quantized_model_v4_param_350_epoch_10/"},
+    "v0.2.0": {"first_out": 8, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/NNUEU_quantized_model_v4_param_350_epoch_10/"},
+    "v0.1.0": {"first_out": 8, "second_out": 4, "third_out": 4, "dual_act": 0, "model_dir": "models/NNUEU_quantized_model_v4_param_350_epoch_10/"}
+  }
+}

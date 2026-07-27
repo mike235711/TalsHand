@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Building a tag no longer loads the wrong net.** `scripts/version_match.py` built a git ref
+  with `cmake -DCMAKE_BUILD_TYPE=Release` and no `NNUEU_*` flags. CMake's defaults (width 32,
+  head 4/4, no dual activation) are unchanged at every tag, so *any* tag built that way produced
+  a width-32 engine loading `models/w32_wdl0` — v0.4.0-v0.4.2 lost their `n512_h32` net and
+  v0.4.3-v0.4.4 their `n256_h16x16_sq` net. Nothing failed: `w32_wdl0` is committed at every tag,
+  so the wrong net loaded quietly, and a "v0.4.3 vs v0.4.2" match by tag was really two identical
+  w32 evals playing each other — its Elo meant nothing. Widths per released version are now
+  recorded in `scripts/nnueu_versions.json`, resolved by `scripts/nnueu_build_config.py`, and the
+  built binary's embedded model path is verified against them (plus a UCI handshake) before a
+  match starts. Verified: v0.4.2/v0.4.3 built by tag now match their archived release binaries
+  move-for-move and eval-for-eval.
+- **The release nets are in the repository.** `models/n256_h16x16_sq` (v0.4.3-v0.4.4) and
+  `models/n512_h32` (v0.4.0-v0.4.2) were untracked, so those releases could not be rebuilt from
+  a clone. Both are now committed (byte-identical to the deployed weights). Tags predating this
+  commit still have no net in their tree; `nnueu_build_config.ensure_model_dir()` supplies it
+  from the current checkout when building them.
+- **One source of truth for the default net path.** `src/accumulation.cpp` and `src/network.cpp`
+  each carried their own stale copy of the width -> net mapping (neither had the 256 case, and
+  both were dead code — the header declarations have no default argument). The mapping now lives
+  only in `NNUEU::DefaultNetDir` (`src/accumulation.h`), which `src/engine.cpp` uses. No change
+  to eval or search: a rebuilt v0.4.4 is move-identical to the shipped binary.
+
 ## [0.4.4] - 2026-06-29
 
 Search release: **base Late Move Pruning (LMP)** — the largest remaining gap vs Stockfish in

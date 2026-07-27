@@ -315,14 +315,10 @@ std::size_t HardwareCores = std::max<std::size_t>(std::thread::hardware_concurre
 int HardThreadCap = 64; // absolute upper bound
 int MaxThreads = std::min<int>(HardThreadCap, int(HardwareCores * 4)); // 4× oversubscription at most
 
-// Default net tracks the build width: the width-32 baseline (w32_wdl0, v0.3.8)
-// for the default build, or the proven width-8 v4 net (the 0.3.7 baseline) for
-// legacy -DNNUEU_FIRST_OUT=8 builds, so a width-8 build reproduces 0.3.7's eval.
-constexpr auto DefaultNNUEFile =
-    (NNUEU::FIRST_OUT == 256) ? "models/n256_h16x16_sq/"   // v0.4.3: dual-act N256/16/16
-    : (NNUEU::FIRST_OUT == 512) ? "models/n512_h32/"
-    : (NNUEU::FIRST_OUT == 32) ? "models/w32_wdl0/"
-                              : "models/NNUEU_quantized_model_v4_param_350_epoch_10/";
+// Default net tracks the build width. The mapping itself lives in accumulation.h
+// (NNUEU::DefaultNetDir) so it exists exactly once; scripts/nnueu_versions.json records
+// which widths — and therefore which net — each released version was built with.
+constexpr auto DefaultNNUEFile = NNUEU::DefaultNetDir;
 constexpr std::size_t DefaultHashMB = 16; // Stockfish defaults to 16 MB
 
 THEngine::THEngine(std::optional<std::string> path)

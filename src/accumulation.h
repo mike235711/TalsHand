@@ -40,6 +40,19 @@ namespace NNUEU
     static constexpr bool DUAL_ACT = (NNUEU_DUAL_ACT != 0);
     static constexpr int HEAD_CONCAT = (DUAL_ACT ? 4 : 2) * SECOND_OUT_W; // (CReLU[+SqrCReLU]) per perspective
     static constexpr int SECOND_OUT = FIRST_OUT * SECOND_OUT_W; // bucketed 2nd-layer weights per king square
+
+    // Single source of truth for the net a build loads by default: the CSV shapes in a model
+    // directory are fixed by (FIRST_OUT, SECOND_OUT_W, THIRD_OUT_W, DUAL_ACT), so the width
+    // switch *is* the net switch. engine.cpp uses this as the default EvalFile; do not repeat
+    // the mapping anywhere else. Which widths each released tag was built with (and therefore
+    // which net it loads) is recorded in scripts/nnueu_versions.json — keep the two in sync.
+    // A width with no released net (the NNUEU sweep candidates) still builds; it is expected to
+    // pick its weights at startup with NNUEU_NET=<dir> (see engine.cpp).
+    static constexpr const char *DefaultNetDir =
+        (FIRST_OUT == 256)   ? "models/n256_h16x16_sq/"  // v0.4.3+: dual-act N256, head 16/16
+        : (FIRST_OUT == 512) ? "models/n512_h32/"        // v0.4.0-v0.4.2: N512, head 32/32
+        : (FIRST_OUT == 32)  ? "models/w32_wdl0/"        // v0.3.8-v0.3.18: w32, head 4/4
+                             : "models/NNUEU_quantized_model_v4_param_350_epoch_10/"; // <= v0.3.7: width 8, head 4/4
     // NNUEUChange structure: holds the incremental change info
     struct NNUEUChange
     {

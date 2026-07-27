@@ -40,6 +40,9 @@ test_qs_pos2_debug
 # VSCode
 .vscode/
 
+# Python (the scripts/ helpers)
+__pycache__/
+
 # Local engine binaries for matches (built artifacts)
 bin_head/
 bin_v031/
