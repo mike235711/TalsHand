@@ -1,0 +1,20 @@
+{
+ "source_ckpt": "/Users/miguel/Documents/GitHub/famB_checkpoints/king_bias_ft_ep119.ckpt",
+ "features": "NnueuPS",
+ "N": 256,
+ "H1": 32,
+ "H2": 64,
+ "acc_width": 512,
+ "split_ft": true,
+ "half_head": false,
+ "padded_split": false,
+ "scales": {
+  "ft": 127.0,
+  "hidden_w": 64.0,
+  "hidden_b": 8128.0,
+  "out_w": 32.25196850393701,
+  "out_b": 4096.0,
+  "out_offset": 2048.0
+ },
+ "note": "scales calibrated against the deployed champion via engine_forward.py (corr 0.999737, eval = 4096*p - 2048); see NNUEU_RESULTS 5b.0"
+}

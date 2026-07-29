@@ -165,6 +165,12 @@ static constexpr int NNUE_BASE[2][5] = {
     { 64 * 5,  64 * 6,  64 * 7,  64 * 8,  64 * 9}  // side = 1
 };
 
+// Appended king planes (F_MAP 768). One index serves BOTH perspectives, exactly like the piece
+// planes: the loader writes firstWInv at mirrorPlane(p), which swaps planes 10 and 11, so
+// firstWInv[640+sq] already holds "opponent king, mirrored square". A king move is therefore an
+// ordinary add/remove on the incremental path -- no accumulator recompute.
+static constexpr int NNUE_KING_BASE[2] = {64 * 10, 64 * 11}; // side = 0 (white), side = 1
+
 Move castling_moves[2][2]{{Move(16772), Move(16516)}, {Move(20412), Move(20156)}}; // [[WKS, WQS], [BKS, BQS]] (origin = origin of king, destination = destination of king)
 
 static constexpr int kingside_castling_check_squares[2][2] = {{5, 6}, {61, 62}};   // [white][sq1, sq2], [black][sq1, sq2]
@@ -1380,6 +1386,14 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
         // Update king position
         m_king_position[not m_turn] = destination_square;
 
+        // Set NNUEU input (F_MAP 768 only; the king-free build records nothing here, which is
+        // why its accumulator is untouched by this change). Castling reaches this branch too,
+        // and origin/destination are the KING's squares there, so the rook change recorded
+        // below is the only other feature that moves.
+        if constexpr (NNUEU::KINGS_IN)
+            nnueuChanges.add(NNUE_KING_BASE[not m_turn] + destination_square,
+                             NNUE_KING_BASE[not m_turn] + origin_square);
+
         state_info->isCheck = isDiscoverCheck(origin_square, destination_square);
         state_info->reversibleMovesMade++; // Move is reversible
 
@@ -1890,7 +1904,11 @@ NNUEU::NNUEUChange BitPosition::makeCapture(T move, StateInfo &new_state_info)
             // Discover checks
             state_info->isCheck = isDiscoverCheck(origin_square, destination_square);
             
-            // Set NNUE input
+            // Set NNUE input. The king's OWN displacement is a feature only at F_MAP 768; the
+            // captured piece leaves in both variants.
+            if constexpr (NNUEU::KINGS_IN)
+                nnueuChanges.add(NNUE_KING_BASE[not m_turn] + destination_square,
+                                 NNUE_KING_BASE[not m_turn] + origin_square);
             nnueuChanges.addlast(NNUE_BASE[m_turn][captured_piece] + destination_square);
         }
         // Moving any piece except king

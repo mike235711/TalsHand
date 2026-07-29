@@ -19,6 +19,10 @@ set(NNUEU_THIRD_OUT 4 CACHE STRING "NNUEU 3rd-layer output width")
 add_compile_definitions(NNUEU_SECOND_OUT=${NNUEU_SECOND_OUT})
 add_compile_definitions(NNUEU_THIRD_OUT=${NNUEU_THIRD_OUT})
 # Dual activation (CReLU + SqrCReLU head) for the "_sq" cloud nets. 0 = single CReLU (default).
+set(NNUEU_F_MAP 640 CACHE STRING "NNUEU input features: 640 king-free, 704 not-turn king, 768 both kings")
+add_compile_definitions(NNUEU_F_MAP=${NNUEU_F_MAP})
+set(NNUEU_SPLIT_FT 0 CACHE STRING "NNUEU split-ft head (1 = each projection reads its own accumulator half)")
+add_compile_definitions(NNUEU_SPLIT_FT=${NNUEU_SPLIT_FT})
 set(NNUEU_DUAL_ACT 0 CACHE STRING "NNUEU dual activation head (1 = CReLU+SqrCReLU)")
 add_compile_definitions(NNUEU_DUAL_ACT=${NNUEU_DUAL_ACT})
 

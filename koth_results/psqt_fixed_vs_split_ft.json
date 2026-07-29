@@ -1,0 +1,311 @@
+{
+  "meta": {
+    "status": "in_progress",
+    "started_at": "2026-07-29T17:49:19",
+    "updated_at": "2026-07-29T17:54:30",
+    "games_planned": 20,
+    "games_played": 1,
+    "time_controls": {
+      "blitz-3+2": {
+        "base": 180.0,
+        "inc": 2.0
+      }
+    },
+    "openings": 10
+  },
+  "new_engine": {
+    "binary": "/private/tmp/lamano_famB/koth/psqt_fixed.sh",
+    "net_dir": "/tmp/lamano_famB/models/famB_psqt_fixed",
+    "net_name": "famB_psqt_fixed",
+    "net_sha256": "4a9318cb3a16"
+  },
+  "old_engine": {
+    "binary": "/private/tmp/lamano_famB/koth/split_ft.sh",
+    "net_dir": "/tmp/lamano_famB/models/famB_split_ft",
+    "net_name": "famB_split_ft",
+    "net_sha256": "6833807fa3ad"
+  },
+  "new_binary": "/private/tmp/lamano_famB/koth/psqt_fixed.sh",
+  "old_binary": "/private/tmp/lamano_famB/koth/split_ft.sh",
+  "per_tc": [
+    {
+      "tc": "blitz-3+2",
+      "base": 180.0,
+      "inc": 2.0,
+      "wins": 0,
+      "draws": 0,
+      "losses": 1,
+      "n": 1,
+      "points": 0.0,
+      "score_pct": 0.0,
+      "elo": -800.0,
+      "elo_error": 0.0,
+      "new_time_losses": 0,
+      "old_time_losses": 0,
+      "time_mgmt_diff": 0,
+      "games": [
+        {
+          "opening": 0,
+          "new_white": true,
+          "result_new_pov": "0-1",
+          "reason": "checkmate"
+        }
+      ]
+    }
+  ],
+  "overall": {
+    "wins": 0,
+    "draws": 0,
+    "losses": 1,
+    "n": 1,
+    "points": 0.0,
+    "score_pct": 0.0,
+    "elo": -800.0,
+    "elo_error": 0.0,
+    "new_time_losses": 0,
+    "old_time_losses": 0,
+    "time_mgmt_diff": 0
+  },
+  "move_distributions": {
+    "overall": {
+      "new": {
+        "time_ms": {
+          "n": 41,
+          "mean": 3812.0,
+          "median": 3868.0,
+          "p10": 1944.0,
+          "p90": 5606.7,
+          "max": 8275.4
+        },
+        "depth": {
+          "n": 39,
+          "mean": 18.5,
+          "median": 14,
+          "p10": 11,
+          "p90": 18,
+          "max": 99
+        },
+        "by_phase": {
+          "opening_1_10": {
+            "n": 10,
+            "avg_time_ms": 4205.6,
+            "avg_depth": 14.6
+          },
+          "middle_11_30": {
+            "n": 20,
+            "avg_time_ms": 4574.0,
+            "avg_depth": 12.8
+          },
+          "endgame_31plus": {
+            "n": 11,
+            "avg_time_ms": 2068.6,
+            "avg_depth": 35.6
+          }
+        },
+        "clock_left_pct": {
+          "mean": 58.7,
+          "median": 58.7
+        }
+      },
+      "old": {
+        "time_ms": {
+          "n": 41,
+          "mean": 3761.4,
+          "median": 3344.5,
+          "p10": 1392.9,
+          "p90": 6649.2,
+          "max": 11768.5
+        },
+        "depth": {
+          "n": 41,
+          "mean": 11.6,
+          "median": 12,
+          "p10": 9,
+          "p90": 15,
+          "max": 17
+        },
+        "by_phase": {
+          "opening_1_10": {
+            "n": 10,
+            "avg_time_ms": 4790.0,
+            "avg_depth": 13.8
+          },
+          "middle_11_30": {
+            "n": 20,
+            "avg_time_ms": 4194.6,
+            "avg_depth": 10.9
+          },
+          "endgame_31plus": {
+            "n": 11,
+            "avg_time_ms": 2038.6,
+            "avg_depth": 10.9
+          }
+        },
+        "clock_left_pct": {
+          "mean": 59.9,
+          "median": 59.9
+        }
+      }
+    },
+    "by_tc": {
+      "blitz-3+2": {
+        "new": {
+          "time_ms": {
+            "n": 41,
+            "mean": 3812.0,
+            "median": 3868.0,
+            "p10": 1944.0,
+            "p90": 5606.7,
+            "max": 8275.4
+          },
+          "depth": {
+            "n": 39,
+            "mean": 18.5,
+            "median": 14,
+            "p10": 11,
+            "p90": 18,
+            "max": 99
+          },
+          "by_phase": {
+            "opening_1_10": {
+              "n": 10,
+              "avg_time_ms": 4205.6,
+              "avg_depth": 14.6
+            },
+            "middle_11_30": {
+              "n": 20,
+              "avg_time_ms": 4574.0,
+              "avg_depth": 12.8
+            },
+            "endgame_31plus": {
+              "n": 11,
+              "avg_time_ms": 2068.6,
+              "avg_depth": 35.6
+            }
+          },
+          "clock_left_pct": {
+            "mean": 58.7,
+            "median": 58.7
+          }
+        },
+        "old": {
+          "time_ms": {
+            "n": 41,
+            "mean": 3761.4,
+            "median": 3344.5,
+            "p10": 1392.9,
+            "p90": 6649.2,
+            "max": 11768.5
+          },
+          "depth": {
+            "n": 41,
+            "mean": 11.6,
+            "median": 12,
+            "p10": 9,
+            "p90": 15,
+            "max": 17
+          },
+          "by_phase": {
+            "opening_1_10": {
+              "n": 10,
+              "avg_time_ms": 4790.0,
+              "avg_depth": 13.8
+            },
+            "middle_11_30": {
+              "n": 20,
+              "avg_time_ms": 4194.6,
+              "avg_depth": 10.9
+            },
+            "endgame_31plus": {
+              "n": 11,
+              "avg_time_ms": 2038.6,
+              "avg_depth": 10.9
+            }
+          },
+          "clock_left_pct": {
+            "mean": 59.9,
+            "median": 59.9
+          }
+        }
+      }
+    },
+    "new": {
+      "time_ms": {
+        "n": 41,
+        "mean": 3812.0,
+        "median": 3868.0,
+        "p10": 1944.0,
+        "p90": 5606.7,
+        "max": 8275.4
+      },
+      "depth": {
+        "n": 39,
+        "mean": 18.5,
+        "median": 14,
+        "p10": 11,
+        "p90": 18,
+        "max": 99
+      },
+      "by_phase": {
+        "opening_1_10": {
+          "n": 10,
+          "avg_time_ms": 4205.6,
+          "avg_depth": 14.6
+        },
+        "middle_11_30": {
+          "n": 20,
+          "avg_time_ms": 4574.0,
+          "avg_depth": 12.8
+        },
+        "endgame_31plus": {
+          "n": 11,
+          "avg_time_ms": 2068.6,
+          "avg_depth": 35.6
+        }
+      },
+      "clock_left_pct": {
+        "mean": 58.7,
+        "median": 58.7
+      }
+    },
+    "old": {
+      "time_ms": {
+        "n": 41,
+        "mean": 3761.4,
+        "median": 3344.5,
+        "p10": 1392.9,
+        "p90": 6649.2,
+        "max": 11768.5
+      },
+      "depth": {
+        "n": 41,
+        "mean": 11.6,
+        "median": 12,
+        "p10": 9,
+        "p90": 15,
+        "max": 17
+      },
+      "by_phase": {
+        "opening_1_10": {
+          "n": 10,
+          "avg_time_ms": 4790.0,
+          "avg_depth": 13.8
+        },
+        "middle_11_30": {
+          "n": 20,
+          "avg_time_ms": 4194.6,
+          "avg_depth": 10.9
+        },
+        "endgame_31plus": {
+          "n": 11,
+          "avg_time_ms": 2038.6,
+          "avg_depth": 10.9
+        }
+      },
+      "clock_left_pct": {
+        "mean": 59.9,
+        "median": 59.9
+      }
+    }
+  }
+}

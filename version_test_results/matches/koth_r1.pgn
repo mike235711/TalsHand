@@ -1,0 +1,38 @@
+[Event "bullet-1+1 op0"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "famB_split_ft"]
+[Black "famB_psqt_fixed"]
+[Result "0-1"]
+[Termination "checkmate"]
+[NewPOV "0-1"]
+
+1. c4 e5 2. e3 Nc6 3. Nf3 Nh6 4. Bd3 Qf6 5. Nc3 Bb4 6. Bxh7 Bxc3 7. bxc3 Kd8 8. Qe2 Rxh7 9. Nxe5 Qxe5 10. a4 a5 11. h3 d6 12. Rb1 Qe4 13. f4 Qxb1 14. O-O Qf5 15. c5 Qg6 16. cxd6 cxd6 17. Rf3 Qe4 18. d3 Qxf3 19. Qxf3 Kc7 20. Qd5 Be6 21. Qb5 Nf5 22. Ba3 Nxe3 23. Bxd6+ Kxd6 24. Qxb7 Rg8 25. Qb6 Nd5 26. Qf2 Nxc3 27. Qe3 f5 28. h4 Nxa4 29. h5 Nc3 30. g4 g6 31. g5 gxh5 32. Qe1 Nd5 33. Qg3 a4 34. Kf2 a3 35. Qf3 a2 36. Qd1 Rb8 37. Kf3 Rb1 38. Qa4 a1=R 39. Qxa1 Rxa1 40. Kg3 Ra2 41. Kh4 Rg2 42. d4 Nxf4 43. g6 Rg4# 0-1
+
+[Event "bullet-1+1 op0"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "famB_psqt_fixed"]
+[Black "famB_split_ft"]
+[Result "1-0"]
+[Termination "checkmate"]
+[NewPOV "0-1"]
+
+1. e4 c6 2. Bb5 Nf6 3. Qf3 Nxe4 4. Qxe4 d5 5. Qe2 Na6 6. Bxa6 e6 7. c4 Qc7 8. Kd1 Rb8 9. Bxb7 Rxb7 10. cxd5 Rxb2 11. Bxb2 Bd6 12. Qe4 O-O 13. dxc6 Rd8 14. Nf3 Bf8 15. Rg1 f5 16. Qc4 Rxd2+ 17. Nbxd2 g6 18. Kc2 a6 19. g3 Qa5 20. Nb3 Qb6 21. Rg2 Be7 22. Qc3 Qc5 23. Nxc5 Kf7 24. Nd3 Bf8 25. Qh8 Ke7 26. Ba3+ Kd8 27. Bd6 Bd7 28. Qxf8+ Be8 29. Qe7+ Kc8 30. Qxe8# 1-0
+
+[Event "bullet-1+1 op1"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "famB_split_ft"]
+[Black "famB_psqt_fixed"]
+[Result "0-1"]
+[FEN "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"]
+[SetUp "1"]
+[Termination "checkmate"]
+[NewPOV "0-1"]
+
+2. c3 e6 3. Nh3 Qh4 4. Be2 Qxh3 5. gxh3 Kd8 6. Rg1 Nc6 7. Kf1 Bd6 8. Bd3 g6 9. Rxg6 fxg6 10. Qf3 Ke7 11. a4 c4 12. Kg1 cxd3 13. Qxd3 Ne5 14. Qe3 Nc6 15. d3 e5 16. Ra3 Bxa3 17. Nxa3 b6 18. Nc4 Nf6 19. Nxb6 axb6 20. f3 Rxa4 21. Qh6 Kf7 22. b4 Nd8 23. c4 Nc6 24. Qxg6+ hxg6 25. h4 Ra1 26. c5 Rxc1+ 27. Kg2 Rc2+ 28. Kg1 Bb7 29. h5 Nxh5 30. b5 Ra8 31. bxc6 Ra1# 0-1
+

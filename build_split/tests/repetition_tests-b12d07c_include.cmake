@@ -1,0 +1,5 @@
+if(EXISTS "/tmp/lamano_famB/build_split/tests/repetition_tests-b12d07c_tests.cmake")
+  include("/tmp/lamano_famB/build_split/tests/repetition_tests-b12d07c_tests.cmake")
+else()
+  add_test(repetition_tests_NOT_BUILT-b12d07c repetition_tests_NOT_BUILT-b12d07c)
+endif()

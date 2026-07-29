@@ -1,0 +1,5 @@
+if(EXISTS "/tmp/lamano_famB/build_split/tests/release_tactics_tests-b12d07c_tests.cmake")
+  include("/tmp/lamano_famB/build_split/tests/release_tactics_tests-b12d07c_tests.cmake")
+else()
+  add_test(release_tactics_tests_NOT_BUILT-b12d07c release_tactics_tests_NOT_BUILT-b12d07c)
+endif()

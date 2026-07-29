@@ -119,6 +119,76 @@ namespace NNUEU
             delete[] tempThirdLayerBiases;
 
             weights.finalBias = load_int16(modelDir + "final_layer_biases.csv");
+
+            // Optional king-bias tables (king_bias arm).
+            {
+                std::ifstream f1(modelDir + "king_emb_turn.csv"), f2(modelDir + "king_emb_not_turn.csv");
+                if (f1 && f2)
+                {
+                    auto readTable = [](std::ifstream &f, int16_t tbl[64][FIRST_OUT]) {
+                        std::string line; int r = 0;
+                        while (std::getline(f, line) && r < 64) {
+                            if (line.find_first_not_of(" \t\r\n") == std::string::npos) continue;
+                            std::stringstream ss(line); std::string v; int c = 0;
+                            while (std::getline(ss, v, ',') && c < FIRST_OUT)
+                                tbl[r][c++] = static_cast<int16_t>(std::stoi(v));
+                            ++r;
+                        }
+                        return r;
+                    };
+                    const int r1 = readTable(f1, weights.kingEmbTurn);
+                    const int r2 = readTable(f2, weights.kingEmbNotTurn);
+                    weights.hasKingBias = (r1 == 64 && r2 == 64);
+                    if (!weights.hasKingBias)
+                        std::cerr << "king_emb_*.csv: got " << r1 << "/" << r2
+                                  << " rows, expected 64/64 -- IGNORED\n";
+                }
+            }
+
+            // Optional PSQT table (psqt_sf arm): 8 rows x F_MAP, already at the output scale.
+            {
+                std::ifstream pf(modelDir + "psqt_weights.csv");
+                if (pf)
+                {
+                    std::string line; int r = 0;
+                    while (std::getline(pf, line) && r < 8) {
+                        if (line.find_first_not_of(" \t\r\n") == std::string::npos) continue;
+                        std::stringstream ss(line); std::string v; int c = 0;
+                        while (std::getline(ss, v, ',') && c < F_MAP)
+                            weights.psqtW[r][c++] = std::stoi(v);
+                        ++r;
+                    }
+                    weights.hasPsqt = (r == 8);
+                    if (r != 0 && !weights.hasPsqt)
+                        std::cerr << "psqt_weights.csv: " << r << " rows, expected 8 -- IGNORED\n";
+                }
+            }
+
+            // Optional material-residual table. Absent for every ordinary net -> hasMaterial
+            // stays false and evaluate() is untouched.
+            {
+                std::ifstream mf(modelDir + "material_dp.csv");
+                if (mf)
+                {
+                    std::string line;
+                    int r = 0;
+                    while (std::getline(mf, line) && r < Network::Weight::MAT_BUCKETS)
+                    {
+                        if (line.find_first_not_of(" \t\r\n") == std::string::npos) continue;
+                        std::stringstream ss(line);
+                        std::string v;
+                        int c = 0;
+                        while (std::getline(ss, v, ',') && c < 5)
+                            weights.materialDp[r][c++] = std::stoi(v);
+                        ++r;
+                    }
+                    weights.matBucketCount = r;
+                    weights.hasMaterial = (r == 1 || r == Network::Weight::MAT_BUCKETS);
+                    if (r != 0 && !weights.hasMaterial)
+                        std::cerr << "material_dp.csv has " << r
+                                  << " rows; expected 1 (fixed) or 7 (bucketed) -- IGNORED\n";
+                }
+            }
         }
         catch (const std::exception &e)
         {
@@ -130,6 +200,96 @@ namespace NNUEU
     }
 
     // The NNUE is built to give an evaluation of the position with high values being good for whose turn it is.
+    // Side-to-move material term, in the engine's output units. Mirrors the training-side
+    // `material_dp`: counts are own-minus-opponent per piece type FROM THE SIDE TO MOVE, because
+    // the label the net was trained against is side-to-move relative. Getting that sign wrong
+    // makes the term cancel itself across the dataset (measured: +0.69 white / -0.69 black).
+    int32_t Network::materialTerm(const BitPosition &position, const Transformer &transformer) const
+    {
+        // the material table lives on the NETWORK's weights (it is head-side, loaded with the
+        // head CSVs), not on the transformer's accumulator weights
+        const auto &w = weights;
+        if (!w.hasMaterial)
+            return 0;
+        const bool white = position.getTurn();
+        int diff[5];
+        for (int t = 0; t < 5; ++t)
+        {
+            // API is getPieces(colour, pieceType) -- colour first. The colour INDEX is not
+            // getTurn() directly: verified empirically (white-to-move down a rook produced
+            // +832 instead of -832), so the side-to-move index is the complement.
+            const int stm = white ? 0 : 1;
+            diff[t] = countBits(position.getPieces(stm, t))
+                    - countBits(position.getPieces(1 - stm, t));
+        }
+        int bucket = 0;
+        if (w.matBucketCount == Network::Weight::MAT_BUCKETS)
+        {
+            // balance in pawns, classical weights, only to select the bucket
+            static constexpr int kVal[5] = {1, 3, 3, 5, 9};
+            int bal = 0;
+            for (int t = 0; t < 5; ++t) bal += diff[t] * kVal[t];
+            // Same bucketing as training's torch.bucketize(bal, [-5,-2,-0.5,0.5,2,5]):
+            // bucket = #edges strictly below bal. Edges are doubled so the half-pawn
+            // boundaries stay integer.
+            static constexpr int kEdges2[6] = {-10, -4, -1, 1, 4, 10};
+            const int bal2 = 2 * bal;
+            for (int e = 0; e < 6; ++e) if (bal2 > kEdges2[e]) ++bucket;
+        }
+        int32_t s = 0;
+        for (int t = 0; t < 5; ++t) s += diff[t] * w.materialDp[bucket][t];
+        return s;
+    }
+
+    // king_bias: add the two king rows to the accumulator, pre-activation. The king indices
+    // must use the SAME orientation as the 2nd-layer block selection (identity for white,
+    // invertIndex for black) or the table is read at the wrong row for one colour only.
+    void Network::applyKingBias(int16_t *acc, int kTurn, int kNotTurn) const
+    {
+        if (!weights.hasKingBias)
+            return;
+        const int16_t *a = weights.kingEmbTurn[kTurn];
+        const int16_t *b = weights.kingEmbNotTurn[kNotTurn];
+        for (int i = 0; i < FIRST_OUT; ++i)
+            acc[i] = static_cast<int16_t>(acc[i] + a[i] + b[i]);
+    }
+
+    // psqt_sf: Stockfish's skip term. Sums the 8-wide PSQT row over the ACTIVE features of both
+    // perspectives, picks the piece-count phase bucket, and returns (wpsqt - bpsqt) * (us - 0.5)
+    // already in engine output units. F_MAP is 640 and ~30 features are active, so this is cheap.
+    int32_t Network::psqtTerm(const BitPosition &position) const
+    {
+        if (!weights.hasPsqt)
+            return 0;
+        int nPieces = 0;
+        for (int c = 0; c < 2; ++c)
+            for (int t = 0; t < 6; ++t)
+                nPieces += countBits(position.getPieces(c, t));
+        const int bucket = std::min(7, std::max(0, (nPieces - 1) / 4));
+
+        int32_t wp = 0, bp = 0;
+        for (int c = 0; c < 2; ++c)
+            for (int t = 0; t < 5; ++t)          // king-free FT: 5 piece types
+            {
+                uint64_t bb = position.getPieces(c, t);
+                while (bb)
+                {
+                    const int sq = getLeastSignificantBitIndex(bb);
+                    bb &= bb - 1;
+                    // psqt_weights.csv is exported in the ENGINE's BLOCKED plane order
+                    // [own P..Q, opp P..Q], the same order the FT rows use. Indexing it with
+                    // the fork's interleaved t*2+side reads another piece type's column and
+                    // costs the whole term (measured: corr 0.26 against the trained net).
+                    const int pw = (c == 0 ? 0 : 5) + t;   // c==0 is white
+                    const int pb = (c == 1 ? 0 : 5) + t;
+                    wp += weights.psqtW[bucket][pw * 64 + sq];
+                    bp += weights.psqtW[bucket][pb * 64 + invertIndex(sq)];
+                }
+            }
+        // (us - 0.5) is +/- 1/2; the difference of the two perspectives carries the factor 2.
+        return position.getTurn() ? (wp - bp) / 2 : (bp - wp) / 2;
+    }
+
     int16_t Network::evaluate(const BitPosition &position, NNUEU::AccumulatorStack &accumulatorStack, const Transformer &transformer) const
     {
         // Update incrementally from the last computed node
@@ -151,21 +311,37 @@ namespace NNUEU
 
         AccumulatorState &updatedAcc = accumulatorStack.top();
 
+        // king_bias works on a COPY: the accumulator is shared/incremental across nodes, so
+        // adding the king rows in place would accumulate them again at every evaluation.
+        alignas(16) int16_t accBuf[FIRST_OUT];
+        const int wk = accumulatorStack.getStackKingPosition(0);
+        const int bk = accumulatorStack.getStackKingPosition(1);
+        if (weights.hasKingBias)
+        {
+            const bool white = position.getTurn();
+            const int16_t *src = updatedAcc.inputTurn[white ? 0 : 1];
+            std::memcpy(accBuf, src, sizeof(accBuf));
+            // same orientation as the 2nd-layer blocks: identity for white, invertIndex for black
+            const int kTurn    = white ? wk : invertIndex(bk);
+            const int kNotTurn = white ? invertIndex(bk) : wk;
+            applyKingBias(accBuf, kTurn, kNotTurn);
+        }
+
         if (position.getTurn())
         {
 #ifndef NDEBUG
-            return forwardPassDebug(updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn) - 2048;
+            return static_cast<int16_t>(forwardPassDebug(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn) - 2048 + materialTerm(position, transformer) + psqtTerm(position));
 #else
-            return forwardPass(updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn) - 2048;
+            return static_cast<int16_t>(forwardPass(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn) - 2048 + materialTerm(position, transformer) + psqtTerm(position));
 #endif
         }
 
         else
         {
 #ifndef NDEBUG
-            return forwardPassDebug(updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn) - 2048;
+            return static_cast<int16_t>(forwardPassDebug(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn) - 2048 + materialTerm(position, transformer) + psqtTerm(position));
 #else
-            return forwardPass(updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn) - 2048;
+            return static_cast<int16_t>(forwardPass(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn) - 2048 + materialTerm(position, transformer) + psqtTerm(position));
 #endif
         }
     }
@@ -203,12 +379,15 @@ namespace NNUEU
                 const int8_t *pW = (blk == 0) ? pWeights11 : pWeights12;
                 const int biasBase = blk * SECOND_OUT_W;                 // secondBias: turn then not_turn
                 const int outBase = blk * (DUAL_ACT ? 2 : 1) * SECOND_OUT_W;
+                // SPLIT_FT: this projection reads only its own half of the accumulator,
+                // and its weights are stored at that same (halved) stride.
+                const int8_t *aBlk = a + (SPLIT_FT ? blk * SPLIT_READ : 0);
                 for (int o = 0; o < SECOND_OUT_W; ++o)
                 {
-                    const int8_t *w = pW + o * FIRST_OUT;
+                    const int8_t *w = pW + o * SPLIT_READ;
                     int32x4_t acc = vdupq_n_s32(0);
-                    for (int i = 0; i < FIRST_OUT; i += 16)
-                        acc = vdotq_s32(acc, vld1q_s8(a + i), vld1q_s8(w + i));
+                    for (int i = 0; i < SPLIT_READ; i += 16)
+                        acc = vdotq_s32(acc, vld1q_s8(aBlk + i), vld1q_s8(w + i));
                     int32_t s = vaddvq_s32(acc) + weights.secondBias[biasBase + o];
                     const int c = std::min(127, std::max(0, static_cast<int>(s >> 6)));
                     l1[outBase + o] = static_cast<int8_t>(c); // CReLU
@@ -245,10 +424,13 @@ namespace NNUEU
                 const int outBase = blk * (DUAL_ACT ? 2 : 1) * SECOND_OUT_W;
                 for (int o = 0; o < SECOND_OUT_W; ++o)
                 {
-                    const int8_t *w = pW + o * FIRST_OUT;
+                    // SPLIT_FT: same halving as the NEON path -- the two MUST agree, or a Debug
+                    // build would evaluate differently from Release and nothing would look broken.
+                    const int8_t *aBlk = a + (SPLIT_FT ? blk * SPLIT_READ : 0);
+                    const int8_t *w = pW + o * SPLIT_READ;
                     int32_t s = weights.secondBias[biasBase + o];
-                    for (int i = 0; i < FIRST_OUT; ++i)
-                        s += static_cast<int32_t>(a[i]) * static_cast<int32_t>(w[i]);
+                    for (int i = 0; i < SPLIT_READ; ++i)
+                        s += static_cast<int32_t>(aBlk[i]) * static_cast<int32_t>(w[i]);
                     const int c = std::min(127, std::max(0, static_cast<int>(s >> 6)));
                     l1[outBase + o] = static_cast<int8_t>(c); // CReLU
                     if constexpr (DUAL_ACT)

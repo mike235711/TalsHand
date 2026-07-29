@@ -1,0 +1,5 @@
+if(EXISTS "/tmp/lamano_famB/build_nosplit/tests/mate_tests-b12d07c_tests.cmake")
+  include("/tmp/lamano_famB/build_nosplit/tests/mate_tests-b12d07c_tests.cmake")
+else()
+  add_test(mate_tests_NOT_BUILT-b12d07c mate_tests_NOT_BUILT-b12d07c)
+endif()

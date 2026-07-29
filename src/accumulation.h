@@ -27,19 +27,69 @@ namespace NNUEU
 #endif
     // Dual activation (Stockfish trick): each 2nd-layer projection emits CReLU + SqrCReLU, so the
     // head sees 4*SECOND_OUT instead of 2. The "_sq" cloud nets use this; default off (single CReLU).
+#ifndef NNUEU_SPLIT_FT
+// split-ft: the FT is 2N wide but each 2nd-layer projection reads only its own N-half
+// (turn -> low half, not-turn -> high half). Keeps the 2nd layer at N-width compute while
+// doubling FT capacity. 0 = classic behaviour, both projections read the whole accumulator.
+#define NNUEU_SPLIT_FT 0
+#endif
 #ifndef NNUEU_DUAL_ACT
 #define NNUEU_DUAL_ACT 0
 #endif
     static_assert(NNUEU_FIRST_OUT == 8 || NNUEU_FIRST_OUT == 32
                       || (NNUEU_FIRST_OUT >= 256 && NNUEU_FIRST_OUT % 16 == 0),
                   "NNUEU_FIRST_OUT must be 8, 32, or a wide width >= 256 and divisible by 16");
-    static constexpr int F_MAP = 640;
+#ifndef NNUEU_F_MAP
+#define NNUEU_F_MAP 640
+#endif
+    // Input feature count. 640 = the king-free set (10 planes: own P,N,B,R,Q then opp P,N,B,R,Q).
+    // 768 adds BOTH kings as planes (12), 704 adds only the not-turn king (11). Putting a king in
+    // the input does NOT cost a recompute: a king move is one feature removed and one added, the
+    // same incremental path every other piece already uses. Only buckets in the FIRST layer would
+    // force a recompute, and this architecture has none.
+    static constexpr int F_MAP = NNUEU_F_MAP;
+    static_assert(F_MAP == 640 || F_MAP == 704 || F_MAP == 768,
+                  "NNUEU_F_MAP must be 640 (king-free), 704 (not-turn king) or 768 (both kings)");
+    static constexpr int N_PLANES = F_MAP / 64;
+    static constexpr bool KINGS_IN = (F_MAP == 768);        // both kings are input planes
+    static constexpr bool KING_NOTURN_IN = (F_MAP == 704);  // only the not-turn king is
+
+    // Own/opponent mirror, used when building the opposite-perspective weight table.
+    //   10 planes -> swap the two 5-plane halves
+    //   12 planes -> swap the two 6-plane halves (kings included)
+    //   11 planes -> swap the 5-plane halves; the lone king plane maps to ITSELF, because from the
+    //                other perspective it still denotes "the king of the side not to move".
+    // Applying the 10-plane rule at 12 planes is silent corruption rather than a crash: (p+5)%10
+    // sends plane 10 to 5 and 11 to 6, overwriting rows already written, and leaves the king rows
+    // zero. newCol stays below 640 < F_MAP, so nothing traps.
+    static constexpr int mirrorPlane(int p)
+    {
+        // The 10 piece planes keep the king-free layout EXACTLY as it was, so every existing
+        // feature index and every NNUE_BASE entry stays valid and the 640 build is untouched.
+        // King planes are APPENDED (10 = own king, 11 = opponent king), which is why they mirror
+        // separately instead of falling out of one modulus.
+        if (p < 10)
+            return (p + 5) % 10;
+        return KINGS_IN ? 21 - p   // own king (10) <-> opponent king (11)
+                        : p;       // 704: the single plane means "king of the side not to move"
+    }                              //      in BOTH perspectives, so it maps to itself
+
+    // Base feature indices of the appended king planes.
+    static constexpr int KING_OWN_BASE = 640;   // 768: own king;  704: the not-to-move king
+    static constexpr int KING_OPP_BASE = 704;   // 768 only
     static constexpr int FIRST_OUT = NNUEU_FIRST_OUT;
     static constexpr int SECOND_OUT_W = NNUEU_SECOND_OUT;       // 2nd-layer output width per perspective
     static constexpr int THIRD_OUT_W = NNUEU_THIRD_OUT;         // 3rd-layer output width
+    static constexpr bool SPLIT_FT = (NNUEU_SPLIT_FT != 0);
+    // how many accumulator lanes ONE projection reads (and the per-neuron weight stride)
+    static constexpr int SPLIT_READ = SPLIT_FT ? (FIRST_OUT / 2) : FIRST_OUT;
+    static_assert(!SPLIT_FT || (FIRST_OUT % 32 == 0),
+                  "SPLIT_FT needs FIRST_OUT divisible by 32 so each half stays NEON-aligned");
     static constexpr bool DUAL_ACT = (NNUEU_DUAL_ACT != 0);
     static constexpr int HEAD_CONCAT = (DUAL_ACT ? 4 : 2) * SECOND_OUT_W; // (CReLU[+SqrCReLU]) per perspective
-    static constexpr int SECOND_OUT = FIRST_OUT * SECOND_OUT_W; // bucketed 2nd-layer weights per king square
+    // bucketed 2nd-layer weights per king square. With SPLIT_FT each neuron only spans its
+    // half, so the stored block halves too -- this is what makes the export unpadded.
+    static constexpr int SECOND_OUT = SPLIT_READ * SECOND_OUT_W;
 
     // Single source of truth for the net a build loads by default: the CSV shapes in a model
     // directory are fixed by (FIRST_OUT, SECOND_OUT_W, THIRD_OUT_W, DUAL_ACT), so the width
@@ -53,6 +103,14 @@ namespace NNUEU
         : (FIRST_OUT == 512) ? "models/n512_h32/"        // v0.4.0-v0.4.2: N512, head 32/32
         : (FIRST_OUT == 32)  ? "models/w32_wdl0/"        // v0.3.8-v0.3.18: w32, head 4/4
                              : "models/NNUEU_quantized_model_v4_param_350_epoch_10/"; // <= v0.3.7: width 8, head 4/4
+    // A castling move under KINGS_IN/KING_NOTURN_IN moves TWO features that both need an
+    // add/remove pair (the king and the rook), which does not fit in indices[3]: the two add()
+    // calls would overwrite each other and the accumulator would silently drift from the true
+    // position. Refuse to build until the change record can carry both pairs.
+    static_assert(!(KINGS_IN || KING_NOTURN_IN),
+                  "F_MAP 704/768 needs NNUEUChange to hold two add/remove pairs (castling moves "
+                  "the king AND the rook); widen indices[] and its consumers first");
+
     // NNUEUChange structure: holds the incremental change info
     struct NNUEUChange
     {

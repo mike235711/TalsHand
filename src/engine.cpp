@@ -1,4 +1,5 @@
 #include <iostream>
+#include <chrono>
 #include <sstream>
 #include <algorithm>
 #include <cctype>
@@ -485,6 +486,45 @@ void THEngine::readUci()
             evalStack.reset(pos, *transformer);
             int16_t v = network.evaluate(pos, evalStack, *transformer);
             std::cout << "eval " << static_cast<int>(v) << std::endl;
+        }
+        else if (token == "evalbench")
+        {
+            // Cost of the eval itself, measured OUTSIDE the search. Comparing nets by nodes/s
+            // cannot separate "the forward pass is more expensive" from "the tree changed shape",
+            // and the accumulator is caught up lazily inside evaluate() (network.cpp:296), so the
+            // two stages are timed separately:
+            //   head  = evaluate() on an already-computed accumulator (forward + per-arm terms)
+            //   full  = reset() + evaluate(), i.e. a from-scratch accumulator plus the head
+            // The incremental per-move update in a real search sits between the two, much nearer
+            // `head`, since it touches only the features that actually changed.
+            // The iteration count is REQUIRED: this loop reads tokens straight off std::cin, so
+            // peeking for an optional argument would swallow the next command instead.
+            std::string arg;
+            std::cin >> arg;
+            const long long iters = std::stoll(arg);
+            static NNUEU::AccumulatorStack benchStack;
+            benchStack.reset(pos, *transformer);
+
+            int64_t sink = 0; // consumed below so the loop cannot be optimised away
+            auto t0 = std::chrono::steady_clock::now();
+            for (long long i = 0; i < iters; ++i)
+                sink += network.evaluate(pos, benchStack, *transformer);
+            auto t1 = std::chrono::steady_clock::now();
+
+            for (long long i = 0; i < iters; ++i)
+            {
+                benchStack.reset(pos, *transformer);
+                sink += network.evaluate(pos, benchStack, *transformer);
+            }
+            auto t2 = std::chrono::steady_clock::now();
+
+            const double headNs = std::chrono::duration<double, std::nano>(t1 - t0).count() / double(iters);
+            const double fullNs = std::chrono::duration<double, std::nano>(t2 - t1).count() / double(iters);
+            std::cout << "evalbench iters " << iters
+                      << " head_ns " << headNs
+                      << " full_ns " << fullNs
+                      << " accum_ns " << (fullNs - headNs)
+                      << " sink " << (sink & 1) << std::endl;
         }
         else if (token == "quit")
         {

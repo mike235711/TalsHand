@@ -1,0 +1,5 @@
+add_test( [==[Perft performance (AB) - nodes/sec per position]==] /tmp/lamano_famB/build_champ/tests/perft_perf_tests [==[Perft performance (AB) - nodes/sec per position]==]  )
+set_tests_properties( [==[Perft performance (AB) - nodes/sec per position]==] PROPERTIES WORKING_DIRECTORY /tmp/lamano_famB/build_champ/tests)
+add_test( [==[QS capture-consistency walk - nodes/sec per position]==] /tmp/lamano_famB/build_champ/tests/perft_perf_tests [==[QS capture-consistency walk - nodes/sec per position]==]  )
+set_tests_properties( [==[QS capture-consistency walk - nodes/sec per position]==] PROPERTIES WORKING_DIRECTORY /tmp/lamano_famB/build_champ/tests)
+set( perft_perf_tests_TESTS [==[Perft performance (AB) - nodes/sec per position]==] [==[QS capture-consistency walk - nodes/sec per position]==])

@@ -41,6 +41,12 @@ public:
     uint64_t cntBeta = 0, cntBetaFirst = 0;         // beta cutoffs total / on the first move (ordering quality)
     uint64_t cntLMP = 0;                            // late-move-pruning skips (v0.4.4)
     uint64_t cntRfp = 0, cntFut = 0, cntSee = 0, cntSeeQS = 0; // reverse-futility / forward-futility / SEE-prune (AB) / SEE-prune (QS)
+    uint64_t cntEval = 0;                           // network.evaluate() calls: NOT one per node.
+                                                    // The accumulator is caught up lazily INSIDE
+                                                    // evaluate() (network.cpp:296), so this counter
+                                                    // gates 100% of NNUEU cost — comparing nets by
+                                                    // nodes/s without it compares different amounts
+                                                    // of eval work.
     bool infoNoEarlyStop = false;                   // "go depth N": run every depth to N + print per-depth info
 
 private:

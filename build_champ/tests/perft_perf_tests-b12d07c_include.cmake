@@ -1,0 +1,5 @@
+if(EXISTS "/tmp/lamano_famB/build_champ/tests/perft_perf_tests-b12d07c_tests.cmake")
+  include("/tmp/lamano_famB/build_champ/tests/perft_perf_tests-b12d07c_tests.cmake")
+else()
+  add_test(perft_perf_tests_NOT_BUILT-b12d07c perft_perf_tests_NOT_BUILT-b12d07c)
+endif()

@@ -1,0 +1,5 @@
+if(EXISTS "/tmp/lamano_famB/build_champ/tests/nnueu_tests-b12d07c_tests.cmake")
+  include("/tmp/lamano_famB/build_champ/tests/nnueu_tests-b12d07c_tests.cmake")
+else()
+  add_test(nnueu_tests_NOT_BUILT-b12d07c nnueu_tests_NOT_BUILT-b12d07c)
+endif()

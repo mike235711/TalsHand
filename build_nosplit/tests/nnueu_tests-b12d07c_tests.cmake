@@ -1,0 +1,7 @@
+add_test( [==[NNUEU weights load from disk and are non-trivial]==] /tmp/lamano_famB/build_nosplit/tests/nnueu_tests [==[NNUEU weights load from disk and are non-trivial]==]  )
+set_tests_properties( [==[NNUEU weights load from disk and are non-trivial]==] PROPERTIES WORKING_DIRECTORY /tmp/lamano_famB/build_nosplit/tests)
+add_test( [==[NNUEU incremental accumulation matches a fresh recomputation]==] /tmp/lamano_famB/build_nosplit/tests/nnueu_tests [==[NNUEU incremental accumulation matches a fresh recomputation]==]  )
+set_tests_properties( [==[NNUEU incremental accumulation matches a fresh recomputation]==] PROPERTIES WORKING_DIRECTORY /tmp/lamano_famB/build_nosplit/tests)
+add_test( [==[NNUEU evaluation is invariant under make/unmake]==] /tmp/lamano_famB/build_nosplit/tests/nnueu_tests [==[NNUEU evaluation is invariant under make/unmake]==]  )
+set_tests_properties( [==[NNUEU evaluation is invariant under make/unmake]==] PROPERTIES WORKING_DIRECTORY /tmp/lamano_famB/build_nosplit/tests)
+set( nnueu_tests_TESTS [==[NNUEU weights load from disk and are non-trivial]==] [==[NNUEU incremental accumulation matches a fresh recomputation]==] [==[NNUEU evaluation is invariant under make/unmake]==])

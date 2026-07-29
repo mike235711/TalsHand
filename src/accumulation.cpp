@@ -23,15 +23,20 @@ void load_int8_2D_array1(const std::string &file_path, int8_t weights[64][NNUEU:
     std::string line;
     size_t row = 0;
 
+    // Block stride is SPLIT_READ, not FIRST_OUT: under SPLIT_FT each neuron's weights span only
+    // the half of the accumulator its projection reads, so the CSV rows are half as long and the
+    // per-king blocks are half as big. Using FIRST_OUT here silently mis-slices the file (and
+    // overruns SECOND_OUT) -- it filled the 2nd layer with garbage while the engine ran fine.
+    constexpr size_t kStride = static_cast<size_t>(NNUEU::SPLIT_READ);
     while (std::getline(file, line) && row < static_cast<size_t>(NNUEU::SECOND_OUT_W))
     {
         std::stringstream ss(line);
         std::string value;
         size_t col = 0;
 
-        while (std::getline(ss, value, ',') && col < 64 * NNUEU::FIRST_OUT)
+        while (std::getline(ss, value, ',') && col < 64 * kStride)
         {
-            weights[col / NNUEU::FIRST_OUT][(col % NNUEU::FIRST_OUT) + row * NNUEU::FIRST_OUT] = static_cast<int8_t>(std::stoi(value));
+            weights[col / kStride][(col % kStride) + row * kStride] = static_cast<int8_t>(std::stoi(value));
             col++;
         }
         row++;
@@ -76,7 +81,7 @@ void load_inverted_int16_2D_array1(const std::string &file_path, int16_t weights
             int square = col % 64;
 
             // Compute the new column after inverting color and square
-            int newPieceType = (pieceType + 5) % 10;
+            int newPieceType = NNUEU::mirrorPlane(pieceType);
             int newCol = newPieceType * 64 + invertIndex(square);
             weights[newCol][row] = static_cast<int16_t>(std::stoi(value));
             col++;
@@ -152,6 +157,28 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
         add_8_int16(inputTurn[0], transformer.weights.firstW[64 * 9 + index]);
         add_8_int16(inputTurn[1], transformer.weights.firstWInv[64 * 9 + index]);
     }
+    // King planes (F_MAP 704/768). Compile-time guarded, so the king-free build emits nothing.
+    // firstW is the white-perspective table and firstWInv the black one; mirrorPlane() already
+    // decided which appended plane each maps to, so both perspectives are just an add here.
+    if constexpr (NNUEU::KINGS_IN)
+    {
+        const int wk = position.getKingPosition(0);
+        const int bk = position.getKingPosition(1);
+        add_8_int16(inputTurn[0], transformer.weights.firstW[NNUEU::KING_OWN_BASE + wk]);
+        add_8_int16(inputTurn[1], transformer.weights.firstWInv[NNUEU::KING_OWN_BASE + wk]);
+        add_8_int16(inputTurn[0], transformer.weights.firstW[NNUEU::KING_OPP_BASE + bk]);
+        add_8_int16(inputTurn[1], transformer.weights.firstWInv[NNUEU::KING_OPP_BASE + bk]);
+    }
+    else if constexpr (NNUEU::KING_NOTURN_IN)
+    {
+        // Only the king of the side NOT to move is a feature. Which physical king that is depends
+        // on whose turn it is, and each perspective sees the other one -- hence the two indices.
+        const int notTurnKing = position.getKingPosition(position.getTurn() ? 1 : 0);
+        const int turnKing = position.getKingPosition(position.getTurn() ? 0 : 1);
+        add_8_int16(inputTurn[0], transformer.weights.firstW[NNUEU::KING_OWN_BASE + notTurnKing]);
+        add_8_int16(inputTurn[1], transformer.weights.firstWInv[NNUEU::KING_OWN_BASE + turnKing]);
+    }
+
     computed[0] = true;
     computed[1] = true;
 }
@@ -159,7 +186,7 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
     // Functions to add/remove features from the accumulators
     inline void NNUEU::AccumulatorState::addAndRemoveOnInput(int subIndexAdd, int subIndexRemove, bool turn, const Transformer &transformer)
     {
-        assert(subIndexAdd >= 0 && subIndexAdd < 640 && subIndexRemove >= 0 && subIndexRemove < 640);
+        assert(subIndexAdd >= 0 && subIndexAdd < NNUEU::F_MAP && subIndexRemove >= 0 && subIndexRemove < NNUEU::F_MAP);
         // Equivalent to the old fused firstW2Indices[add][remove] = firstW[add] - firstW[remove],
         // done as two passes so no quadratic table is needed (essential at width 512).
         if (not turn)

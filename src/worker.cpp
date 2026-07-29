@@ -98,6 +98,7 @@ int16_t Worker::quiesenceSearch(int16_t alpha, int16_t beta)
     ++qnodes;
     if (threads.stop) // hard time-out: unwind immediately (value is discarded by the caller)
         return 0;
+    ++cntEval;
     int16_t value = network.evaluate(currentPos, accumulatorStack, *transformer);
 
     // Fail high when making no moves
@@ -242,6 +243,8 @@ int16_t Worker::alphaBetaSearch(int8_t depth, int16_t alpha, int16_t beta, int p
     // reverse futility, the null-move gate, and later forward pruning. Eval is meaningless
     // in check, so it is left at 0 there and all eval-based pruning is skipped.
     const bool inCheck = currentPos.getIsCheck();
+    if (!inCheck)
+        ++cntEval;
     const int16_t staticEval = inCheck ? static_cast<int16_t>(0)
                                        : network.evaluate(currentPos, accumulatorStack, *transformer);
 
@@ -577,6 +580,7 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
     std::memset(killers, 0, sizeof(killers));         // fresh killer table per search
     std::memset(mainHistory, 0, sizeof(mainHistory)); // fresh butterfly history per search
     nodes = qnodes = cntTTcut = cntNMP = cntLMR = cntBeta = cntBetaFirst = cntLMP = 0; // search-introspection counters
+    cntEval = 0;
     cntRfp = cntFut = cntSee = cntSeeQS = 0;
 
     rootPos.setBlockersAndPinsInAB(); // For discovered checks and move generators
@@ -704,6 +708,7 @@ void Worker::iterativeSearch(int8_t start_depth, int8_t fixed_max_depth)
                       << " betacut " << cntBeta << " betafirst " << cntBetaFirst
                       << " lmp " << cntLMP
                       << " rfp " << cntRfp << " fut " << cntFut << " see " << cntSee << " seeqs " << cntSeeQS
+                      << " evals " << cntEval
                       << '\n' << std::flush;
     }
 }

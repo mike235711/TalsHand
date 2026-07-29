@@ -21,6 +21,9 @@ namespace NNUEU
         int16_t evaluate(const BitPosition &position, NNUEU::AccumulatorStack &accumulatorStack, const Transformer &transformer) const;
 
         int16_t forwardPass(int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const;
+        int32_t materialTerm(const BitPosition &position, const Transformer &transformer) const;
+        int32_t psqtTerm(const BitPosition &position) const;
+        void applyKingBias(int16_t *acc, int kTurn, int kNotTurn) const;
 
 #ifndef NDEBUG
         int16_t forwardPassDebug(const int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const;
@@ -35,6 +38,20 @@ namespace NNUEU
             int16_t secondBias[HEAD_CONCAT] = {0};
             int16_t thirdBias[THIRD_OUT_W] = {0};
             int16_t finalBias = {0};
+            // Material-residual arms: dp[bucket][piece] pre-scaled by the engine's output
+            // scale (4096), so adding it to the eval is exact integer work. hasMaterial stays
+            // false for every ordinary net, which keeps their eval bit-identical to before.
+            static constexpr int MAT_BUCKETS = 7;
+            int32_t materialDp[MAT_BUCKETS][5] = {{0}};
+            int matBucketCount = 0;          // 1 = fixed table, 7 = balance-bucketed
+            bool hasMaterial = false;
+            // king_bias: two 64 x FIRST_OUT tables added to the accumulator pre-activation.
+            int16_t kingEmbTurn[64][FIRST_OUT] = {{0}};
+            int16_t kingEmbNotTurn[64][FIRST_OUT] = {{0}};
+            bool hasKingBias = false;
+            // psqt_sf: 8 extra FT outputs, phase-bucketed, added straight to the eval.
+            int32_t psqtW[8][F_MAP] = {{0}};
+            bool hasPsqt = false;
         };
         Weight weights;
 

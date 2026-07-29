@@ -1,0 +1,12 @@
+[Event "blitz-3+2 op0"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "famB_psqt_fixed"]
+[Black "famB_split_ft"]
+[Result "0-1"]
+[Termination "checkmate"]
+[NewPOV "0-1"]
+
+1. d4 Nf6 2. c4 e6 3. Nc3 d5 4. Nf3 c5 5. cxd5 cxd4 6. Nxd4 Nxd5 7. Bd2 Bb4 8. Ndb5 O-O 9. e3 Nf6 10. Be2 Be7 11. a3 a6 12. Nd4 e5 13. Nf3 Nc6 14. h3 Bf5 15. Qb3 Qc8 16. Qd1 Re8 17. Ng5 e4 18. Qa4 Bf8 19. Qb3 Ne5 20. Nxf7 Nxf7 21. Bc4 Be6 22. Nd5 Kh8 23. Bc3 b5 24. Qd1 Rd8 25. Ba2 Nxd5 26. Bxd5 Kg8 27. Bxe4 Rxd1+ 28. Rxd1 b4 29. Bxg7 Bxg7 30. axb4 Rb8 31. Bd3 Ne5 32. f3 Nxd3+ 33. Ke2 Qc2+ 34. Rd2 Nf4+ 35. exf4 Bc4+ 36. Ke3 Re8+ 37. Kf2 Qxd2+ 38. Kg3 Bh6 39. f5 Qf4+ 40. Kf2 Re2+ 41. Kf1 Qc1# 0-1
+
