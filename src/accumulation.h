@@ -103,34 +103,47 @@ namespace NNUEU
         : (FIRST_OUT == 512) ? "models/n512_h32/"        // v0.4.0-v0.4.2: N512, head 32/32
         : (FIRST_OUT == 32)  ? "models/w32_wdl0/"        // v0.3.8-v0.3.18: w32, head 4/4
                              : "models/NNUEU_quantized_model_v4_param_350_epoch_10/"; // <= v0.3.7: width 8, head 4/4
-    // A castling move under KINGS_IN/KING_NOTURN_IN moves TWO features that both need an
-    // add/remove pair (the king and the rook), which does not fit in indices[3]: the two add()
-    // calls would overwrite each other and the accumulator would silently drift from the true
-    // position. Refuse to build until the change record can carry both pairs.
-    static_assert(!(KINGS_IN || KING_NOTURN_IN),
-                  "F_MAP 704/768 needs NNUEUChange to hold two add/remove pairs (castling moves "
-                  "the king AND the rook); widen indices[] and its consumers first");
-
     // NNUEUChange structure: holds the incremental change info
     struct NNUEUChange
     {
-        bool is_capture;
-        int indices[3];
+        // A move displaces at most TWO features that each need an (add, remove) pair. Normally
+        // there is one (the moving piece), but a CASTLING move at F_MAP 704/768 moves the king
+        // AND the rook and both are input features. The old record held a single pair, so the
+        // two calls overwrote each other and the accumulator drifted silently away from the true
+        // position -- no crash, just a wrong eval. Hence a small fixed array plus a count.
+        static constexpr int MAX_PAIRS = 2;
 
-        // Default constructor initializing members. It is used to detect empty changes due to only moving the king.
-        NNUEUChange() : is_capture(false)
+        // int16_t/uint8_t, not int: this record is copied into an AccumulatorState at every
+        // pushed node (eval is 83-91% of node cost, so the hot path is not the place to grow a
+        // struct). A feature index is bounded by F_MAP <= 768, so it fits with room to spare and
+        // the whole record is 12 bytes -- SMALLER than the 16-byte one it replaces.
+        int16_t added[MAX_PAIRS];
+        int16_t removed[MAX_PAIRS];
+        int16_t capturedIdx;   // feature of the captured piece; only read when is_capture
+        uint8_t n_pairs;       // how many of added[]/removed[] are live
+        bool is_capture;
+
+        // Default = "this move changes no input feature". That is a real case, not just an
+        // initial value: a null move never changes the board, and at F_MAP 640 the king is not
+        // an input feature, so a plain king move leaves the accumulator alone. It used to be
+        // spelled `indices[0] == indices[1]` (isKingMove()); at 704/768 a king move DOES change
+        // the input, so the condition has to be the pair COUNT, not a king-move test.
+        NNUEUChange() : capturedIdx(-1), n_pairs(0), is_capture(false)
         {
-            indices[0] = 0;  
-            indices[1] = 0;  
-            indices[2] = -1;
+            added[0] = removed[0] = 0;
+            added[1] = removed[1] = 0;
         }
-        // Overload for normal (non-capture) move: two indices.
+        // Record the moving piece's (add, remove) pair. REPLACES pair 0: a promotion records the
+        // pawn's move first and then overwrites it with (promoted piece at destination, pawn at
+        // origin), so appending here would apply the pawn move twice.
         void add(int idx0, int idx1);
-        // Overload for capture move: three indices.
-        void add(int idx0, int idx1, int idx2);
-        // For adding the last index in a multi-step update.
+        // APPEND an extra pair. Used only by castling for the rook, which is a second displaced
+        // feature rather than a correction of the first. It needs no #if at the call site: at 768
+        // the king already filled pair 0, at 640 nothing did and the rook lands in pair 0 -- the
+        // exact record the king-free build produced before.
+        void addPair(int idx0, int idx1);
+        // Record the captured piece's feature (it is removed, never re-added).
         void addlast(int idx2);
-        bool isKingMove() const;
         bool isCapture() const;
     };
 

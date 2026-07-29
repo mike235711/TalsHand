@@ -239,7 +239,7 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
 
     inline void NNUEU::AccumulatorState::addOnInput(int subIndex, bool turn, const Transformer &transformer)
     {
-        assert(subIndex >= 0 && subIndex < 640);
+        assert(subIndex >= 0 && subIndex < NNUEU::F_MAP);
         if (not turn)
             add_8_int16(inputTurn[0], transformer.weights.firstW[subIndex]);
         else
@@ -248,44 +248,42 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
 
     inline void NNUEU::AccumulatorState::removeOnInput(int subIndex, bool turn, const Transformer &transformer)
     {
-        assert(subIndex >= 0 && subIndex < 640);
+        assert(subIndex >= 0 && subIndex < NNUEU::F_MAP);
         if (not turn)
             substract_8_int16(inputTurn[0], transformer.weights.firstW[subIndex]);
         else
             substract_8_int16(inputTurn[1], transformer.weights.firstWInv[subIndex]);
     }
 
-    // Overload for a normal (non-capture) move: two indices
+    // The moving piece's pair. Writes slot 0 in place -- see the header for why this REPLACES
+    // (promotions) while castling's rook APPENDS.
     void NNUEU::NNUEUChange::add(int idx0, int idx1)
     {
-        assert(idx0 >= 0 && idx0 < 640);
-        assert(idx1 >= 0 && idx1 < 640);
+        assert(idx0 >= 0 && idx0 < NNUEU::F_MAP);
+        assert(idx1 >= 0 && idx1 < NNUEU::F_MAP);
         is_capture = false; // No capture
-        indices[0] = idx0;
-        indices[1] = idx1;
+        added[0] = static_cast<int16_t>(idx0);
+        removed[0] = static_cast<int16_t>(idx1);
+        if (n_pairs == 0)
+            n_pairs = 1;
     }
 
-    // Overload for a capture move: three indices
-    void NNUEU::NNUEUChange::add(int idx0, int idx1, int idx2)
+    // The castling rook. Appends, so it never clobbers the king pair recorded at F_MAP 768.
+    void NNUEU::NNUEUChange::addPair(int idx0, int idx1)
     {
-        assert(idx0 >= 0 && idx0 < 640);
-        assert(idx1 >= 0 && idx1 < 640);
-        assert(idx2 >= 0 && idx2 < 640);
-        is_capture = true; // It's a capture
-        indices[0] = idx0;
-        indices[1] = idx1;
-        indices[2] = idx2;
+        assert(idx0 >= 0 && idx0 < NNUEU::F_MAP);
+        assert(idx1 >= 0 && idx1 < NNUEU::F_MAP);
+        assert(n_pairs < MAX_PAIRS);
+        added[n_pairs] = static_cast<int16_t>(idx0);
+        removed[n_pairs] = static_cast<int16_t>(idx1);
+        ++n_pairs;
     }
 
     void NNUEU::NNUEUChange::addlast(int idx2)
     {
-        assert(idx2 >= 0 && idx2 < 640);
+        assert(idx2 >= 0 && idx2 < NNUEU::F_MAP);
         is_capture = true; // It's a capture
-        indices[2] = idx2;
-    }
-    inline bool NNUEU::NNUEUChange::isKingMove() const
-    {
-        return indices[0] == indices[1];
+        capturedIdx = static_cast<int16_t>(idx2);
     }
     inline bool NNUEU::NNUEUChange::isCapture() const
     {
@@ -303,8 +301,12 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
         // Compare with the incrementally-updated top of the stack
         const AccumulatorState &inc = top();
 
+        // ALL lanes, not the first 8. At width 512 an 8-lane window is 1.6% of the accumulator,
+        // and the drift this check exists to catch (a change record that dropped one of a
+        // castling move's two add/remove pairs, F_MAP 704/768) shows up in whichever lanes that
+        // rook's weight row happens to touch -- it can sit entirely outside the window.
         bool mismatch_found = false;
-        for (int i = 0; i < 8; ++i)
+        for (int i = 0; i < FIRST_OUT; ++i)
         {
             if (fresh.inputTurn[turn][i] != inc.inputTurn[turn][i])
             {
@@ -420,9 +422,13 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
         const NNUEUChange &c = curr.changes;
 
         if (c.isCapture())
-            curr.removeOnInput(c.indices[2], turn, transformer);
-        if (!c.isKingMove())
-            curr.addAndRemoveOnInput(c.indices[0], c.indices[1], turn, transformer);
+            curr.removeOnInput(c.capturedIdx, turn, transformer);
+        // n_pairs is 0 for a null move (and, at F_MAP 640, for a plain king move -- the king is
+        // not an input feature there), 1 for essentially every real move, and 2 only for castling
+        // once the king IS an input feature. MAX_PAIRS is a compile-time 2, so the trip count is
+        // known and the rare second iteration costs one predictable branch.
+        for (unsigned i = 0; i < c.n_pairs; ++i)
+            curr.addAndRemoveOnInput(c.added[i], c.removed[i], turn, transformer);
         curr.computed[turn] = true;
     }
 

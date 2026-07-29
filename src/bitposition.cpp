@@ -1416,8 +1416,9 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 
                 // Direct check
                 state_info->isCheck = state_info->previous->checkBits[3] & 32;
-                // Set NNUEU input
-                nnueuChanges.add(64 * 3 + 5, 64 * 3 + 7);
+                // Set NNUEU input. addPair, not add: the rook is a SECOND displaced feature,
+                // not a correction of the king's -- see NNUEUChange in accumulation.h.
+                nnueuChanges.addPair(64 * 3 + 5, 64 * 3 + 7);
             }
             else if (move.getData() == 16516) // White queenside castling
             {
@@ -1434,8 +1435,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
 
                 // Direct check
                 state_info->isCheck = state_info->previous->checkBits[3] & 8;
-                // Set NNUEU input
-                nnueuChanges.add(64 * 3 + 3, 64 * 3);
+                // Set NNUEU input (appended; see the kingside branch)
+                nnueuChanges.addPair(64 * 3 + 3, 64 * 3);
             }
             else if (move.getData() == 20412) // Black kingside castling
             {
@@ -1452,8 +1453,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 m_board[61] = 3;
 
                 state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[1][3][63] ^ zobrist_keys::pieceZobristNumbers[1][3][61];
-                // Set NNUEU input
-                nnueuChanges.add(64 * 8 + 61, 64 * 8 + 63);
+                // Set NNUEU input (appended; see the kingside branch)
+                nnueuChanges.addPair(64 * 8 + 61, 64 * 8 + 63);
             }
             else // Black queenside castling
             {
@@ -1470,8 +1471,8 @@ NNUEU::NNUEUChange BitPosition::makeMove(T move, StateInfo &new_state_info)
                 m_board[59] = 3;
 
                 state_info->zobristKey ^= zobrist_keys::pieceZobristNumbers[1][3][56] ^ zobrist_keys::pieceZobristNumbers[1][3][59];
-                // Set NNUEU input
-                nnueuChanges.add(64 * 8 + 59, 64 * 8 + 56);
+                // Set NNUEU input (appended; see the kingside branch)
+                nnueuChanges.addPair(64 * 8 + 59, 64 * 8 + 56);
             }
         }
         // Updating passant square
