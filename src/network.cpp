@@ -96,9 +96,14 @@ namespace NNUEU
     {
         try
         {
-            // third layer: THIRD_OUT_W neurons x HEAD_CONCAT inputs (flat row-major)
-            auto tempThirdLayerWeights = load_int8_1D_array(modelDir + "third_layer_weights.csv", THIRD_OUT_W * HEAD_CONCAT);
-            std::memcpy(weights.thirdW, tempThirdLayerWeights, sizeof(int8_t) * THIRD_OUT_W * HEAD_CONCAT);
+            // third layer: THIRD_OUT_W neurons x THIRD_IN inputs (flat row-major in the CSV).
+            // THIRD_IN == HEAD_CONCAT except under NNUEU_PSQT_L3, where the CSV rows carry
+            // HEAD_CONCAT + 8 columns (the 8 psqt lanes) and are re-strided to THIRD_STRIDE
+            // in memory (pad columns stay zero for the NEON 16-lane dot).
+            auto tempThirdLayerWeights = load_int8_1D_array(modelDir + "third_layer_weights.csv", THIRD_OUT_W * THIRD_IN);
+            for (int o = 0; o < THIRD_OUT_W; ++o)
+                std::memcpy(weights.thirdW + o * THIRD_STRIDE, tempThirdLayerWeights + o * THIRD_IN,
+                            sizeof(int8_t) * THIRD_IN);
             delete[] tempThirdLayerWeights;
 
             // final layer: THIRD_OUT_W weights (buffer padded +8 for NEON over-read, pad stays 0)
@@ -161,6 +166,14 @@ namespace NNUEU
                     weights.hasPsqt = (r == 8);
                     if (r != 0 && !weights.hasPsqt)
                         std::cerr << "psqt_weights.csv: " << r << " rows, expected 8 -- IGNORED\n";
+                }
+                if (PSQT_L3 && !weights.hasPsqt)
+                {
+                    // a psqt_l3 build without the psqt table would feed a constant 64 into the
+                    // 8 extra third-layer lanes AND drop the output term -- a silently wrong net.
+                    std::cerr << "NNUEU_PSQT_L3 build but " << modelDir
+                              << "psqt_weights.csv is missing/invalid -- refusing to load\n";
+                    return false;
                 }
             }
 
@@ -242,8 +255,12 @@ namespace NNUEU
     }
 
     // king_bias: add the two king rows to the accumulator, pre-activation. The king indices
-    // must use the SAME orientation as the 2nd-layer block selection (identity for white,
-    // invertIndex for black) or the table is read at the wrong row for one colour only.
+    // must use the SAME indices as the 2nd-layer block selection (accumulation.cpp:357-360):
+    // BOTH kings in the side-to-move's frame -- white turn: second1[wk], second2[bk] (raw);
+    // black turn: second1[invertIndex(bk)], second2[invertIndex(wk)]. Training feeds
+    // king_emb_turn/not_turn the very same psqt_indices/layer_stack_indices, so any other
+    // orientation reads the wrong table row (caught by the vs-float gate on the first run
+    // with non-zero tables; invisible while the tables were zero-init).
     void Network::applyKingBias(int16_t *acc, int kTurn, int kNotTurn) const
     {
         if (!weights.hasKingBias)
@@ -255,9 +272,11 @@ namespace NNUEU
     }
 
     // psqt_sf: Stockfish's skip term. Sums the 8-wide PSQT row over the ACTIVE features of both
-    // perspectives, picks the piece-count phase bucket, and returns (wpsqt - bpsqt) * (us - 0.5)
-    // already in engine output units. F_MAP is 640 and ~30 features are active, so this is cheap.
-    int32_t Network::psqtTerm(const BitPosition &position) const
+    // perspectives, picks the piece-count phase bucket, and returns the stm-signed perspective
+    // difference (wpsqt - bpsqt) UNHALVED, at the output (x4096) scale. F_MAP is 640 and ~30
+    // features are active, so this is cheap. psqtTerm() halves it for the output add; psqt_l3
+    // additionally maps it onto a third-layer input lane (see evaluate()).
+    int32_t Network::psqtRaw(const BitPosition &position) const
     {
         if (!weights.hasPsqt)
             return 0;
@@ -286,8 +305,14 @@ namespace NNUEU
                     bp += weights.psqtW[bucket][pb * 64 + invertIndex(sq)];
                 }
             }
-        // (us - 0.5) is +/- 1/2; the difference of the two perspectives carries the factor 2.
-        return position.getTurn() ? (wp - bp) / 2 : (bp - wp) / 2;
+        return position.getTurn() ? (wp - bp) : (bp - wp);
+    }
+
+    // (us - 0.5) is +/- 1/2; the difference of the two perspectives carries the factor 2.
+    // Same truncation as the old inline `(wp - bp) / 2` / `(bp - wp) / 2` (bit-identical).
+    int32_t Network::psqtTerm(const BitPosition &position) const
+    {
+        return psqtRaw(position) / 2;
     }
 
     int16_t Network::evaluate(const BitPosition &position, NNUEU::AccumulatorStack &accumulatorStack, const Transformer &transformer) const
@@ -321,32 +346,59 @@ namespace NNUEU
             const bool white = position.getTurn();
             const int16_t *src = updatedAcc.inputTurn[white ? 0 : 1];
             std::memcpy(accBuf, src, sizeof(accBuf));
-            // same orientation as the 2nd-layer blocks: identity for white, invertIndex for black
+            // same indices as the 2nd-layer blocks (accumulation.cpp:357-360): both kings in
+            // the side-to-move's frame
             const int kTurn    = white ? wk : invertIndex(bk);
-            const int kNotTurn = white ? invertIndex(bk) : wk;
+            const int kNotTurn = white ? bk : invertIndex(wk);
             applyKingBias(accBuf, kTurn, kNotTurn);
         }
+
+#if NNUEU_PSQT_L3
+        // psqt_l3: the phase-bucketed PSQT difference is used TWICE, exactly as in training:
+        //   (a) added to the output, halved: out += ps, ps = (wpsqt-bpsqt)*(us-0.5)  -> raw/2
+        //   (b) fed to the third layer as 8 identical lanes: clamp(ps*0.25 + 0.5, 0, 1)
+        // Scale bookkeeping for (b): psqt_weights.csv is at the OUTPUT scale (x4096), so
+        // ps = raw/8192 in the model's float units; the engine's activations live at x127.
+        //   127 * clamp(0.25*(raw/8192) + 0.5, 0, 1) = clamp(raw*127/32768 + 63.5, 0, 127)
+        // computed in fixed point as floor((raw*127 + 2080768) / 32768)  [2080768 = 63.5*32768].
+        // The floor matches the engine's truncating ">>" activation convention everywhere else;
+        // the third-layer weights over these lanes then quantize at the ordinary x64 int8 grid,
+        // identical to the 64 head columns (training STE rounds the WHOLE third.weight at 1/64).
+        const int32_t psqtRawStm = psqtRaw(position);
+        const int32_t psqtAdd = psqtRawStm / 2;   // same truncation as psqtTerm()
+        const int8_t psqtLane = static_cast<int8_t>(std::clamp(
+            static_cast<int32_t>((static_cast<int64_t>(psqtRawStm) * 127 + 2080768) >> 15), 0, 127));
+#define NNUEU_PSQT_L3_ARG , psqtLane
+#define NNUEU_PSQT_OUT_TERM psqtAdd
+#else
+#define NNUEU_PSQT_L3_ARG
+#define NNUEU_PSQT_OUT_TERM psqtTerm(position)
+#endif
 
         if (position.getTurn())
         {
 #ifndef NDEBUG
-            return static_cast<int16_t>(forwardPassDebug(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn) - 2048 + materialTerm(position, transformer) + psqtTerm(position));
+            return static_cast<int16_t>(forwardPassDebug(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn NNUEU_PSQT_L3_ARG) - 2048 + materialTerm(position, transformer) + NNUEU_PSQT_OUT_TERM);
 #else
-            return static_cast<int16_t>(forwardPass(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn) - 2048 + materialTerm(position, transformer) + psqtTerm(position));
+            return static_cast<int16_t>(forwardPass(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn NNUEU_PSQT_L3_ARG) - 2048 + materialTerm(position, transformer) + NNUEU_PSQT_OUT_TERM);
 #endif
         }
 
         else
         {
 #ifndef NDEBUG
-            return static_cast<int16_t>(forwardPassDebug(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn) - 2048 + materialTerm(position, transformer) + psqtTerm(position));
+            return static_cast<int16_t>(forwardPassDebug(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn NNUEU_PSQT_L3_ARG) - 2048 + materialTerm(position, transformer) + NNUEU_PSQT_OUT_TERM);
 #else
-            return static_cast<int16_t>(forwardPass(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn) - 2048 + materialTerm(position, transformer) + psqtTerm(position));
+            return static_cast<int16_t>(forwardPass(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn NNUEU_PSQT_L3_ARG) - 2048 + materialTerm(position, transformer) + NNUEU_PSQT_OUT_TERM);
 #endif
         }
     }
 
-    int16_t Network::forwardPass(int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12) const
+    int16_t Network::forwardPass(int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12
+#if NNUEU_PSQT_L3
+                                 , int8_t psqtLane
+#endif
+                                 ) const
     // This function should pass using simd instructions an array pInput of 16 int16's through a neural network.
     // There are two first layers of 8 by 4 each taking the same pInput, after concatenating the outputs of both first layers,
     // the second layer is 8 by 4, the third layer is 4 by 1.
@@ -373,7 +425,8 @@ namespace NNUEU
             // then activate. Single-act -> CReLU only (l1 = crelu_turn ‖ crelu_nott). Dual-act -> per
             // perspective CReLU ‖ SqrCReLU, so l1 = crelu_turn ‖ sqrelu_turn ‖ crelu_nott ‖ sqrelu_nott
             // (matches the "_sq" training head: cat(CReLU(pre), SqrCReLU(pre)) per projection).
-            alignas(16) int8_t l1[HEAD_CONCAT];
+            // PSQT_L3 widens l1 to THIRD_STRIDE: 8 psqt lanes after HEAD_CONCAT, zero pad after.
+            alignas(16) int8_t l1[THIRD_STRIDE] = {0};
             for (int blk = 0; blk < 2; ++blk)
             {
                 const int8_t *pW = (blk == 0) ? pWeights11 : pWeights12;
@@ -395,14 +448,21 @@ namespace NNUEU
                         l1[outBase + SECOND_OUT_W + o] = static_cast<int8_t>((c * c) >> 7); // SqrCReLU = c^2/128
                 }
             }
-            // layer 2 (third): THIRD_OUT_W neurons, dot over HEAD_CONCAT. l2 padded up to a multiple
-            // of 16 (zero) so the final NEON 16-lane dot never over-reads when THIRD_OUT_W < 16 (h*x8).
+#if NNUEU_PSQT_L3
+            // the 8 psqt lanes all carry the SAME per-position scalar, exactly like training's
+            // `.expand(-1, 8)`; lanes THIRD_IN..THIRD_STRIDE-1 stay zero (and so do their weights).
+            for (int i = HEAD_CONCAT; i < THIRD_IN; ++i)
+                l1[i] = psqtLane;
+#endif
+            // layer 2 (third): THIRD_OUT_W neurons, dot over THIRD_STRIDE (== HEAD_CONCAT unless
+            // PSQT_L3 pads 72 -> 80). l2 padded up to a multiple of 16 (zero) so the final NEON
+            // 16-lane dot never over-reads when THIRD_OUT_W < 16 (h*x8).
             alignas(16) int8_t l2[((THIRD_OUT_W + 15) / 16) * 16] = {0};
             for (int o = 0; o < THIRD_OUT_W; ++o)
             {
-                const int8_t *w = weights.thirdW + o * HEAD_CONCAT;
+                const int8_t *w = weights.thirdW + o * THIRD_STRIDE;
                 int32x4_t acc = vdupq_n_s32(0);
-                for (int i = 0; i < HEAD_CONCAT; i += 16)
+                for (int i = 0; i < THIRD_STRIDE; i += 16)
                     acc = vdotq_s32(acc, vld1q_s8(l1 + i), vld1q_s8(w + i));
                 int32_t s = vaddvq_s32(acc) + weights.thirdBias[o];
                 l2[o] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(s >> 6))));
@@ -416,7 +476,9 @@ namespace NNUEU
             int8_t a[FIRST_OUT];
             for (int i = 0; i < FIRST_OUT; ++i)
                 a[i] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(pInput[i]))));
-            int8_t l1[HEAD_CONCAT];
+            // PSQT_L3: same widening as the NEON path -- the two MUST agree (a previous change
+            // patched only NEON and Debug/Release diverged).
+            int8_t l1[THIRD_STRIDE] = {0};
             for (int blk = 0; blk < 2; ++blk)
             {
                 const int8_t *pW = (blk == 0) ? pWeights11 : pWeights12;
@@ -437,12 +499,16 @@ namespace NNUEU
                         l1[outBase + SECOND_OUT_W + o] = static_cast<int8_t>((c * c) >> 7); // SqrCReLU = c^2/128
                 }
             }
+#if NNUEU_PSQT_L3
+            for (int i = HEAD_CONCAT; i < THIRD_IN; ++i)
+                l1[i] = psqtLane;                       // 8 identical lanes, as in training
+#endif
             int8_t l2[THIRD_OUT_W];
             for (int o = 0; o < THIRD_OUT_W; ++o)
             {
                 int32_t s = weights.thirdBias[o];
-                for (int i = 0; i < HEAD_CONCAT; ++i)
-                    s += static_cast<int32_t>(l1[i]) * static_cast<int32_t>(weights.thirdW[o * HEAD_CONCAT + i]);
+                for (int i = 0; i < THIRD_IN; ++i)
+                    s += static_cast<int32_t>(l1[i]) * static_cast<int32_t>(weights.thirdW[o * THIRD_STRIDE + i]);
                 l2[o] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(s >> 6))));
             }
             int32_t s = weights.finalBias;

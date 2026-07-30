@@ -113,11 +113,20 @@ namespace NNUEU
 
     int16_t Network::forwardPassDebug(const int16_t *pInput,
                                         const int8_t *pWeights11,
-                                        const int8_t *pWeights12) const
+                                        const int8_t *pWeights12
+#if NNUEU_PSQT_L3
+                                        , int8_t psqtLane   // pass-through: PSQT_L3 implies FIRST_OUT>=256,
+                                                            // where forwardPass IS the reference path
+#endif
+                                        ) const
     {
         int16_t fast = forwardPass(const_cast<int16_t *>(pInput), // existing SIMD routine takes non‑const
                                     pWeights11,
-                                    pWeights12);
+                                    pWeights12
+#if NNUEU_PSQT_L3
+                                    , psqtLane
+#endif
+                                    );
         // forwardPassScalar is the small-head (width-8) reference for validating the NEON path of the
         // 8/32 nets only; for ALL wide nets (>=256) forwardPass is itself the scalar reference (NEON
         // #if / scalar #else, validated externally vs the numpy/torch quant), so nothing to compare.

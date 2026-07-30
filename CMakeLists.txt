@@ -25,6 +25,10 @@ set(NNUEU_SPLIT_FT 0 CACHE STRING "NNUEU split-ft head (1 = each projection read
 add_compile_definitions(NNUEU_SPLIT_FT=${NNUEU_SPLIT_FT})
 set(NNUEU_DUAL_ACT 0 CACHE STRING "NNUEU dual activation head (1 = CReLU+SqrCReLU)")
 add_compile_definitions(NNUEU_DUAL_ACT=${NNUEU_DUAL_ACT})
+# psqt_l3 (famC): the 8 phase-bucketed PSQT sums also enter the THIRD layer as 8 extra input
+# lanes (third_layer_weights.csv rows widen to HEAD_CONCAT+8). 0 = classic head (default).
+set(NNUEU_PSQT_L3 0 CACHE STRING "NNUEU psqt_l3 head (1 = 8 PSQT lanes appended to the 3rd-layer input)")
+add_compile_definitions(NNUEU_PSQT_L3=${NNUEU_PSQT_L3})
 
 add_subdirectory(src)
 
