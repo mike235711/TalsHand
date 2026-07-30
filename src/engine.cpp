@@ -354,6 +354,7 @@ void THEngine::readUci()
         {
             std::cout << "id name La Mano de Miguelito\n"
                       << "id author Miguel Córdoba\n"
+                      << "option name EvalFile type string default " << NNUEUFile << "\n"
                       << "uciok\n"
                       << std::flush;
         }
