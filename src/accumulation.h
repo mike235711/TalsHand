@@ -87,6 +87,41 @@ namespace NNUEU
                   "SPLIT_FT needs FIRST_OUT divisible by 32 so each half stays NEON-aligned");
     static constexpr bool DUAL_ACT = (NNUEU_DUAL_ACT != 0);
     static constexpr int HEAD_CONCAT = (DUAL_ACT ? 4 : 2) * SECOND_OUT_W; // (CReLU[+SqrCReLU]) per perspective
+// psqt_l3 (famC): the 8 phase-bucketed PSQT sums skip the 2nd layer and enter the THIRD layer as
+// 8 extra input lanes (all carrying the SAME per-position scalar -- training does
+// `clamp(ps*0.25+0.5,0,1).expand(-1,8)`), on top of ALSO being added to the output (psqtTerm).
+// 0 = classic head, third layer reads exactly HEAD_CONCAT lanes and nothing changes.
+#ifndef NNUEU_PSQT_L3
+#define NNUEU_PSQT_L3 0
+#endif
+    static constexpr bool PSQT_L3 = (NNUEU_PSQT_L3 != 0);
+    static_assert(!PSQT_L3 || NNUEU_FIRST_OUT >= 256,
+                  "NNUEU_PSQT_L3 is only wired into the wide-net (>=256) forward pass");
+    // third-layer input width, and its in-memory row stride. Under PSQT_L3 the stride is padded
+    // up to a multiple of 16 (72 -> 80) so the NEON 16-lane dot loop stays remainder-free; the
+    // pad lanes are zero on BOTH sides (l1 pad and thirdW pad), so they contribute nothing.
+    static constexpr int THIRD_IN = HEAD_CONCAT + (PSQT_L3 ? 8 : 0);
+    static constexpr int THIRD_STRIDE = PSQT_L3 ? ((THIRD_IN + 15) / 16) * 16 : HEAD_CONCAT;
+// third_phase (famD): the 3rd layer's OUTPUT stack widens to 8 phase-bucketed weight sets (one
+// stack per piece-count phase bucket, the SAME 0..7 bucket psqt_sf's psqtW is indexed by), instead
+// of PSQT_L3's INPUT-side widening above. Training computes all 8 stacks and gathers the sample's
+// bucket post-hoc (it needs gradients for every stack); the engine only ever needs ONE bucket per
+// position, so it selects the slice up front and dots against ONLY that slice -- 8x cheaper than
+// computing all 8 and discarding 7. Composes with PSQT_L3: thirdW rows still live at THIRD_STRIDE
+// (the input-side padding is unaffected), but there are now 8*THIRD_OUT_W of them, bucket-major
+// (all of bucket 0's THIRD_OUT_W rows, then bucket 1's, ...) -- the exact row-major slicing
+// PyTorch's `third_pre.view(-1, 8, H2)` on a [H2*8, third_in] nn.Linear.weight produces.
+#ifndef NNUEU_THIRD_PHASE
+#define NNUEU_THIRD_PHASE 0
+#endif
+    static constexpr bool THIRD_PHASE = (NNUEU_THIRD_PHASE != 0);
+    static_assert(!THIRD_PHASE || NNUEU_FIRST_OUT >= 256,
+                  "NNUEU_THIRD_PHASE is only wired into the wide-net (>=256) forward pass");
+    static constexpr int THIRD_PHASE_BUCKETS = 8;
+    // Number of thirdW/thirdBias stacks actually stored: 8 under THIRD_PHASE, 1 otherwise. Kept as
+    // a named constant (not inlined as a ?: at each use) so the Weight struct sizes and the load()/
+    // forwardPass() row-selection math all read off one definition.
+    static constexpr int THIRD_STACKS = THIRD_PHASE ? THIRD_PHASE_BUCKETS : 1;
     // bucketed 2nd-layer weights per king square. With SPLIT_FT each neuron only spans its
     // half, so the stored block halves too -- this is what makes the export unpadded.
     static constexpr int SECOND_OUT = SPLIT_READ * SECOND_OUT_W;
