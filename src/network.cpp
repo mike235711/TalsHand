@@ -322,6 +322,33 @@ namespace NNUEU
                     bp += weights.psqtW[bucket][pb * 64 + invertIndex(sq)];
                 }
             }
+        // King-plane psqt columns (F_MAP 704/768 only -- compiles to nothing at 640). The
+        // fork's psqt_sf columns are an ordinary slice of self.input's OUTPUT, which sees every
+        // active feature including the king planes; _seed_psqt() only zeros those rows at
+        // init, and by a few epochs past psqt_freeze_epochs they carry real, non-negligible
+        // weight (measured on the famD kings_in__main epoch=9 ckpt: king rows mean|.|~=0.012 vs
+        // piece rows'~=0.164 -- not noise). Dropping them (as this function did until now) cost
+        // ~0.001-0.0015 of correlation against the true float model on real positions, small but
+        // measurable and easy to close for free: it is the SAME columns the FT/psqtW export
+        // already carries (psqtW is sized [8][F_MAP], not [8][640]), just never read.
+        // Indices mirror the FT's own convention exactly (accumulation.cpp initialize()/
+        // psqtRaw's own mirror trick above): wp uses each perspective's OWN raw king square(s),
+        // bp uses the mirrored plane at the INVERTED square (mirrorPlane swaps 10<->11 under
+        // KINGS_IN, and maps 10->10 under KING_NOTURN_IN -- see accumulation.h::mirrorPlane).
+        if constexpr (KINGS_IN)
+        {
+            const int wk = position.getKingPosition(0);
+            const int bk = position.getKingPosition(1);
+            wp += weights.psqtW[bucket][KING_OWN_BASE + wk] + weights.psqtW[bucket][KING_OPP_BASE + bk];
+            bp += weights.psqtW[bucket][KING_OPP_BASE + invertIndex(wk)] + weights.psqtW[bucket][KING_OWN_BASE + invertIndex(bk)];
+        }
+        else if constexpr (KING_NOTURN_IN)
+        {
+            const int wk = position.getKingPosition(0);
+            const int bk = position.getKingPosition(1);
+            wp += weights.psqtW[bucket][KING_OWN_BASE + bk];
+            bp += weights.psqtW[bucket][KING_OWN_BASE + invertIndex(wk)];
+        }
         return position.getTurn() ? (wp - bp) : (bp - wp);
     }
 
