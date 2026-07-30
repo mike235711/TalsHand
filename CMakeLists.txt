@@ -29,6 +29,13 @@ add_compile_definitions(NNUEU_DUAL_ACT=${NNUEU_DUAL_ACT})
 # lanes (third_layer_weights.csv rows widen to HEAD_CONCAT+8). 0 = classic head (default).
 set(NNUEU_PSQT_L3 0 CACHE STRING "NNUEU psqt_l3 head (1 = 8 PSQT lanes appended to the 3rd-layer input)")
 add_compile_definitions(NNUEU_PSQT_L3=${NNUEU_PSQT_L3})
+# third_phase (famD): the 3rd layer's OUTPUT stack widens to 8 phase-bucketed weight sets, gathered
+# by the SAME piece-count phase bucket psqt_sf already uses (third_layer_weights.csv rows widen to
+# 8*THIRD_OUT_W, bucket-major). Composes with NNUEU_PSQT_L3 (which widens the INPUT stride
+# instead): with both on, third_layer_weights.csv is 8*THIRD_OUT_W rows of THIRD_IN columns.
+# 0 = classic single-stack third layer (default).
+set(NNUEU_THIRD_PHASE 0 CACHE STRING "NNUEU third_phase head (1 = 8 phase-bucketed 3rd-layer weight stacks)")
+add_compile_definitions(NNUEU_THIRD_PHASE=${NNUEU_THIRD_PHASE})
 
 add_subdirectory(src)
 

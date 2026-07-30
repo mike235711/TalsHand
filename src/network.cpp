@@ -96,12 +96,15 @@ namespace NNUEU
     {
         try
         {
-            // third layer: THIRD_OUT_W neurons x THIRD_IN inputs (flat row-major in the CSV).
+            // third layer: THIRD_STACKS*THIRD_OUT_W neurons x THIRD_IN inputs (flat row-major in
+            // the CSV). THIRD_STACKS is 8 under NNUEU_THIRD_PHASE (bucket-major: all of bucket 0's
+            // THIRD_OUT_W rows, then bucket 1's, ... -- the same slicing PyTorch's
+            // `view(-1, 8, H2)` on a [H2*8, third_in] nn.Linear.weight produces) and 1 otherwise.
             // THIRD_IN == HEAD_CONCAT except under NNUEU_PSQT_L3, where the CSV rows carry
             // HEAD_CONCAT + 8 columns (the 8 psqt lanes) and are re-strided to THIRD_STRIDE
             // in memory (pad columns stay zero for the NEON 16-lane dot).
-            auto tempThirdLayerWeights = load_int8_1D_array(modelDir + "third_layer_weights.csv", THIRD_OUT_W * THIRD_IN);
-            for (int o = 0; o < THIRD_OUT_W; ++o)
+            auto tempThirdLayerWeights = load_int8_1D_array(modelDir + "third_layer_weights.csv", THIRD_STACKS * THIRD_OUT_W * THIRD_IN);
+            for (int o = 0; o < THIRD_STACKS * THIRD_OUT_W; ++o)
                 std::memcpy(weights.thirdW + o * THIRD_STRIDE, tempThirdLayerWeights + o * THIRD_IN,
                             sizeof(int8_t) * THIRD_IN);
             delete[] tempThirdLayerWeights;
@@ -119,8 +122,10 @@ namespace NNUEU
             delete[] tempSecondLayer1Biases;
             delete[] tempSecondLayer2Biases;
 
-            auto tempThirdLayerBiases = load_int16_array(modelDir + "third_layer_biases.csv", THIRD_OUT_W);
-            std::memcpy(weights.thirdBias, tempThirdLayerBiases, sizeof(int16_t) * THIRD_OUT_W);
+            // third_layer_biases.csv: THIRD_STACKS*THIRD_OUT_W values, same bucket-major order as
+            // the weights (bias has no per-input stride, so no re-striding needed here).
+            auto tempThirdLayerBiases = load_int16_array(modelDir + "third_layer_biases.csv", THIRD_STACKS * THIRD_OUT_W);
+            std::memcpy(weights.thirdBias, tempThirdLayerBiases, sizeof(int16_t) * THIRD_STACKS * THIRD_OUT_W);
             delete[] tempThirdLayerBiases;
 
             weights.finalBias = load_int16(modelDir + "final_layer_biases.csv");
@@ -271,6 +276,22 @@ namespace NNUEU
             acc[i] = static_cast<int16_t>(acc[i] + a[i] + b[i]);
     }
 
+    // SF's PSQT phase bucket: (n_pieces - 1) / 4 clamped to 0..7, counting ALL pieces on the
+    // board -- BOTH colours, all 6 types INCLUDING king (getPieces' pieceType 0..5 is P,N,B,R,Q,K;
+    // see bitposition.h/.cpp m_pieces[0..5]). This equals the training-side phase_bucket()'s
+    // "valid king-free-FT features + 2" exactly, since a king-free feature count already IS the
+    // non-king piece count and the "+2" is the two kings this loop counts directly.
+    // psqtRaw() (psqt_sf) and third_phase's stack selection both call this SAME function so the
+    // bucket can never drift between the two consumers.
+    int Network::phaseBucket(const BitPosition &position) const
+    {
+        int nPieces = 0;
+        for (int c = 0; c < 2; ++c)
+            for (int t = 0; t < 6; ++t)
+                nPieces += countBits(position.getPieces(c, t));
+        return std::min(7, std::max(0, (nPieces - 1) / 4));
+    }
+
     // psqt_sf: Stockfish's skip term. Sums the 8-wide PSQT row over the ACTIVE features of both
     // perspectives, picks the piece-count phase bucket, and returns the stm-signed perspective
     // difference (wpsqt - bpsqt) UNHALVED, at the output (x4096) scale. F_MAP is 640 and ~30
@@ -280,11 +301,7 @@ namespace NNUEU
     {
         if (!weights.hasPsqt)
             return 0;
-        int nPieces = 0;
-        for (int c = 0; c < 2; ++c)
-            for (int t = 0; t < 6; ++t)
-                nPieces += countBits(position.getPieces(c, t));
-        const int bucket = std::min(7, std::max(0, (nPieces - 1) / 4));
+        const int bucket = phaseBucket(position);
 
         int32_t wp = 0, bp = 0;
         for (int c = 0; c < 2; ++c)
@@ -375,21 +392,31 @@ namespace NNUEU
 #define NNUEU_PSQT_OUT_TERM psqtTerm(position)
 #endif
 
+#if NNUEU_THIRD_PHASE
+        // third_phase: pick the ONE phase-bucketed thirdW/thirdBias stack this position needs and
+        // dot only against it (see accumulation.h). Same bucket phaseBucket() gives psqtRaw() --
+        // computed once here so it can never disagree with the psqt term's bucket.
+        const int thirdBucket = phaseBucket(position);
+#define NNUEU_THIRD_PHASE_ARG , thirdBucket
+#else
+#define NNUEU_THIRD_PHASE_ARG
+#endif
+
         if (position.getTurn())
         {
 #ifndef NDEBUG
-            return static_cast<int16_t>(forwardPassDebug(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn NNUEU_PSQT_L3_ARG) - 2048 + materialTerm(position, transformer) + NNUEU_PSQT_OUT_TERM);
+            return static_cast<int16_t>(forwardPassDebug(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn NNUEU_PSQT_L3_ARG NNUEU_THIRD_PHASE_ARG) - 2048 + materialTerm(position, transformer) + NNUEU_PSQT_OUT_TERM);
 #else
-            return static_cast<int16_t>(forwardPass(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn NNUEU_PSQT_L3_ARG) - 2048 + materialTerm(position, transformer) + NNUEU_PSQT_OUT_TERM);
+            return static_cast<int16_t>(forwardPass(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[0], accumulatorStack.secondLayer1WeightsBlockWhiteTurn, accumulatorStack.secondLayer2WeightsBlockWhiteTurn NNUEU_PSQT_L3_ARG NNUEU_THIRD_PHASE_ARG) - 2048 + materialTerm(position, transformer) + NNUEU_PSQT_OUT_TERM);
 #endif
         }
 
         else
         {
 #ifndef NDEBUG
-            return static_cast<int16_t>(forwardPassDebug(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn NNUEU_PSQT_L3_ARG) - 2048 + materialTerm(position, transformer) + NNUEU_PSQT_OUT_TERM);
+            return static_cast<int16_t>(forwardPassDebug(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn NNUEU_PSQT_L3_ARG NNUEU_THIRD_PHASE_ARG) - 2048 + materialTerm(position, transformer) + NNUEU_PSQT_OUT_TERM);
 #else
-            return static_cast<int16_t>(forwardPass(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn NNUEU_PSQT_L3_ARG) - 2048 + materialTerm(position, transformer) + NNUEU_PSQT_OUT_TERM);
+            return static_cast<int16_t>(forwardPass(weights.hasKingBias ? accBuf : updatedAcc.inputTurn[1], accumulatorStack.secondLayer1WeightsBlockBlackTurn, accumulatorStack.secondLayer2WeightsBlockBlackTurn NNUEU_PSQT_L3_ARG NNUEU_THIRD_PHASE_ARG) - 2048 + materialTerm(position, transformer) + NNUEU_PSQT_OUT_TERM);
 #endif
         }
     }
@@ -397,6 +424,9 @@ namespace NNUEU
     int16_t Network::forwardPass(int16_t *pInput, const int8_t *pWeights11, const int8_t *pWeights12
 #if NNUEU_PSQT_L3
                                  , int8_t psqtLane
+#endif
+#if NNUEU_THIRD_PHASE
+                                 , int thirdBucket
 #endif
                                  ) const
     // This function should pass using simd instructions an array pInput of 16 int16's through a neural network.
@@ -412,6 +442,15 @@ namespace NNUEU
         // the numpy/torch quant reference (re-verify per shape via the Debug forwardPassDebug assert).
         if constexpr (FIRST_OUT >= 256)
         {
+#if NNUEU_THIRD_PHASE
+            // third_phase: the ONE phase-bucketed thirdW/thirdBias stack this position needs,
+            // selected up front (bucket-major: stack k's THIRD_OUT_W rows start at row k*THIRD_OUT_W).
+            // Dotting only against this slice -- not all 8 -- is the whole point: training computes
+            // all 8 because it needs gradients for every stack, the engine needs exactly one.
+            const int thirdRowBase = thirdBucket * THIRD_OUT_W;
+#else
+            constexpr int thirdRowBase = 0;
+#endif
 #if defined(__ARM_NEON)
             // activations: narrow the int16 accumulator to int8 with ReLU clamp [0,127]
             alignas(16) int8_t a[FIRST_OUT];
@@ -460,11 +499,11 @@ namespace NNUEU
             alignas(16) int8_t l2[((THIRD_OUT_W + 15) / 16) * 16] = {0};
             for (int o = 0; o < THIRD_OUT_W; ++o)
             {
-                const int8_t *w = weights.thirdW + o * THIRD_STRIDE;
+                const int8_t *w = weights.thirdW + (thirdRowBase + o) * THIRD_STRIDE;
                 int32x4_t acc = vdupq_n_s32(0);
                 for (int i = 0; i < THIRD_STRIDE; i += 16)
                     acc = vdotq_s32(acc, vld1q_s8(l1 + i), vld1q_s8(w + i));
-                int32_t s = vaddvq_s32(acc) + weights.thirdBias[o];
+                int32_t s = vaddvq_s32(acc) + weights.thirdBias[thirdRowBase + o];
                 l2[o] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(s >> 6))));
             }
             // layer 3 (final): 1 output, dot over THIRD_OUT_W
@@ -506,9 +545,9 @@ namespace NNUEU
             int8_t l2[THIRD_OUT_W];
             for (int o = 0; o < THIRD_OUT_W; ++o)
             {
-                int32_t s = weights.thirdBias[o];
+                int32_t s = weights.thirdBias[thirdRowBase + o];
                 for (int i = 0; i < THIRD_IN; ++i)
-                    s += static_cast<int32_t>(l1[i]) * static_cast<int32_t>(weights.thirdW[o * THIRD_STRIDE + i]);
+                    s += static_cast<int32_t>(l1[i]) * static_cast<int32_t>(weights.thirdW[(thirdRowBase + o) * THIRD_STRIDE + i]);
                 l2[o] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(s >> 6))));
             }
             int32_t s = weights.finalBias;

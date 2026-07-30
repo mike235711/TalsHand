@@ -118,6 +118,10 @@ namespace NNUEU
                                         , int8_t psqtLane   // pass-through: PSQT_L3 implies FIRST_OUT>=256,
                                                             // where forwardPass IS the reference path
 #endif
+#if NNUEU_THIRD_PHASE
+                                        , int thirdBucket   // pass-through: THIRD_PHASE also implies
+                                                            // FIRST_OUT>=256 (see accumulation.h)
+#endif
                                         ) const
     {
         int16_t fast = forwardPass(const_cast<int16_t *>(pInput), // existing SIMD routine takes non‑const
@@ -125,6 +129,9 @@ namespace NNUEU
                                     pWeights12
 #if NNUEU_PSQT_L3
                                     , psqtLane
+#endif
+#if NNUEU_THIRD_PHASE
+                                    , thirdBucket
 #endif
                                     );
         // forwardPassScalar is the small-head (width-8) reference for validating the NEON path of the

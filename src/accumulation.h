@@ -102,6 +102,26 @@ namespace NNUEU
     // pad lanes are zero on BOTH sides (l1 pad and thirdW pad), so they contribute nothing.
     static constexpr int THIRD_IN = HEAD_CONCAT + (PSQT_L3 ? 8 : 0);
     static constexpr int THIRD_STRIDE = PSQT_L3 ? ((THIRD_IN + 15) / 16) * 16 : HEAD_CONCAT;
+// third_phase (famD): the 3rd layer's OUTPUT stack widens to 8 phase-bucketed weight sets (one
+// stack per piece-count phase bucket, the SAME 0..7 bucket psqt_sf's psqtW is indexed by), instead
+// of PSQT_L3's INPUT-side widening above. Training computes all 8 stacks and gathers the sample's
+// bucket post-hoc (it needs gradients for every stack); the engine only ever needs ONE bucket per
+// position, so it selects the slice up front and dots against ONLY that slice -- 8x cheaper than
+// computing all 8 and discarding 7. Composes with PSQT_L3: thirdW rows still live at THIRD_STRIDE
+// (the input-side padding is unaffected), but there are now 8*THIRD_OUT_W of them, bucket-major
+// (all of bucket 0's THIRD_OUT_W rows, then bucket 1's, ...) -- the exact row-major slicing
+// PyTorch's `third_pre.view(-1, 8, H2)` on a [H2*8, third_in] nn.Linear.weight produces.
+#ifndef NNUEU_THIRD_PHASE
+#define NNUEU_THIRD_PHASE 0
+#endif
+    static constexpr bool THIRD_PHASE = (NNUEU_THIRD_PHASE != 0);
+    static_assert(!THIRD_PHASE || NNUEU_FIRST_OUT >= 256,
+                  "NNUEU_THIRD_PHASE is only wired into the wide-net (>=256) forward pass");
+    static constexpr int THIRD_PHASE_BUCKETS = 8;
+    // Number of thirdW/thirdBias stacks actually stored: 8 under THIRD_PHASE, 1 otherwise. Kept as
+    // a named constant (not inlined as a ?: at each use) so the Weight struct sizes and the load()/
+    // forwardPass() row-selection math all read off one definition.
+    static constexpr int THIRD_STACKS = THIRD_PHASE ? THIRD_PHASE_BUCKETS : 1;
     // bucketed 2nd-layer weights per king square. With SPLIT_FT each neuron only spans its
     // half, so the stored block halves too -- this is what makes the export unpadded.
     static constexpr int SECOND_OUT = SPLIT_READ * SECOND_OUT_W;
