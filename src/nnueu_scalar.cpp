@@ -120,7 +120,7 @@ namespace NNUEU
 #endif
 #if NNUEU_THIRD_PHASE
                                         , int thirdBucket   // pass-through: THIRD_PHASE also implies
-                                                            // FIRST_OUT>=256 (see accumulation.h)
+                                                            // FIRST_OUT>=128 (see accumulation.h)
 #endif
                                         ) const
     {
@@ -135,9 +135,10 @@ namespace NNUEU
 #endif
                                     );
         // forwardPassScalar is the small-head (width-8) reference for validating the NEON path of the
-        // 8/32 nets only; for ALL wide nets (>=256) forwardPass is itself the scalar reference (NEON
-        // #if / scalar #else, validated externally vs the numpy/torch quant), so nothing to compare.
-        if constexpr (FIRST_OUT < 256)
+        // 8/32 nets only; for ALL wide nets (>=128, incl. famE's HEAD_SUM arms) forwardPass is itself
+        // the scalar reference (NEON #if / scalar #else, validated externally vs the numpy/torch
+        // quant), so nothing to compare.
+        if constexpr (FIRST_OUT < 128)
         {
             int16_t slow = forwardPassScalar(pInput, pWeights11, pWeights12);
             assert(fast == slow && "NNUEU SIMD/scalar mismatch evaluation detected!");

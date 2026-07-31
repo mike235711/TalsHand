@@ -89,6 +89,45 @@ int16_t load_int16(const std::string &file_path)
 
 namespace NNUEU
 {
+#if NNUEU_HEAD_SKIP
+    // famE HEAD_SKIP: rescale a skip scalar from where it is computed to where it is added.
+    //
+    // The skip scalar is lane SECOND_OUT_W-1 of an ordinary 2nd-layer neuron's `s = dot + bias`
+    // -- the SAME "x8128" fixed point every other 2nd-layer neuron's `s` lives at before ITS OWN
+    // >>6 shift (x8128 = x64 hidden-layer-weight scale * x127 FT-activation scale; hidden-layer
+    // BIASES are quantized at that same x8128 product so `dot + bias` stays one consistent scale).
+    // It needs to land in evaluate()'s final sum, which lives at the "x4096" output scale (see
+    // engine.cpp/accumulation.h header comment: final weights x(4096/127), final bias x4096,
+    // output centered by -2048; materialTerm/psqtTerm are likewise pre-scaled to x4096 before
+    // being added there).
+    //
+    // No weight in this net supplies that x8128 -> x4096 conversion for the skip lane: it BYPASSES
+    // the 3rd layer AND the final layer, i.e. bypasses the only two places such a conversion is
+    // normally learned (an ordinary neuron gets there via >>6 (x8128->x127) then two MORE trained
+    // linear layers). Per the spec, the skip path is a straight, UNCLAMPED linear residual (no
+    // CReLU) -- nnue-pytorch's factorizer pattern (l1c_out/l1f_out folded straight into the final
+    // sum) -- so there is no natural place to hang a learned scale either.
+    //
+    // Design choice (documented here since nothing upstream forces it): treat the skip lane as an
+    // IDENTITY-weighted residual, i.e. give it exactly the per-unit contribution an ORDINARY
+    // neuron would get from a final-layer weight of 1.0. That fixes the scale to the same
+    // x8128->x127->x4096 chain an ordinary neuron gets from >>6 composed with finalW's x(4096/127)
+    // at unit weight: (1/64) * (4096/127) = 4096/8128 = 64/127 EXACTLY (no rounding in the ratio
+    // itself). Concretely: skip_output_x4096 = floor(skip_raw_x8128 * 64 / 127).
+    //
+    // 127 is not a power of two, and (unlike every other quantity in this file) the skip value is
+    // NOT ReLU'd -- it can be negative -- so this needs an explicit floor, not C++'s truncate-
+    // toward-zero `/`, to match the floor convention every `>>`-based rescale in this file already
+    // uses (see e.g. the psqt_l3 comment in evaluate() below).
+    static inline int32_t headSkipToOutputScale(int32_t skipRawX8128)
+    {
+        const int64_t num = static_cast<int64_t>(skipRawX8128) * 64; // still exact, no rounding yet
+        int64_t q = num / 127;
+        if (num % 127 != 0 && num < 0)
+            --q; // C++ '/' truncates toward zero; step down by 1 to floor negative quotients
+        return static_cast<int32_t>(q);
+    }
+#endif
 
     // No default argument here: the declaration in network.h has none (so this one was dead code
     // anyway) and the width -> net mapping has a single home, NNUEU::DefaultNetDir.
@@ -463,11 +502,12 @@ namespace NNUEU
     // The input is int16, and the weights are int8. So before multiplying we reduce int16 to int8
     // (by clipping to max int8) and clip negatives to zero before each layer pass.
     {
-        // Wide-net head (e.g. N256/512/768/1024: acc(N) -> HEAD_CONCAT -> THIRD_OUT_W -> 1).
-        // FIRST_OUT, HEAD_CONCAT and THIRD_OUT_W are all multiples of 16, so the dot loops are
-        // remainder-free for any wide width. NEON (SDOT) path; scalar fallback. Both bit-exact with
-        // the numpy/torch quant reference (re-verify per shape via the Debug forwardPassDebug assert).
-        if constexpr (FIRST_OUT >= 256)
+        // Wide-net head (e.g. N128/256/512/768/1024: acc(N) -> HEAD_OUT_W -> THIRD_OUT_W -> 1).
+        // FIRST_OUT, HEAD_OUT_W (== HEAD_CONCAT unless famE's HEAD_SUM is on) and THIRD_OUT_W are
+        // all multiples of 16, so the dot loops are remainder-free for any wide width. NEON (SDOT)
+        // path; scalar fallback. Both bit-exact with the numpy/torch quant reference (re-verify per
+        // shape via the Debug forwardPassDebug assert).
+        if constexpr (FIRST_OUT >= 128)
         {
 #if NNUEU_THIRD_PHASE
             // third_phase: the ONE phase-bucketed thirdW/thirdBias stack this position needs,
@@ -487,31 +527,80 @@ namespace NNUEU
                                           vqmovn_s16(vld1q_s16(pInput + i + 8)));
                 vst1q_s8(a + i, vmaxq_s8(v, vdupq_n_s8(0)));
             }
-            // layer 1 (second): per perspective (turn, not_turn) compute SECOND_OUT_W pre-activations
-            // then activate. Single-act -> CReLU only (l1 = crelu_turn ‖ crelu_nott). Dual-act -> per
-            // perspective CReLU ‖ SqrCReLU, so l1 = crelu_turn ‖ sqrelu_turn ‖ crelu_nott ‖ sqrelu_nott
-            // (matches the "_sq" training head: cat(CReLU(pre), SqrCReLU(pre)) per projection).
-            // PSQT_L3 widens l1 to THIRD_STRIDE: 8 psqt lanes after HEAD_CONCAT, zero pad after.
+            // layer 1 (second): per perspective (turn, not_turn) compute SECOND_OUT_W pre-activations.
+            // Classic (HEAD_SUM=0): activate each perspective SEPARATELY then concatenate.
+            // Single-act -> CReLU only (l1 = crelu_turn ‖ crelu_nott). Dual-act -> per perspective
+            // CReLU ‖ SqrCReLU, so l1 = crelu_turn ‖ sqrelu_turn ‖ crelu_nott ‖ sqrelu_nott (matches
+            // the "_sq" training head: cat(CReLU(pre), SqrCReLU(pre)) per projection).
+            // famE (HEAD_SUM=1): SUM the two perspectives' RAW pre-activation outputs into ONE
+            // HEAD_SUM_RAW_W-wide vector FIRST, and activate only the sum (see accumulation.h's
+            // HEAD_SUM_* constants). Under HEAD_SKIP, lane SECOND_OUT_W-1 of EACH perspective never
+            // joins the sum -- it is carried as a separate "skip scalar" and folded straight into
+            // the final output below (bypassing the summed/activated path and the 3rd/final layers).
+            // PSQT_L3 widens l1 to THIRD_STRIDE: 8 psqt lanes after HEAD_OUT_W, zero pad after
+            // (PSQT_L3 cannot coexist with HEAD_SUM -- see accumulation.h's static_assert).
             alignas(16) int8_t l1[THIRD_STRIDE] = {0};
-            for (int blk = 0; blk < 2; ++blk)
+#if NNUEU_HEAD_SKIP
+            int32_t skipTurnRaw = 0, skipNottRaw = 0; // x8128 scale (dot + bias, unshifted, unclamped)
+#endif
+            if constexpr (HEAD_SUM)
             {
-                const int8_t *pW = (blk == 0) ? pWeights11 : pWeights12;
-                const int biasBase = blk * SECOND_OUT_W;                 // secondBias: turn then not_turn
-                const int outBase = blk * (DUAL_ACT ? 2 : 1) * SECOND_OUT_W;
-                // SPLIT_FT: this projection reads only its own half of the accumulator,
-                // and its weights are stored at that same (halved) stride.
-                const int8_t *aBlk = a + (SPLIT_FT ? blk * SPLIT_READ : 0);
-                for (int o = 0; o < SECOND_OUT_W; ++o)
+                int32_t combined[HEAD_SUM_RAW_W];
+                for (int blk = 0; blk < 2; ++blk)
                 {
-                    const int8_t *w = pW + o * SPLIT_READ;
-                    int32x4_t acc = vdupq_n_s32(0);
-                    for (int i = 0; i < SPLIT_READ; i += 16)
-                        acc = vdotq_s32(acc, vld1q_s8(aBlk + i), vld1q_s8(w + i));
-                    int32_t s = vaddvq_s32(acc) + weights.secondBias[biasBase + o];
-                    const int c = std::min(127, std::max(0, static_cast<int>(s >> 6)));
-                    l1[outBase + o] = static_cast<int8_t>(c); // CReLU
+                    const int8_t *pW = (blk == 0) ? pWeights11 : pWeights12;
+                    const int biasBase = blk * SECOND_OUT_W;
+                    const int8_t *aBlk = a + (SPLIT_FT ? blk * SPLIT_READ : 0);
+                    for (int o = 0; o < SECOND_OUT_W; ++o)
+                    {
+                        const int8_t *w = pW + o * SPLIT_READ;
+                        int32x4_t acc = vdupq_n_s32(0);
+                        for (int i = 0; i < SPLIT_READ; i += 16)
+                            acc = vdotq_s32(acc, vld1q_s8(aBlk + i), vld1q_s8(w + i));
+                        const int32_t s = vaddvq_s32(acc) + weights.secondBias[biasBase + o];
+#if NNUEU_HEAD_SKIP
+                        if (o == SECOND_OUT_W - 1)
+                        {
+                            (blk == 0 ? skipTurnRaw : skipNottRaw) = s;
+                            continue;
+                        }
+#endif
+                        if (blk == 0)
+                            combined[o] = s;
+                        else
+                            combined[o] += s;
+                    }
+                }
+                for (int o = 0; o < HEAD_SUM_RAW_W; ++o)
+                {
+                    const int c = std::min(127, std::max(0, static_cast<int>(combined[o] >> 6)));
+                    l1[o] = static_cast<int8_t>(c); // CReLU(combined)
                     if constexpr (DUAL_ACT)
-                        l1[outBase + SECOND_OUT_W + o] = static_cast<int8_t>((c * c) >> 7); // SqrCReLU = c^2/128
+                        l1[HEAD_SUM_RAW_W + o] = static_cast<int8_t>((c * c) >> 7); // SqrCReLU(combined)
+                }
+            }
+            else
+            {
+                for (int blk = 0; blk < 2; ++blk)
+                {
+                    const int8_t *pW = (blk == 0) ? pWeights11 : pWeights12;
+                    const int biasBase = blk * SECOND_OUT_W;                 // secondBias: turn then not_turn
+                    const int outBase = blk * (DUAL_ACT ? 2 : 1) * SECOND_OUT_W;
+                    // SPLIT_FT: this projection reads only its own half of the accumulator,
+                    // and its weights are stored at that same (halved) stride.
+                    const int8_t *aBlk = a + (SPLIT_FT ? blk * SPLIT_READ : 0);
+                    for (int o = 0; o < SECOND_OUT_W; ++o)
+                    {
+                        const int8_t *w = pW + o * SPLIT_READ;
+                        int32x4_t acc = vdupq_n_s32(0);
+                        for (int i = 0; i < SPLIT_READ; i += 16)
+                            acc = vdotq_s32(acc, vld1q_s8(aBlk + i), vld1q_s8(w + i));
+                        int32_t s = vaddvq_s32(acc) + weights.secondBias[biasBase + o];
+                        const int c = std::min(127, std::max(0, static_cast<int>(s >> 6)));
+                        l1[outBase + o] = static_cast<int8_t>(c); // CReLU
+                        if constexpr (DUAL_ACT)
+                            l1[outBase + SECOND_OUT_W + o] = static_cast<int8_t>((c * c) >> 7); // SqrCReLU = c^2/128
+                    }
                 }
             }
 #if NNUEU_PSQT_L3
@@ -520,7 +609,7 @@ namespace NNUEU
             for (int i = HEAD_CONCAT; i < THIRD_IN; ++i)
                 l1[i] = psqtLane;
 #endif
-            // layer 2 (third): THIRD_OUT_W neurons, dot over THIRD_STRIDE (== HEAD_CONCAT unless
+            // layer 2 (third): THIRD_OUT_W neurons, dot over THIRD_STRIDE (== HEAD_OUT_W unless
             // PSQT_L3 pads 72 -> 80). l2 padded up to a multiple of 16 (zero) so the final NEON
             // 16-lane dot never over-reads when THIRD_OUT_W < 16 (h*x8).
             alignas(16) int8_t l2[((THIRD_OUT_W + 15) / 16) * 16] = {0};
@@ -537,32 +626,79 @@ namespace NNUEU
             int32x4_t accf = vdupq_n_s32(0);
             for (int i = 0; i < THIRD_OUT_W; i += 16)
                 accf = vdotq_s32(accf, vld1q_s8(l2 + i), vld1q_s8(weights.finalW + i));
-            return static_cast<int16_t>(vaddvq_s32(accf) + weights.finalBias);
+            int32_t finalResult = vaddvq_s32(accf) + weights.finalBias;
+#if NNUEU_HEAD_SKIP
+            // famE: fold the two skip scalars straight into the final output, at the fixed-point
+            // scale derived in headSkipToOutputScale()'s comment above.
+            finalResult += headSkipToOutputScale(skipTurnRaw) + headSkipToOutputScale(skipNottRaw);
+#endif
+            return static_cast<int16_t>(finalResult);
 #else
             int8_t a[FIRST_OUT];
             for (int i = 0; i < FIRST_OUT; ++i)
                 a[i] = static_cast<int8_t>(std::min(127, std::max(0, static_cast<int>(pInput[i]))));
-            // PSQT_L3: same widening as the NEON path -- the two MUST agree (a previous change
-            // patched only NEON and Debug/Release diverged).
+            // PSQT_L3/HEAD_SUM: same widening/restructuring as the NEON path -- the two MUST agree
+            // (a previous change patched only NEON and Debug/Release diverged).
             int8_t l1[THIRD_STRIDE] = {0};
-            for (int blk = 0; blk < 2; ++blk)
+#if NNUEU_HEAD_SKIP
+            int32_t skipTurnRaw = 0, skipNottRaw = 0; // x8128 scale (dot + bias, unshifted, unclamped)
+#endif
+            if constexpr (HEAD_SUM)
             {
-                const int8_t *pW = (blk == 0) ? pWeights11 : pWeights12;
-                const int biasBase = blk * SECOND_OUT_W;
-                const int outBase = blk * (DUAL_ACT ? 2 : 1) * SECOND_OUT_W;
-                for (int o = 0; o < SECOND_OUT_W; ++o)
+                int32_t combined[HEAD_SUM_RAW_W];
+                for (int blk = 0; blk < 2; ++blk)
                 {
-                    // SPLIT_FT: same halving as the NEON path -- the two MUST agree, or a Debug
-                    // build would evaluate differently from Release and nothing would look broken.
+                    const int8_t *pW = (blk == 0) ? pWeights11 : pWeights12;
+                    const int biasBase = blk * SECOND_OUT_W;
                     const int8_t *aBlk = a + (SPLIT_FT ? blk * SPLIT_READ : 0);
-                    const int8_t *w = pW + o * SPLIT_READ;
-                    int32_t s = weights.secondBias[biasBase + o];
-                    for (int i = 0; i < SPLIT_READ; ++i)
-                        s += static_cast<int32_t>(aBlk[i]) * static_cast<int32_t>(w[i]);
-                    const int c = std::min(127, std::max(0, static_cast<int>(s >> 6)));
-                    l1[outBase + o] = static_cast<int8_t>(c); // CReLU
+                    for (int o = 0; o < SECOND_OUT_W; ++o)
+                    {
+                        const int8_t *w = pW + o * SPLIT_READ;
+                        int32_t s = weights.secondBias[biasBase + o];
+                        for (int i = 0; i < SPLIT_READ; ++i)
+                            s += static_cast<int32_t>(aBlk[i]) * static_cast<int32_t>(w[i]);
+#if NNUEU_HEAD_SKIP
+                        if (o == SECOND_OUT_W - 1)
+                        {
+                            (blk == 0 ? skipTurnRaw : skipNottRaw) = s;
+                            continue;
+                        }
+#endif
+                        if (blk == 0)
+                            combined[o] = s;
+                        else
+                            combined[o] += s;
+                    }
+                }
+                for (int o = 0; o < HEAD_SUM_RAW_W; ++o)
+                {
+                    const int c = std::min(127, std::max(0, static_cast<int>(combined[o] >> 6)));
+                    l1[o] = static_cast<int8_t>(c); // CReLU(combined)
                     if constexpr (DUAL_ACT)
-                        l1[outBase + SECOND_OUT_W + o] = static_cast<int8_t>((c * c) >> 7); // SqrCReLU = c^2/128
+                        l1[HEAD_SUM_RAW_W + o] = static_cast<int8_t>((c * c) >> 7); // SqrCReLU(combined)
+                }
+            }
+            else
+            {
+                for (int blk = 0; blk < 2; ++blk)
+                {
+                    const int8_t *pW = (blk == 0) ? pWeights11 : pWeights12;
+                    const int biasBase = blk * SECOND_OUT_W;
+                    const int outBase = blk * (DUAL_ACT ? 2 : 1) * SECOND_OUT_W;
+                    for (int o = 0; o < SECOND_OUT_W; ++o)
+                    {
+                        // SPLIT_FT: same halving as the NEON path -- the two MUST agree, or a Debug
+                        // build would evaluate differently from Release and nothing would look broken.
+                        const int8_t *aBlk = a + (SPLIT_FT ? blk * SPLIT_READ : 0);
+                        const int8_t *w = pW + o * SPLIT_READ;
+                        int32_t s = weights.secondBias[biasBase + o];
+                        for (int i = 0; i < SPLIT_READ; ++i)
+                            s += static_cast<int32_t>(aBlk[i]) * static_cast<int32_t>(w[i]);
+                        const int c = std::min(127, std::max(0, static_cast<int>(s >> 6)));
+                        l1[outBase + o] = static_cast<int8_t>(c); // CReLU
+                        if constexpr (DUAL_ACT)
+                            l1[outBase + SECOND_OUT_W + o] = static_cast<int8_t>((c * c) >> 7); // SqrCReLU = c^2/128
+                    }
                 }
             }
 #if NNUEU_PSQT_L3
@@ -580,6 +716,9 @@ namespace NNUEU
             int32_t s = weights.finalBias;
             for (int i = 0; i < THIRD_OUT_W; ++i)
                 s += static_cast<int32_t>(l2[i]) * static_cast<int32_t>(weights.finalW[i]);
+#if NNUEU_HEAD_SKIP
+            s += headSkipToOutputScale(skipTurnRaw) + headSkipToOutputScale(skipNottRaw);
+#endif
             return static_cast<int16_t>(s);
 #endif
         }

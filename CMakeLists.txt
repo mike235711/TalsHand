@@ -36,6 +36,17 @@ add_compile_definitions(NNUEU_PSQT_L3=${NNUEU_PSQT_L3})
 # 0 = classic single-stack third layer (default).
 set(NNUEU_THIRD_PHASE 0 CACHE STRING "NNUEU third_phase head (1 = 8 phase-bucketed 3rd-layer weight stacks)")
 add_compile_definitions(NNUEU_THIRD_PHASE=${NNUEU_THIRD_PHASE})
+# famE: HEAD_SUM sums the two perspectives' RAW (pre-activation) 2nd-layer outputs into ONE vector
+# and activates ONLY the sum, instead of activating each perspective separately and concatenating.
+# 0 = classic concat head (default, every existing arm). Needs NNUEU_FIRST_OUT >= 128.
+set(NNUEU_HEAD_SUM 0 CACHE STRING "NNUEU famE head (1 = sum-then-activate the two perspectives instead of concat)")
+add_compile_definitions(NNUEU_HEAD_SUM=${NNUEU_HEAD_SUM})
+# famE: HEAD_SKIP carves the LAST lane of each perspective's raw 2nd-layer output out of the sum
+# above and folds it straight into the final output, bypassing the 3rd/final layers (a linear
+# residual/factorizer connection, unclamped). Only meaningful with NNUEU_HEAD_SUM=1.
+# 0 = no skip scalar, all lanes are summed (default).
+set(NNUEU_HEAD_SKIP 0 CACHE STRING "NNUEU famE skip-scalar residual (1 = last 2nd-layer lane bypasses to the final output)")
+add_compile_definitions(NNUEU_HEAD_SKIP=${NNUEU_HEAD_SKIP})
 
 add_subdirectory(src)
 

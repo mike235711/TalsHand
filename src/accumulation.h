@@ -36,9 +36,14 @@ namespace NNUEU
 #ifndef NNUEU_DUAL_ACT
 #define NNUEU_DUAL_ACT 0
 #endif
+    // The wide-net forward pass (network.cpp's `if constexpr (FIRST_OUT >= 128)` branch) was
+    // originally exercised only at >=256 (N256/N512); famE's HEAD_SUM/HEAD_SKIP arms need N=128
+    // too (2*128=256 post-split_ft accumulator, Miguel's "256"), and the wide-net code is already
+    // generic in FIRST_OUT (NEON loops step by 16, SPLIT_FT needs %32==0) -- 128 was never
+    // unsound, just untested below 256, so the floor moves down rather than adding a new branch.
     static_assert(NNUEU_FIRST_OUT == 8 || NNUEU_FIRST_OUT == 32
-                      || (NNUEU_FIRST_OUT >= 256 && NNUEU_FIRST_OUT % 16 == 0),
-                  "NNUEU_FIRST_OUT must be 8, 32, or a wide width >= 256 and divisible by 16");
+                      || (NNUEU_FIRST_OUT >= 128 && NNUEU_FIRST_OUT % 16 == 0),
+                  "NNUEU_FIRST_OUT must be 8, 32, or a wide width >= 128 and divisible by 16");
 #ifndef NNUEU_F_MAP
 #define NNUEU_F_MAP 640
 #endif
@@ -87,21 +92,70 @@ namespace NNUEU
                   "SPLIT_FT needs FIRST_OUT divisible by 32 so each half stays NEON-aligned");
     static constexpr bool DUAL_ACT = (NNUEU_DUAL_ACT != 0);
     static constexpr int HEAD_CONCAT = (DUAL_ACT ? 4 : 2) * SECOND_OUT_W; // (CReLU[+SqrCReLU]) per perspective
+    // ^ HEAD_CONCAT is ALSO what sizes network.h's Weight::secondBias[HEAD_CONCAT] (the RAW,
+    // pre-activation per-(block,neuron) bias -- 2*SECOND_OUT_W entries are actually indexed, in
+    // EVERY mode including HEAD_SUM below; HEAD_CONCAT is always >= that, dual_act or not). Its
+    // formula stays exactly as it always was for that reason: HEAD_SUM changes what the 3rd layer
+    // reads (see HEAD_OUT_W below), never how the bias array is sized.
+
+// famE: HEAD_SUM replaces "activate each perspective separately, then concatenate" with "SUM the
+// two perspectives' RAW (pre-activation, pre-clamp) 2nd-layer outputs into ONE vector, and only
+// THEN apply CReLU[+SqrCReLU]" (see network.cpp forwardPass). 0 = today's concat behaviour,
+// unchanged for every existing arm (w8/w32/N256/N512).
+#ifndef NNUEU_HEAD_SUM
+#define NNUEU_HEAD_SUM 0
+#endif
+    static constexpr bool HEAD_SUM = (NNUEU_HEAD_SUM != 0);
+    static_assert(!HEAD_SUM || NNUEU_FIRST_OUT >= 128,
+                  "NNUEU_HEAD_SUM is only wired into the wide-net (>=128) forward pass");
+    static_assert(!HEAD_SUM || SECOND_OUT_W >= 2,
+                  "NNUEU_HEAD_SUM needs SECOND_OUT_W >= 2 (HEAD_SKIP additionally reserves one "
+                  "lane as the skip scalar, so needs SECOND_OUT_W >= 2 to leave >=1 summed lane)");
+
+// famE: HEAD_SKIP carves the LAST lane (index SECOND_OUT_W-1) of EACH perspective's raw 2nd-layer
+// output out of the sum above and treats it as a "skip scalar" that bypasses the summed/activated
+// path AND the 3rd and final layers' trained weights entirely -- nnue-pytorch's LayerStacks
+// factorizer-residual pattern (l1c_out/l1f_out folded straight into the final sum, unclamped).
+// The two skip scalars are carried separately (never summed with each other or with the combined
+// vector) and added directly into evaluate()'s final output, at a fixed-point scale derived in
+// network.cpp (see the HEAD_SKIP comment in forwardPass). Only meaningful when HEAD_SUM=1.
+// 0 = no skip scalar, all SECOND_OUT_W lanes are summed (default).
+#ifndef NNUEU_HEAD_SKIP
+#define NNUEU_HEAD_SKIP 0
+#endif
+    static constexpr bool HEAD_SKIP = (NNUEU_HEAD_SKIP != 0);
+    static_assert(!HEAD_SKIP || HEAD_SUM, "NNUEU_HEAD_SKIP requires NNUEU_HEAD_SUM=1");
+
+    // Width of the summed vector BEFORE the dual-act cat: H1, minus the skip lane under HEAD_SKIP.
+    static constexpr int HEAD_SUM_RAW_W = SECOND_OUT_W - (HEAD_SKIP ? 1 : 0);
+    // 3rd-layer input width under HEAD_SUM: cat(CReLU(combined), SqrCReLU(combined)) since famE
+    // always has DUAL_ACT=1 (kept general here to match HEAD_CONCAT's own DUAL_ACT ternary).
+    static constexpr int HEAD_SUM_OUT_W = (DUAL_ACT ? 2 : 1) * HEAD_SUM_RAW_W;
+    // The 3rd-layer input width THIS build actually uses: HEAD_SUM_OUT_W under HEAD_SUM, else the
+    // classic HEAD_CONCAT. THIRD_IN/THIRD_STRIDE below read this (not HEAD_CONCAT directly), so
+    // HEAD_SUM's narrower (HEAD_SKIP) or equal-width vector propagates everywhere exactly once.
+    static constexpr int HEAD_OUT_W = HEAD_SUM ? HEAD_SUM_OUT_W : HEAD_CONCAT;
+
 // psqt_l3 (famC): the 8 phase-bucketed PSQT sums skip the 2nd layer and enter the THIRD layer as
 // 8 extra input lanes (all carrying the SAME per-position scalar -- training does
 // `clamp(ps*0.25+0.5,0,1).expand(-1,8)`), on top of ALSO being added to the output (psqtTerm).
-// 0 = classic head, third layer reads exactly HEAD_CONCAT lanes and nothing changes.
+// 0 = classic head, third layer reads exactly HEAD_OUT_W lanes and nothing changes.
 #ifndef NNUEU_PSQT_L3
 #define NNUEU_PSQT_L3 0
 #endif
     static constexpr bool PSQT_L3 = (NNUEU_PSQT_L3 != 0);
     static_assert(!PSQT_L3 || NNUEU_FIRST_OUT >= 256,
                   "NNUEU_PSQT_L3 is only wired into the wide-net (>=256) forward pass");
+    // Not (yet) designed together: PSQT_L3 pads THIRD_STRIDE and stuffs a shared scalar into the
+    // pad columns, which forwardPass's HEAD_SUM branch below does not build -- fail loudly at
+    // compile time instead of silently mis-slicing l1 if someone turns both on.
+    static_assert(!(HEAD_SUM && PSQT_L3),
+                  "NNUEU_HEAD_SUM composing with NNUEU_PSQT_L3 is not implemented");
     // third-layer input width, and its in-memory row stride. Under PSQT_L3 the stride is padded
     // up to a multiple of 16 (72 -> 80) so the NEON 16-lane dot loop stays remainder-free; the
     // pad lanes are zero on BOTH sides (l1 pad and thirdW pad), so they contribute nothing.
-    static constexpr int THIRD_IN = HEAD_CONCAT + (PSQT_L3 ? 8 : 0);
-    static constexpr int THIRD_STRIDE = PSQT_L3 ? ((THIRD_IN + 15) / 16) * 16 : HEAD_CONCAT;
+    static constexpr int THIRD_IN = HEAD_OUT_W + (PSQT_L3 ? 8 : 0);
+    static constexpr int THIRD_STRIDE = PSQT_L3 ? ((THIRD_IN + 15) / 16) * 16 : HEAD_OUT_W;
 // third_phase (famD): the 3rd layer's OUTPUT stack widens to 8 phase-bucketed weight sets (one
 // stack per piece-count phase bucket, the SAME 0..7 bucket psqt_sf's psqtW is indexed by), instead
 // of PSQT_L3's INPUT-side widening above. Training computes all 8 stacks and gathers the sample's
@@ -115,8 +169,8 @@ namespace NNUEU
 #define NNUEU_THIRD_PHASE 0
 #endif
     static constexpr bool THIRD_PHASE = (NNUEU_THIRD_PHASE != 0);
-    static_assert(!THIRD_PHASE || NNUEU_FIRST_OUT >= 256,
-                  "NNUEU_THIRD_PHASE is only wired into the wide-net (>=256) forward pass");
+    static_assert(!THIRD_PHASE || NNUEU_FIRST_OUT >= 128,
+                  "NNUEU_THIRD_PHASE is only wired into the wide-net (>=128) forward pass");
     static constexpr int THIRD_PHASE_BUCKETS = 8;
     // Number of thirdW/thirdBias stacks actually stored: 8 under THIRD_PHASE, 1 otherwise. Kept as
     // a named constant (not inlined as a ?: at each use) so the Weight struct sizes and the load()/
