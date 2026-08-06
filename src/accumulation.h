@@ -154,8 +154,24 @@ namespace NNUEU
     // third-layer input width, and its in-memory row stride. Under PSQT_L3 the stride is padded
     // up to a multiple of 16 (72 -> 80) so the NEON 16-lane dot loop stays remainder-free; the
     // pad lanes are zero on BOTH sides (l1 pad and thirdW pad), so they contribute nothing.
+    //
+    // HEAD_SUM needs the SAME padding, and for the same reason: under HEAD_SKIP the summed vector
+    // is 2*(SECOND_OUT_W-1) wide, which is NOT a multiple of 16 (H1=16 -> 30). forwardPass's NEON
+    // third-layer dot steps i += 16 over THIRD_STRIDE, so an unpadded 30 would make the i=16
+    // iteration read l1[16..31] -- 2 bytes past a 30-byte l1 -- and w[16..31], 2 bytes past the
+    // row into the NEXT row's real weights. That read is out of bounds; it happened to give the
+    // right answer only because clang rounds the alignas(16) l1 slot up to 32 bytes and zeroes it,
+    // so the two stray l1 lanes multiplied the stray weights by 0. Padding the stride to 32 makes
+    // the zero-ness a guarantee (thirdW is zero-initialised and load() copies only THIRD_IN
+    // columns per row, so the pad columns are genuinely zero) instead of a stack-layout accident.
     static constexpr int THIRD_IN = HEAD_OUT_W + (PSQT_L3 ? 8 : 0);
-    static constexpr int THIRD_STRIDE = PSQT_L3 ? ((THIRD_IN + 15) / 16) * 16 : HEAD_OUT_W;
+    static constexpr int THIRD_STRIDE =
+        (PSQT_L3 || HEAD_SUM) ? ((THIRD_IN + 15) / 16) * 16 : HEAD_OUT_W;
+    // The wide-net (FIRST_OUT >= 128) forward pass dots the third layer 16 lanes at a time, so the
+    // stride MUST be a multiple of 16 there. Asserting it here turns "a new head shape silently
+    // reads out of bounds" into a build failure -- the failure mode HEAD_SKIP hit above.
+    static_assert(NNUEU_FIRST_OUT < 128 || THIRD_STRIDE % 16 == 0,
+                  "wide-net THIRD_STRIDE must be a multiple of 16 (NEON 16-lane third-layer dot)");
 // third_phase (famD): the 3rd layer's OUTPUT stack widens to 8 phase-bucketed weight sets (one
 // stack per piece-count phase bucket, the SAME 0..7 bucket psqt_sf's psqtW is indexed by), instead
 // of PSQT_L3's INPUT-side widening above. Training computes all 8 stacks and gathers the sample's
