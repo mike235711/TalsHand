@@ -603,8 +603,22 @@ void THEngine::loadNNUEU()
         std::cerr << "Error: NNUEU weights not found: " << p << '\n';
         std::exit(EXIT_FAILURE);
     }
-    transformer->load(p.string());
-    network.load(p.string());
+    // Both loaders now REFUSE a net whose CSV shapes disagree with this build's compile-time
+    // geometry (see load_int8_1D_array / load_int8_2D_array1). Report it: the return value used
+    // to be dropped, so a refused — or, before the bounds check, an overflowing — load looked
+    // exactly like a good one. Deliberately NOT std::exit(): the default net is only a guess
+    // from NNUEU::DefaultNetDir, and the process has to survive to accept the `setoption name
+    // EvalFile` that every sweep/verification harness sends immediately afterwards.
+    const bool tOk = transformer->load(p.string());
+    const bool nOk = network.load(p.string());
+    if (!tOk || !nOk)
+        std::cerr << "Error: NNUEU weights at " << p << " do not match this build's geometry"
+                  << " (FIRST_OUT=" << NNUEU::FIRST_OUT
+                  << " SECOND_OUT=" << NNUEU::SECOND_OUT_W
+                  << " THIRD_OUT=" << NNUEU::THIRD_OUT_W
+                  << " F_MAP=" << NNUEU::F_MAP
+                  << ") -- the net is NOT loaded. Point EvalFile at a matching directory"
+                     " (each famE arm ships an arm.json with the cmake line it needs).\n";
     threadpool.clear();
 }
 

@@ -21,7 +21,11 @@ famE's fixed architecture (see accumulation.h / network.cpp for the authoritativ
     bypasses the summed/activated path AND the 3rd/final layers, added straight into the final
     output at a fixed-point scale derived in network.cpp's `headSkipToOutputScale()` comment
     (repeated below).
-  - Varies: N (NNUEU_FIRST_OUT) in {128, 256}, H2 (NNUEU_THIRD_OUT) in {16, 32}, HEAD_SKIP in {0,1}.
+  - Varies: N (NNUEU_FIRST_OUT) in {256, 512}, H2 (NNUEU_THIRD_OUT) in {16, 32}, HEAD_SKIP in {0,1}.
+    UNITS: NNUEU_FIRST_OUT is the WHOLE accumulator. Under SPLIT_FT each perspective reads half
+    of it, so these are the trainer's/Miguel's N = 128 and 256 (`--nnueu-N`), and the build
+    directories are build_famE/N256_* and N512_*. Pairing a net exported for one width with a
+    binary built for the other loads SILENTLY with scrambled king buckets -- see arm.json.
 
 On-grid weights
 ----------------
@@ -35,7 +39,7 @@ intermediate float rounding step to confound the comparison. That is exactly wha
 
 Usage:
     python3 scripts/famE_verify.py --root /path/to/worktree \
-        --configs 128:16:0 128:16:1 256:32:1 128:32:0 128:32:1 256:16:0 256:16:1 256:32:0
+        --configs 256:16:0 256:16:1 256:32:0 256:32:1 512:16:0 512:16:1 512:32:0 512:32:1
 
 Each prebuilt engine binary is expected at
     <root>/build_famE/N<N>_H<H2>_SK<SKIP>/src/talshand_exe
@@ -120,7 +124,7 @@ def phase_bucket(n_pieces: int) -> int:
 
 @dataclass(frozen=True)
 class FamEConfig:
-    n: int          # NNUEU_FIRST_OUT: 128 or 256
+    n: int          # NNUEU_FIRST_OUT (the WHOLE accumulator): 256 or 512
     h2: int         # NNUEU_THIRD_OUT: 16 or 32
     head_skip: int  # NNUEU_HEAD_SKIP: 0 or 1
 
@@ -138,7 +142,11 @@ class FamEConfig:
 
     @property
     def third_in(self) -> int:
-        return self.head_out_w  # PSQT_L3=0 always for famE, so THIRD_STRIDE == THIRD_IN == HEAD_OUT_W
+        # PSQT_L3=0 always for famE, so THIRD_IN == HEAD_OUT_W.  NOT the same as THIRD_STRIDE:
+        # accumulation.h pads THIRD_STRIDE up to a multiple of 16 under HEAD_SUM, so under
+        # HEAD_SKIP (H1=16) THIRD_IN is 30 while THIRD_STRIDE is 32.  The CSV carries THIRD_IN
+        # columns per row; the engine re-strides them on load and leaves the pad columns zero.
+        return self.head_out_w
 
     def name(self) -> str:
         return f"N{self.n}_H{self.h2}_SK{self.head_skip}"
@@ -221,6 +229,23 @@ def write_model_dir(out_dir: Path, cfg: FamEConfig, w: Weights) -> None:
     _write_rows(out_dir / "final_layer_weights.csv", w.final_w.reshape(1, -1))
     _write_lines(out_dir / "final_layer_biases.csv", [w.final_bias])
     _write_rows(out_dir / "psqt_weights.csv", w.psqt_w)                      # [8, F_MAP]
+    # arm.json: the cmake line this directory needs, written NEXT TO the weights.
+    # A net directory and a binary pair silently -- an N256 net in an N512 build used to load
+    # with exit 0, empty stderr and a scrambled king-bucket table (startpos eval -26250 correct
+    # vs -9426 mismatched). The engine now refuses such a pair, but it can only refuse what it
+    # can see; this file is what a human (or a script) reads to build the right binary.
+    import json
+    (out_dir / "arm.json").write_text(json.dumps({
+        "build_dir": cfg.name(),
+        "cmake_args": cfg.cmake_args(),
+        "cmake": "cmake -S . -B build_famE/%s %s -DCMAKE_BUILD_TYPE=Release"
+                 % (cfg.name(), " ".join(cfg.cmake_args())),
+        "nnueu_first_out": cfg.n,
+        "trainer_nnueu_N": cfg.split_read,
+        "note": "NNUEU_FIRST_OUT is the WHOLE accumulator; the trainer's --nnueu-N is half of "
+                "it under SPLIT_FT. Loading this directory in a binary built with different "
+                "widths is refused by the engine's shape checks.",
+    }, indent=1) + "\n")
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +312,10 @@ def numpy_forward_eval(fen: str, cfg: FamEConfig, w: Weights) -> int:
 
     c = np.clip(combined >> 6, 0, 127)          # CReLU(combined); Python >> is floor, matches C++20
     sq_c = (c * c) >> 7                         # SqrCReLU(combined)
-    l1 = np.concatenate([c, sq_c]).astype(np.int64)  # width HEAD_OUT_W == THIRD_IN == THIRD_STRIDE
+    # width HEAD_OUT_W == THIRD_IN (30 under HEAD_SKIP, 32 otherwise).  The engine's in-memory
+    # THIRD_STRIDE is padded to a multiple of 16 and can be WIDER than this; the pad lanes are
+    # zero on both sides, so a reference that stops at THIRD_IN computes the same dot product.
+    l1 = np.concatenate([c, sq_c]).astype(np.int64)
 
     n_pieces = len(board.piece_map())
     bucket = phase_bucket(n_pieces)
@@ -423,7 +451,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1],
                      help="worktree root containing build_famE/<name>/src/talshand_exe")
-    ap.add_argument("--configs", nargs="+", default=["128:16:0", "128:16:1", "256:32:1"],
+    ap.add_argument("--configs", nargs="+", default=["256:16:0", "256:16:1", "512:32:1"],
                      help="N:H2:HEAD_SKIP triples")
     ap.add_argument("--seed", type=int, default=20260731)
     ap.add_argument("--out-dir", type=Path, default=None,

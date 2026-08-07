@@ -37,10 +37,17 @@ namespace NNUEU
 #define NNUEU_DUAL_ACT 0
 #endif
     // The wide-net forward pass (network.cpp's `if constexpr (FIRST_OUT >= 128)` branch) was
-    // originally exercised only at >=256 (N256/N512); famE's HEAD_SUM/HEAD_SKIP arms need N=128
-    // too (2*128=256 post-split_ft accumulator, Miguel's "256"), and the wide-net code is already
-    // generic in FIRST_OUT (NEON loops step by 16, SPLIT_FT needs %32==0) -- 128 was never
-    // unsound, just untested below 256, so the floor moves down rather than adding a new branch.
+    // originally exercised only at >=256 (N256/N512). The floor sits at 128 because the wide-net
+    // code is already generic in FIRST_OUT (NEON loops step by 16, SPLIT_FT needs %32==0) -- 128
+    // was never unsound, just untested -- so the floor moved down rather than adding a branch.
+    //
+    // UNITS (this comment used to get them wrong, which is worth spelling out because the same
+    // slip is what made NNUEU_FIRST_OUT-vs-arm-name pairing a silent-corruption trap): FIRST_OUT
+    // IS THE WHOLE ACCUMULATOR. Under SPLIT_FT each projection reads SPLIT_READ == FIRST_OUT/2
+    // of it (see SPLIT_READ below). famE's two widths are ACCUMULATORS of 256 and 512 -- i.e.
+    // FIRST_OUT 256 and 512, per-perspective read widths 128 and 256, and famE therefore never
+    // builds below FIRST_OUT=256. The trainer's `--nnueu-N` and Miguel's "N" are the READ width
+    // (128/256); `--nnueu-first-out` and this macro are the accumulator (256/512).
     static_assert(NNUEU_FIRST_OUT == 8 || NNUEU_FIRST_OUT == 32
                       || (NNUEU_FIRST_OUT >= 128 && NNUEU_FIRST_OUT % 16 == 0),
                   "NNUEU_FIRST_OUT must be 8, 32, or a wide width >= 128 and divisible by 16");
@@ -203,11 +210,26 @@ namespace NNUEU
     // which net it loads) is recorded in scripts/nnueu_versions.json — keep the two in sync.
     // A width with no released net (the NNUEU sweep candidates) still builds; it is expected to
     // pick its weights at startup with NNUEU_NET=<dir> (see engine.cpp).
+    //
+    // KEYED ON THE WHOLE TRIPLE, not on FIRST_OUT alone. FIRST_OUT alone is not enough to name a
+    // net: famE's N512_H16_* builds are FIRST_OUT==512 with a 16/16 head, and the old
+    // FIRST_OUT-only mapping handed them models/n512_h32/ -- a 32-wide head. That directory's
+    // final_layer_weights.csv has 32 values and the build's buffer holds 16, which was a live
+    // heap overflow (SIGABRT on 7 of 8 startups; see load_int8_1D_array in network.cpp).
+    // Geometries with no released net fall through to the width-8 net purely so the directory
+    // EXISTS -- engine.cpp::loadNNUEU() std::exit()s on a missing path, and the process has to
+    // stay alive long enough to accept `setoption name EvalFile`. The load itself will now
+    // refuse that net loudly rather than pretend, which is the intended outcome.
     static constexpr const char *DefaultNetDir =
-        (FIRST_OUT == 256)   ? "models/n256_h16x16_sq/"  // v0.4.3+: dual-act N256, head 16/16
-        : (FIRST_OUT == 512) ? "models/n512_h32/"        // v0.4.0-v0.4.2: N512, head 32/32
-        : (FIRST_OUT == 32)  ? "models/w32_wdl0/"        // v0.3.8-v0.3.18: w32, head 4/4
-                             : "models/NNUEU_quantized_model_v4_param_350_epoch_10/"; // <= v0.3.7: width 8, head 4/4
+        (FIRST_OUT == 256 && SECOND_OUT_W == 16 && THIRD_OUT_W == 16)
+            ? "models/n256_h16x16_sq/"                    // v0.4.3+: dual-act N256, head 16/16
+        : (FIRST_OUT == 512 && SECOND_OUT_W == 32 && THIRD_OUT_W == 32)
+            ? "models/n512_h32/"                          // v0.4.0-v0.4.2: N512, head 32/32
+        : (FIRST_OUT == 32 && SECOND_OUT_W == 4 && THIRD_OUT_W == 4)
+            ? "models/w32_wdl0/"                          // v0.3.8-v0.3.18: w32, head 4/4
+            : "models/NNUEU_quantized_model_v4_param_350_epoch_10/"; // <= v0.3.7: width 8, head 4/4
+                                                                     // (also the "no released net
+                                                                     //  for this geometry" stand-in)
     // NNUEUChange structure: holds the incremental change info
     struct NNUEUChange
     {

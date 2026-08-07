@@ -33,27 +33,58 @@ namespace NNUEU
 // Parameter loading utilities
 /////////////////////////////////
 
+// Reads exactly `cols` comma-separated int8 values (across any number of lines).
+//
+// THE BOUNDS CHECK IS NOT COSMETIC. This was the only loader in this file WITHOUT one
+// (load_int16_array and both 2D loaders in accumulation.cpp always had theirs), and the
+// missing `index < cols` was a live heap overflow: a build whose head geometry does not match
+// the net directory it loads writes past the end of `arr`. Reproduced 2026-08-07 on the famE
+// N512_H16_* builds -- NNUEU::DefaultNetDir mapped FIRST_OUT==512 to models/n512_h32/, whose
+// final_layer_weights.csv holds 32 values, into a 16-byte buffer: SIGABRT (exit 134) on 7 of 8
+// startups. It also silently corrupted whatever the allocator had put after the buffer on the
+// runs that did not abort, which is the worse half of the bug.
+//
+// A count mismatch (too few OR too many values) is now a HARD LOAD ERROR rather than a
+// zero-filled tail / an overflow: the caller gets nullptr and refuses the whole net. A net
+// whose head geometry disagrees with the build is not a net that plays slightly worse, it is a
+// different function -- see the arm.json written next to every famE arm for the cmake line a
+// given directory needs.
 int8_t *load_int8_1D_array(const std::string &file_path, size_t cols)
 {
-    int8_t *arr = new int8_t[cols](); // Zero-initialize the array
-    std::vector<int8_t> values;
     std::ifstream file(file_path);
-    std::string line;
-
     if (!file.is_open())
     {
         std::cerr << "Failed to open file: " << file_path << std::endl;
         return nullptr;
     }
+
+    int8_t *arr = new int8_t[cols](); // Zero-initialize the array
+    std::string line;
     std::size_t index = 0;
-    while (std::getline(file, line))
+    bool overflow = false;
+    while (!overflow && std::getline(file, line))
     {
         std::stringstream ss(line);
         std::string item;
         while (std::getline(ss, item, ','))
         {
+            if (item.find_first_not_of(" \t\r\n") == std::string::npos)
+                continue; // trailing newline / blank field
+            if (index >= cols)
+            {
+                overflow = true;
+                break;
+            }
             arr[index++] = static_cast<int8_t>(std::stoi(item));
         }
+    }
+    if (overflow || index != cols)
+    {
+        std::cerr << file_path << ": expected exactly " << cols << " values, file has "
+                  << (overflow ? "more than " : "") << index
+                  << " -- this net does not match this build's geometry, refusing to load\n";
+        delete[] arr;
+        return nullptr;
     }
     return arr;
 }
@@ -143,6 +174,8 @@ namespace NNUEU
             // HEAD_CONCAT + 8 columns (the 8 psqt lanes) and are re-strided to THIRD_STRIDE
             // in memory (pad columns stay zero for the NEON 16-lane dot).
             auto tempThirdLayerWeights = load_int8_1D_array(modelDir + "third_layer_weights.csv", THIRD_STACKS * THIRD_OUT_W * THIRD_IN);
+            if (!tempThirdLayerWeights)
+                return false; // wrong shape for this build -- load_int8_1D_array already explained
             for (int o = 0; o < THIRD_STACKS * THIRD_OUT_W; ++o)
                 std::memcpy(weights.thirdW + o * THIRD_STRIDE, tempThirdLayerWeights + o * THIRD_IN,
                             sizeof(int8_t) * THIRD_IN);
@@ -150,6 +183,8 @@ namespace NNUEU
 
             // final layer: THIRD_OUT_W weights (buffer padded +8 for NEON over-read, pad stays 0)
             auto tempFinalLayerWeights = load_int8_1D_array(modelDir + "final_layer_weights.csv", THIRD_OUT_W);
+            if (!tempFinalLayerWeights)
+                return false;
             std::memcpy(weights.finalW, tempFinalLayerWeights, sizeof(int8_t) * THIRD_OUT_W);
             delete[] tempFinalLayerWeights;
 

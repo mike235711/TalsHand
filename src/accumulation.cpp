@@ -1,5 +1,7 @@
 #include <fstream>
 #include <sstream>
+#include <iostream>
+#include <string>
 #include <cassert>
 
 #ifdef __ARM_NEON
@@ -16,78 +18,121 @@
 #include "accumulation.h"
 #include "network.h"
 
+// Shape check shared by the three 2D loaders below.
+//
+// Every one of them was already BOUNDED (`row < ...`, `col < ...`), so none could overflow --
+// but a bound is not a check: a file with the wrong shape was silently truncated or silently
+// left the tail zero, and the engine went on to play with a scrambled net. That is the exact
+// failure the famE naming trap produces (the token "N256" means accumulator 512 in an arm name
+// and accumulator 256 in an engine build name): pairing an N256 net with an N512 build loaded
+// with exit 0 and empty stderr, and moved the start position's eval from -26250 to -9426.
+// Report the shape instead, so a mismatch is a refused load rather than a worse engine.
+namespace
+{
+struct Shape2D
+{
+    size_t rows = 0;
+    size_t cols = 0;   // column count of the FIRST non-blank row
+    bool ragged = false;
+    bool extra_rows = false;
+    bool extra_cols = false;
+};
+
+bool check_2d_shape(const std::string &file_path, const Shape2D &s,
+                    size_t want_rows, size_t want_cols)
+{
+    if (s.rows == want_rows && s.cols == want_cols && !s.ragged && !s.extra_rows && !s.extra_cols)
+        return true;
+    std::cerr << file_path << ": expected " << want_rows << " rows x " << want_cols
+              << " columns, got " << (s.extra_rows ? ">" : "") << s.rows << " x "
+              << (s.extra_cols ? ">" : "") << s.cols << (s.ragged ? " (ragged)" : "")
+              << " -- this net does not match this build's geometry, refusing to load\n";
+    return false;
+}
+
+// Row/column walker shared by the three loaders. `store(row, col, value)` does the layout-
+// specific write; everything else -- blank-line skipping, the bounds that keep a wrong-shaped
+// file from writing past the array, and the shape bookkeeping -- is identical between them.
+template <typename Store>
+Shape2D read_2d(std::ifstream &file, size_t want_rows, size_t want_cols, Store store)
+{
+    Shape2D s;
+    std::string line;
+    while (std::getline(file, line))
+    {
+        if (line.find_first_not_of(" \t\r\n") == std::string::npos)
+            continue; // blank line / trailing newline
+        if (s.rows >= want_rows)
+        {
+            s.extra_rows = true;
+            break;
+        }
+        std::stringstream ss(line);
+        std::string value;
+        size_t col = 0;
+        while (std::getline(ss, value, ','))
+        {
+            if (value.find_first_not_of(" \t\r\n") == std::string::npos)
+                continue;
+            if (col >= want_cols)
+            {
+                s.extra_cols = true;
+                break;
+            }
+            store(s.rows, col, static_cast<int>(std::stoi(value)));
+            col++;
+        }
+        if (s.rows == 0)
+            s.cols = col;
+        else if (col != s.cols)
+            s.ragged = true;
+        s.rows++;
+    }
+    return s;
+}
+} // namespace
+
 // Function to load a 2D int8_t array from a file
-void load_int8_2D_array1(const std::string &file_path, int8_t weights[64][NNUEU::SECOND_OUT])
+bool load_int8_2D_array1(const std::string &file_path, int8_t weights[64][NNUEU::SECOND_OUT])
 {
     std::ifstream file(file_path);
-    std::string line;
-    size_t row = 0;
-
     // Block stride is SPLIT_READ, not FIRST_OUT: under SPLIT_FT each neuron's weights span only
     // the half of the accumulator its projection reads, so the CSV rows are half as long and the
     // per-king blocks are half as big. Using FIRST_OUT here silently mis-slices the file (and
     // overruns SECOND_OUT) -- it filled the 2nd layer with garbage while the engine ran fine.
     constexpr size_t kStride = static_cast<size_t>(NNUEU::SPLIT_READ);
-    while (std::getline(file, line) && row < static_cast<size_t>(NNUEU::SECOND_OUT_W))
-    {
-        std::stringstream ss(line);
-        std::string value;
-        size_t col = 0;
-
-        while (std::getline(ss, value, ',') && col < 64 * kStride)
-        {
-            weights[col / kStride][(col % kStride) + row * kStride] = static_cast<int8_t>(std::stoi(value));
-            col++;
-        }
-        row++;
-    }
+    const size_t want_rows = static_cast<size_t>(NNUEU::SECOND_OUT_W);
+    const size_t want_cols = 64 * kStride;
+    const Shape2D s = read_2d(file, want_rows, want_cols, [&](size_t row, size_t col, int v) {
+        weights[col / kStride][(col % kStride) + row * kStride] = static_cast<int8_t>(v);
+    });
+    return check_2d_shape(file_path, s, want_rows, want_cols);
 }
-void load_int16_2D_array1(const std::string &file_path, int16_t weights[NNUEU::F_MAP][NNUEU::FIRST_OUT])
+bool load_int16_2D_array1(const std::string &file_path, int16_t weights[NNUEU::F_MAP][NNUEU::FIRST_OUT])
 {
     std::ifstream file(file_path);
-    std::string line;
-    size_t row = 0;
-
-    while (std::getline(file, line) && row < NNUEU::FIRST_OUT)
-    {
-        std::stringstream ss(line);
-        std::string value;
-        size_t col = 0;
-
-        while (std::getline(ss, value, ',') && col < NNUEU::F_MAP)
-        {
-            weights[col][row] = static_cast<int16_t>(std::stoi(value));
-            col++;
-        }
-        row++;
-    }
+    const size_t want_rows = static_cast<size_t>(NNUEU::FIRST_OUT);
+    const size_t want_cols = static_cast<size_t>(NNUEU::F_MAP);
+    const Shape2D s = read_2d(file, want_rows, want_cols, [&](size_t row, size_t col, int v) {
+        weights[col][row] = static_cast<int16_t>(v);
+    });
+    return check_2d_shape(file_path, s, want_rows, want_cols);
 }
 
-void load_inverted_int16_2D_array1(const std::string &file_path, int16_t weights[NNUEU::F_MAP][NNUEU::FIRST_OUT])
+bool load_inverted_int16_2D_array1(const std::string &file_path, int16_t weights[NNUEU::F_MAP][NNUEU::FIRST_OUT])
 {
     std::ifstream file(file_path);
-    std::string line;
-    size_t row = 0;
-
-    while (std::getline(file, line) && row < NNUEU::FIRST_OUT)
-    {
-        std::stringstream ss(line);
-        std::string value;
-        size_t col = 0;
-
-        while (std::getline(ss, value, ',') && col < NNUEU::F_MAP)
-        {
-            int pieceType = col / 64;
-            int square = col % 64;
-
-            // Compute the new column after inverting color and square
-            int newPieceType = NNUEU::mirrorPlane(pieceType);
-            int newCol = newPieceType * 64 + invertIndex(square);
-            weights[newCol][row] = static_cast<int16_t>(std::stoi(value));
-            col++;
-        }
-        row++;
-    }
+    const size_t want_rows = static_cast<size_t>(NNUEU::FIRST_OUT);
+    const size_t want_cols = static_cast<size_t>(NNUEU::F_MAP);
+    const Shape2D s = read_2d(file, want_rows, want_cols, [&](size_t row, size_t col, int v) {
+        const int pieceType = static_cast<int>(col) / 64;
+        const int square = static_cast<int>(col) % 64;
+        // Compute the new column after inverting color and square
+        const int newPieceType = NNUEU::mirrorPlane(pieceType);
+        const int newCol = newPieceType * 64 + invertIndex(square);
+        weights[newCol][row] = static_cast<int16_t>(v);
+    });
+    return check_2d_shape(file_path, s, want_rows, want_cols);
 }
     // Initialize Accumulators
 void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Transformer &transformer)
@@ -438,12 +483,18 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
     {
         try
         {
-            // Load weights into fixed-size arrays
-            load_int16_2D_array1(modelDir + "first_linear_weights.csv", weights.firstW);
-            load_inverted_int16_2D_array1(modelDir + "first_linear_weights.csv", weights.firstWInv);
+            // Load weights into fixed-size arrays. Every loader now VALIDATES the CSV's shape
+            // against this build's compile-time geometry and returns false on a mismatch --
+            // refusing the net is the point: an N256 net in an N512 build used to load with
+            // exit 0, empty stderr and a scrambled king-bucket table.
+            bool ok = true;
+            ok &= load_int16_2D_array1(modelDir + "first_linear_weights.csv", weights.firstW);
+            ok &= load_inverted_int16_2D_array1(modelDir + "first_linear_weights.csv", weights.firstWInv);
 
-            load_int8_2D_array1(modelDir + "second_layer_turn_weights.csv", weights.second1);
-            load_int8_2D_array1(modelDir + "second_layer_not_turn_weights.csv", weights.second2);
+            ok &= load_int8_2D_array1(modelDir + "second_layer_turn_weights.csv", weights.second1);
+            ok &= load_int8_2D_array1(modelDir + "second_layer_not_turn_weights.csv", weights.second2);
+            if (!ok)
+                return false;
 
             // Load biases
             auto tempFirstLayerBiases = load_int16_array(modelDir + "first_linear_biases.csv", FIRST_OUT);
