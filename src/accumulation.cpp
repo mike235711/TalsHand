@@ -108,28 +108,36 @@ bool load_int8_2D_array1(const std::string &file_path, int8_t weights[64][NNUEU:
     });
     return check_2d_shape(file_path, s, want_rows, want_cols);
 }
-bool load_int16_2D_array1(const std::string &file_path, int16_t weights[NNUEU::F_MAP][NNUEU::FIRST_OUT])
+bool load_int16_2D_array1(const std::string &file_path, int16_t weights[NNUEU::FT_ROWS][NNUEU::FIRST_OUT])
 {
     std::ifstream file(file_path);
     const size_t want_rows = static_cast<size_t>(NNUEU::FIRST_OUT);
-    const size_t want_cols = static_cast<size_t>(NNUEU::F_MAP);
+    // FT_ROWS == F_MAP unless FT_PHASE, where the file carries 8 bucket-major copies.
+    const size_t want_cols = static_cast<size_t>(NNUEU::FT_ROWS);
     const Shape2D s = read_2d(file, want_rows, want_cols, [&](size_t row, size_t col, int v) {
         weights[col][row] = static_cast<int16_t>(v);
     });
     return check_2d_shape(file_path, s, want_rows, want_cols);
 }
 
-bool load_inverted_int16_2D_array1(const std::string &file_path, int16_t weights[NNUEU::F_MAP][NNUEU::FIRST_OUT])
+bool load_inverted_int16_2D_array1(const std::string &file_path, int16_t weights[NNUEU::FT_ROWS][NNUEU::FIRST_OUT])
 {
     std::ifstream file(file_path);
     const size_t want_rows = static_cast<size_t>(NNUEU::FIRST_OUT);
-    const size_t want_cols = static_cast<size_t>(NNUEU::F_MAP);
+    const size_t want_cols = static_cast<size_t>(NNUEU::FT_ROWS);
     const Shape2D s = read_2d(file, want_rows, want_cols, [&](size_t row, size_t col, int v) {
-        const int pieceType = static_cast<int>(col) / 64;
-        const int square = static_cast<int>(col) % 64;
+        // THE MIRROR IS PER BUCKET. Under FT_PHASE the file is 8 stacked copies of the feature
+        // space; permuting planes over the whole tensor would mirror bucket 0's planes into
+        // bucket 1's rows. Every shape would still check out and 7 of the 8 buckets would
+        // evaluate a scrambled board -- the same trap export_nnueu.py hit on the way out.
+        const int c = static_cast<int>(col);
+        const int bucket = c / NNUEU::F_MAP;
+        const int feature = c % NNUEU::F_MAP;
+        const int pieceType = feature / 64;
+        const int square = feature % 64;
         // Compute the new column after inverting color and square
         const int newPieceType = NNUEU::mirrorPlane(pieceType);
-        const int newCol = newPieceType * 64 + invertIndex(square);
+        const int newCol = NNUEU::ftRow(bucket, newPieceType * 64 + invertIndex(square));
         weights[newCol][row] = static_cast<int16_t>(v);
     });
     return check_2d_shape(file_path, s, want_rows, want_cols);
@@ -137,70 +145,79 @@ bool load_inverted_int16_2D_array1(const std::string &file_path, int16_t weights
     // Initialize Accumulators
 void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Transformer &transformer)
 {
-    // Start accumulators with the firstLayerBiases
+    // Piece count (BOTH kings included) and, under FT_PHASE, the bucket it selects. The count is
+    // maintained incrementally from here on -- only a capture changes it.
+    pieceCount = 0;
+    for (int c = 0; c < 2; ++c)
+        for (int t = 0; t < 6; ++t)
+            pieceCount += countBits(position.getPieces(c, t));
+    const int bkt = FT_PHASE ? phaseBucketOf(pieceCount) : 0;
+    feats.clearAll();
+
+    // Start accumulators with the firstLayerBiases (shared across buckets, as SF's is)
     std::memcpy(inputTurn[0], transformer.weights.firstBias, sizeof(transformer.weights.firstBias));
     std::memcpy(inputTurn[1], transformer.weights.firstBias, sizeof(transformer.weights.firstBias));
 
     // White pawns
     for (unsigned short index : getBitIndices(position.getPieces(0, 0)))
     {
-        add_8_int16(inputTurn[0], transformer.weights.firstW[index]);
-        add_8_int16(inputTurn[1], transformer.weights.firstWInv[index]);
+        feats.set(index); add_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, index)]);
+        add_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, index)]);
     }
     // White knights
     for (unsigned short index : getBitIndices(position.getPieces(0, 1)))
     {
-        add_8_int16(inputTurn[0], transformer.weights.firstW[64 + index]);
-        add_8_int16(inputTurn[1], transformer.weights.firstWInv[64 + index]);
+        feats.set(64 + index); add_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, 64 + index)]);
+        add_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, 64 + index)]);
     }
     // White bishops
     for (unsigned short index : getBitIndices(position.getPieces(0, 2)))
     {
-        add_8_int16(inputTurn[0], transformer.weights.firstW[64 * 2 + index]);
-        add_8_int16(inputTurn[1], transformer.weights.firstWInv[64 * 2 + index]);
+        feats.set(64 * 2 + index); add_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, 64 * 2 + index)]);
+        add_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, 64 * 2 + index)]);
     }
     // White rooks
     for (unsigned short index : getBitIndices(position.getPieces(0, 3)))
     {
-        add_8_int16(inputTurn[0], transformer.weights.firstW[64 * 3 + index]);
-        add_8_int16(inputTurn[1], transformer.weights.firstWInv[64 * 3 + index]);
+        feats.set(64 * 3 + index); add_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, 64 * 3 + index)]);
+        add_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, 64 * 3 + index)]);
     }
     // White queens
     for (unsigned short index : getBitIndices(position.getPieces(0, 4)))
     {
-        add_8_int16(inputTurn[0], transformer.weights.firstW[64 * 4 + index]);
-        add_8_int16(inputTurn[1], transformer.weights.firstWInv[64 * 4 + index]);
+        feats.set(64 * 4 + index); add_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, 64 * 4 + index)]);
+        add_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, 64 * 4 + index)]);
     }
 
     // Black pawns
     for (unsigned short index : getBitIndices(position.getPieces(1, 0)))
     {
-        add_8_int16(inputTurn[0], transformer.weights.firstW[64 * 5 + index]);
-        add_8_int16(inputTurn[1], transformer.weights.firstWInv[64 * 5 + index]);
+        feats.set(64 * 5 + index); add_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, 64 * 5 + index)]);
+        add_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, 64 * 5 + index)]);
     }
     // Black knights
     for (unsigned short index : getBitIndices(position.getPieces(1, 1)))
     {
-        add_8_int16(inputTurn[0], transformer.weights.firstW[64 * 6 + index]);
-        add_8_int16(inputTurn[1], transformer.weights.firstWInv[64 * 6 + index]);
+        feats.set(64 * 6 + index); add_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, 64 * 6 + index)]);
+        add_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, 64 * 6 + index)]);
     }
     // Black bishops
     for (unsigned short index : getBitIndices(position.getPieces(1, 2)))
     {
-        add_8_int16(inputTurn[0], transformer.weights.firstW[64 * 7 + index]);
-        add_8_int16(inputTurn[1], transformer.weights.firstWInv[64 * 7 + index]);
+        feats.set(64 * 7 + index); add_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, 64 * 7 + index)]);
+        add_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, 64 * 7 + index)]);
     }
     // Black rooks
     for (unsigned short index : getBitIndices(position.getPieces(1, 3)))
     {
-        add_8_int16(inputTurn[0], transformer.weights.firstW[64 * 8 + index]);
-        add_8_int16(inputTurn[1], transformer.weights.firstWInv[64 * 8 + index]);
+        feats.set(64 * 8 + index); add_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, 64 * 8 + index)]);
+        add_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, 64 * 8 + index)]);
     }
     // Black queens
     for (unsigned short index : getBitIndices(position.getPieces(1, 4)))
     {
-        add_8_int16(inputTurn[0], transformer.weights.firstW[64 * 9 + index]);
-        add_8_int16(inputTurn[1], transformer.weights.firstWInv[64 * 9 + index]);
+        feats.set(64 * 9 + index); add_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, 64 * 9 + index)]);
+        add_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, 64 * 9 + index)]);
     }
     // King planes (F_MAP 704/768). Compile-time guarded, so the king-free build emits nothing.
     // firstW is the white-perspective table and firstWInv the black one; mirrorPlane() already
@@ -209,10 +226,10 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
     {
         const int wk = position.getKingPosition(0);
         const int bk = position.getKingPosition(1);
-        add_8_int16(inputTurn[0], transformer.weights.firstW[NNUEU::KING_OWN_BASE + wk]);
-        add_8_int16(inputTurn[1], transformer.weights.firstWInv[NNUEU::KING_OWN_BASE + wk]);
-        add_8_int16(inputTurn[0], transformer.weights.firstW[NNUEU::KING_OPP_BASE + bk]);
-        add_8_int16(inputTurn[1], transformer.weights.firstWInv[NNUEU::KING_OPP_BASE + bk]);
+        feats.set(NNUEU::KING_OWN_BASE + wk); add_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, NNUEU::KING_OWN_BASE + wk)]);
+        add_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, NNUEU::KING_OWN_BASE + wk)]);
+        feats.set(NNUEU::KING_OPP_BASE + bk); add_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, NNUEU::KING_OPP_BASE + bk)]);
+        add_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, NNUEU::KING_OPP_BASE + bk)]);
     }
     else if constexpr (NNUEU::KING_NOTURN_IN)
     {
@@ -220,8 +237,8 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
         // on whose turn it is, and each perspective sees the other one -- hence the two indices.
         const int notTurnKing = position.getKingPosition(position.getTurn() ? 1 : 0);
         const int turnKing = position.getKingPosition(position.getTurn() ? 0 : 1);
-        add_8_int16(inputTurn[0], transformer.weights.firstW[NNUEU::KING_OWN_BASE + notTurnKing]);
-        add_8_int16(inputTurn[1], transformer.weights.firstWInv[NNUEU::KING_OWN_BASE + turnKing]);
+        feats.set(NNUEU::KING_OWN_BASE + notTurnKing); add_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, NNUEU::KING_OWN_BASE + notTurnKing)]);
+        add_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, NNUEU::KING_OWN_BASE + turnKing)]);
     }
 
     computed[0] = true;
@@ -229,20 +246,20 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
 }
 
     // Functions to add/remove features from the accumulators
-    inline void NNUEU::AccumulatorState::addAndRemoveOnInput(int subIndexAdd, int subIndexRemove, bool turn, const Transformer &transformer)
+    inline void NNUEU::AccumulatorState::addAndRemoveOnInput(int subIndexAdd, int subIndexRemove, bool turn, int bkt, const Transformer &transformer)
     {
         assert(subIndexAdd >= 0 && subIndexAdd < NNUEU::F_MAP && subIndexRemove >= 0 && subIndexRemove < NNUEU::F_MAP);
         // Equivalent to the old fused firstW2Indices[add][remove] = firstW[add] - firstW[remove],
         // done as two passes so no quadratic table is needed (essential at width 512).
         if (not turn)
         {
-            add_8_int16(inputTurn[0], transformer.weights.firstW[subIndexAdd]);
-            substract_8_int16(inputTurn[0], transformer.weights.firstW[subIndexRemove]);
+            add_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, subIndexAdd)]);
+            substract_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, subIndexRemove)]);
         }
         else
         {
-            add_8_int16(inputTurn[1], transformer.weights.firstWInv[subIndexAdd]);
-            substract_8_int16(inputTurn[1], transformer.weights.firstWInv[subIndexRemove]);
+            add_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, subIndexAdd)]);
+            substract_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, subIndexRemove)]);
         }
     }
 
@@ -282,22 +299,22 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
 #endif
     }
 
-    inline void NNUEU::AccumulatorState::addOnInput(int subIndex, bool turn, const Transformer &transformer)
+    inline void NNUEU::AccumulatorState::addOnInput(int subIndex, bool turn, int bkt, const Transformer &transformer)
     {
         assert(subIndex >= 0 && subIndex < NNUEU::F_MAP);
         if (not turn)
-            add_8_int16(inputTurn[0], transformer.weights.firstW[subIndex]);
+            add_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, subIndex)]);
         else
-            add_8_int16(inputTurn[1], transformer.weights.firstWInv[subIndex]);
+            add_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, subIndex)]);
     }
 
-    inline void NNUEU::AccumulatorState::removeOnInput(int subIndex, bool turn, const Transformer &transformer)
+    inline void NNUEU::AccumulatorState::removeOnInput(int subIndex, bool turn, int bkt, const Transformer &transformer)
     {
         assert(subIndex >= 0 && subIndex < NNUEU::F_MAP);
         if (not turn)
-            substract_8_int16(inputTurn[0], transformer.weights.firstW[subIndex]);
+            substract_8_int16(inputTurn[0], transformer.weights.firstW[ftRow(bkt, subIndex)]);
         else
-            substract_8_int16(inputTurn[1], transformer.weights.firstWInv[subIndex]);
+            substract_8_int16(inputTurn[1], transformer.weights.firstWInv[ftRow(bkt, subIndex)]);
     }
 
     // The moving piece's pair. Writes slot 0 in place -- see the header for why this REPLACES
@@ -388,8 +405,30 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
         m_current_idx = 1;
         AccumulatorState &rootState = stack[0];
 
+        // The finny entries belong to the PREVIOUS root's tree. Keeping them would still be
+        // correct -- they are only ever a diff base, and the diff is computed against the entry's
+        // own feature set -- but it would start a bucket from a position arbitrarily far away.
+        if constexpr (FT_PHASE)
+            for (int b = 0; b < FT_BUCKETS; ++b)
+                for (int t = 0; t < 2; ++t)
+                    m_finny[b][t].valid = false;
+
         // Build a fresh accumulator for the root
         rootState.initialize(rootPos, transformer);
+
+        // Seed the root's own bucket so the first phase change in the search diffs against the
+        // root instead of rebuilding from the bias.
+        if constexpr (FT_PHASE)
+        {
+            const int bkt = phaseBucketOf(rootState.pieceCount);
+            for (int t = 0; t < 2; ++t)
+            {
+                FinnyEntry &fe = m_finny[bkt][t];
+                std::memcpy(fe.acc, rootState.inputTurn[t], sizeof(int16_t) * FIRST_OUT);
+                fe.feats = rootState.feats;
+                fe.valid = true;
+            }
+        }
 
         const int whiteKing = rootPos.getKingPosition(0);
         const int blackKing = rootPos.getKingPosition(1);
@@ -425,6 +464,22 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
     {
         assert(m_current_idx < stack.size()); // Ensure space exists
         stack[m_current_idx].newAcc(chngs);
+        if constexpr (FT_PHASE)
+        {
+            // Derived from the PARENT, never from the board: push() has no position, and walking
+            // the bitboards here would cost more than the accumulator update it feeds.
+            AccumulatorState &node = stack[m_current_idx];
+            const AccumulatorState &par = stack[m_current_idx - 1];
+            node.pieceCount = par.pieceCount - (chngs.isCapture() ? 1 : 0);
+            node.feats = par.feats;
+            if (chngs.isCapture() && chngs.capturedIdx >= 0)
+                node.feats.clear(chngs.capturedIdx);
+            for (unsigned i = 0; i < chngs.n_pairs; ++i)
+            {
+                node.feats.clear(chngs.removed[i]);
+                node.feats.set(chngs.added[i]);
+            }
+        }
         m_current_idx++;
     }
 
@@ -458,23 +513,111 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
     }
 
     // This applies the “NNUEUChange” to the current node
+    // Rebuild `node`'s accumulator for `turn` in `bucket`, from the bucket's finny entry when it
+    // has one and from the bias when it does not, and then adopt `node` as the entry.
+    void NNUEU::AccumulatorStack::refreshFromFinny(AccumulatorState &node, bool turn, int bucket,
+                                                   const Transformer &transformer)
+    {
+        FinnyEntry &fe = m_finny[bucket][turn];
+        int16_t *dst = node.inputTurn[turn];
+
+        if (!fe.valid)
+        {
+            // Cold bucket: from the bias, every active feature. ~30 toggles, paid once per
+            // bucket per search.
+            std::memcpy(dst, transformer.weights.firstBias, sizeof(int16_t) * FIRST_OUT);
+            for (int wi = 0; wi < FeatureSet::WORDS; ++wi)
+            {
+                uint64_t m = node.feats.w[wi];
+                while (m)
+                {
+                    const int f = (wi << 6) + __builtin_ctzll(m);
+                    m &= m - 1;
+                    node.addOnInput(f, turn, bucket, transformer);
+                }
+            }
+        }
+        else
+        {
+            // Warm: start from the cached accumulator and apply the symmetric difference. ~4-5
+            // toggles in the middlegame, measured.
+            std::memcpy(dst, fe.acc, sizeof(int16_t) * FIRST_OUT);
+            for (int wi = 0; wi < FeatureSet::WORDS; ++wi)
+            {
+                const uint64_t cur = node.feats.w[wi];
+                const uint64_t sto = fe.feats.w[wi];
+                uint64_t add = cur & ~sto;
+                uint64_t rem = sto & ~cur;
+                while (add)
+                {
+                    const int f = (wi << 6) + __builtin_ctzll(add);
+                    add &= add - 1;
+                    node.addOnInput(f, turn, bucket, transformer);
+                }
+                while (rem)
+                {
+                    const int f = (wi << 6) + __builtin_ctzll(rem);
+                    rem &= rem - 1;
+                    node.removeOnInput(f, turn, bucket, transformer);
+                }
+            }
+        }
+
+        std::memcpy(fe.acc, dst, sizeof(int16_t) * FIRST_OUT);
+        fe.feats = node.feats;
+        fe.valid = true;
+    }
+
     void NNUEU::AccumulatorStack::applyIncrementalChanges(AccumulatorState &curr, const AccumulatorState &prev, bool turn, const Transformer &transformer)
     {
         assert(prev.computed[turn]);
-        // Copy previous accumulators
-        std::memcpy(curr.inputTurn[turn], prev.inputTurn[turn], sizeof(curr.inputTurn[turn]));
 
         const NNUEUChange &c = curr.changes;
-
-        if (c.isCapture())
-            curr.removeOnInput(c.capturedIdx, turn, transformer);
         // n_pairs is 0 for a null move (and, at F_MAP 640, for a plain king move -- the king is
         // not an input feature there), 1 for essentially every real move, and 2 only for castling
         // once the king IS an input feature. MAX_PAIRS is a compile-time 2, so the trip count is
         // known and the rare second iteration costs one predictable branch.
-        for (unsigned i = 0; i < c.n_pairs; ++i)
-            curr.addAndRemoveOnInput(c.added[i], c.removed[i], turn, transformer);
-        curr.computed[turn] = true;
+
+        if constexpr (FT_PHASE)
+        {
+            const int bkt = phaseBucketOf(curr.pieceCount);
+            const int bktPrev = phaseBucketOf(prev.pieceCount);
+            if (bkt != bktPrev)
+            {
+                // A phase change: the parent's accumulator is a sum over a DIFFERENT weight
+                // table, so not one lane of it is reusable. Rebuild through the finny table for
+                // the new bucket. This is the entire cost of FT_PHASE and the reason it is a
+                // build switch rather than a free win.
+                refreshFromFinny(curr, turn, bkt, transformer);
+                curr.computed[turn] = true;
+                return;
+            }
+            // Same bucket: the ordinary running-sum edit, indexed into that bucket's rows.
+            std::memcpy(curr.inputTurn[turn], prev.inputTurn[turn], sizeof(curr.inputTurn[turn]));
+            if (c.isCapture())
+                curr.removeOnInput(c.capturedIdx, turn, bkt, transformer);
+            for (unsigned i = 0; i < c.n_pairs; ++i)
+                curr.addAndRemoveOnInput(c.added[i], c.removed[i], turn, bkt, transformer);
+
+            // Keep the bucket's finny entry fresh. One memcpy on an already-hot line, and it is
+            // what keeps the refresh diff small: without it the entry would age to whatever
+            // position last CHANGED phase, and the symmetric difference would grow without bound.
+            FinnyEntry &fe = m_finny[bkt][turn];
+            std::memcpy(fe.acc, curr.inputTurn[turn], sizeof(int16_t) * FIRST_OUT);
+            fe.feats = curr.feats;
+            fe.valid = true;
+            curr.computed[turn] = true;
+            return;
+        }
+        else
+        {
+            std::memcpy(curr.inputTurn[turn], prev.inputTurn[turn], sizeof(curr.inputTurn[turn]));
+            if (c.isCapture())
+                curr.removeOnInput(c.capturedIdx, turn, 0, transformer);
+            for (unsigned i = 0; i < c.n_pairs; ++i)
+                curr.addAndRemoveOnInput(c.added[i], c.removed[i], turn, 0, transformer);
+            curr.computed[turn] = true;
+        }
     }
 
     // No default argument here: the declaration in accumulation.h has none (so this one was dead

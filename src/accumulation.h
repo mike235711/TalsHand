@@ -36,6 +36,29 @@ namespace NNUEU
 #ifndef NNUEU_DUAL_ACT
 #define NNUEU_DUAL_ACT 0
 #endif
+
+// famF: FT_PHASE buckets the FIRST layer by phase. The FT holds one copy of the whole feature
+// space per bucket and a position's features are shifted into its own copy -- the same index
+// offset SF uses to bucket its FT by king square, and the same one the trainer applies
+// (feature + phase*F_MAP). The BIAS is shared across buckets (one vector), as SF's is.
+//
+// THIS IS THE ONE THING THAT BREAKS PURE INCREMENTAL UPDATE. Every other feature of this
+// architecture -- kings in the input, split_ft, dual_act, phase-bucketed 3rd layer -- leaves the
+// accumulator a running sum that a move edits. A phase change does not: the child's features
+// index a DIFFERENT weight table, so nothing in the parent's accumulator can be reused. The
+// child has to be rebuilt, and rebuilding from the bias every time would cost ~30 feature adds.
+// Hence the finny tables below: one cached accumulator per (bucket, perspective), rebuilt as the
+// DIFF against the last position that used that bucket.
+//
+// Measured before it was built (trace-replay of a real search at accumulator width 512):
+// phase bucketing costs +14% of accumulation time in the middlegame, +26% tactical, +4-8% in
+// endgames; 14-18% of updates stop being incremental and go through a finny refresh at ~4.6
+// feature toggles each. Averaged over game phases that is +13.8%, against +23% for SF-style
+// king bucketing -- the two are anti-correlated, because kings barely move in the middlegame
+// and captures dry up in the endgame.
+#ifndef NNUEU_FT_PHASE
+#define NNUEU_FT_PHASE 0
+#endif
     // The wide-net forward pass (network.cpp's `if constexpr (FIRST_OUT >= 128)` branch) was
     // originally exercised only at >=256 (N256/N512). The floor sits at 128 because the wide-net
     // code is already generic in FIRST_OUT (NEON loops step by 16, SPLIT_FT needs %32==0) -- 128
@@ -57,12 +80,32 @@ namespace NNUEU
     // Input feature count. 640 = the king-free set (10 planes: own P,N,B,R,Q then opp P,N,B,R,Q).
     // 768 adds BOTH kings as planes (12), 704 adds only the not-turn king (11). Putting a king in
     // the input does NOT cost a recompute: a king move is one feature removed and one added, the
-    // same incremental path every other piece already uses. Only buckets in the FIRST layer would
-    // force a recompute, and this architecture has none.
+    // same incremental path every other piece already uses. Buckets in the FIRST layer DO
+    // force a recompute -- see NNUEU_FT_PHASE above, which is exactly that, and pays for it
+    // with finny tables. Without FT_PHASE this architecture still has none.
     static constexpr int F_MAP = NNUEU_F_MAP;
     static_assert(F_MAP == 640 || F_MAP == 704 || F_MAP == 768,
                   "NNUEU_F_MAP must be 640 (king-free), 704 (not-turn king) or 768 (both kings)");
     static constexpr int N_PLANES = F_MAP / 64;
+    static constexpr bool FT_PHASE = (NNUEU_FT_PHASE != 0);
+    static constexpr int FT_BUCKETS = FT_PHASE ? 8 : 1;
+    // Rows of the stored FT: one copy of the feature space per bucket, bucket-major, which is
+    // exactly the column order export_nnueu.py writes ("columns [b*F_MAP .. (b+1)*F_MAP) are
+    // bucket b").
+    static constexpr int FT_ROWS = FT_BUCKETS * F_MAP;
+    // The row a (bucket, feature) pair lives at. Single definition on purpose: the loader, the
+    // full rebuild, the incremental update and the finny refresh all index through this, so the
+    // bucket-major convention cannot drift between them.
+    static constexpr int ftRow(int bucket, int feature) { return bucket * F_MAP + feature; }
+    // The phase bucket rule, duplicated NOWHERE: Network::phaseBucket() computes it from a
+    // position, this computes it from a piece count the accumulator stack tracks incrementally
+    // (a capture is the only move that changes the count). Both must agree -- verified by
+    // assertion in debug builds.
+    static constexpr int phaseBucketOf(int nPieces)
+    {
+        const int b = (nPieces - 1) / 4;
+        return b < 0 ? 0 : (b > 7 ? 7 : b);
+    }
     static constexpr bool KINGS_IN = (F_MAP == 768);        // both kings are input planes
     static constexpr bool KING_NOTURN_IN = (F_MAP == 704);  // only the not-turn king is
 
@@ -275,11 +318,31 @@ namespace NNUEU
     };
 
     // AccumulatorState structure: holds the NNUEU accumulators for one node.
+    // The set of ACTIVE input features of a position, as a bitset over F_MAP.
+    //
+    // Only FT_PHASE needs this, and only to diff against a finny entry: a refresh has to know
+    // which features the cached position has that this one does not, and vice versa. It is
+    // carried per node and copied parent -> child (96 bytes at F_MAP 768), which is cheaper than
+    // re-deriving it from the board at every phase change.
+    struct FeatureSet
+    {
+        static constexpr int WORDS = (F_MAP + 63) / 64;
+        uint64_t w[WORDS];
+        void clearAll() { for (int i = 0; i < WORDS; ++i) w[i] = 0; }
+        void set(int i) { w[i >> 6] |= (1ull << (i & 63)); }
+        void clear(int i) { w[i >> 6] &= ~(1ull << (i & 63)); }
+        bool test(int i) const { return (w[i >> 6] >> (i & 63)) & 1ull; }
+    };
+
     struct AccumulatorState
     {
         int16_t inputTurn[2][FIRST_OUT]; // [0] white, [1] black NNUEU input arrays.
         bool computed[2];           // True if the state is fully updated for whites/blacks perspective.
         NNUEUChange changes;     // The incremental change that led to this state.
+        // FT_PHASE only. pieceCount is maintained incrementally (a capture is the only move that
+        // changes it); feats is the active-feature bitset this node's accumulator corresponds to.
+        int pieceCount;
+        FeatureSet feats;
         void newAcc(const NNUEUChange &chngs)
         {
             changes = chngs;
@@ -289,9 +352,10 @@ namespace NNUEU
         void initialize(const BitPosition &position, const Transformer &transformer);
         inline void substract_8_int16(int16_t *a, const int16_t *b);
         inline void add_8_int16(int16_t *a, const int16_t *b);
-        void addOnInput(int subIndex, bool turn, const Transformer &transformer);
-        void removeOnInput(int subIndex, bool turn, const Transformer &transformer);
-        void addAndRemoveOnInput(int subIndexAdd, int subIndexRemove, bool turn, const Transformer &transformer);
+        // `bkt` is the FT phase bucket whose weight rows to use; always 0 without FT_PHASE.
+        void addOnInput(int subIndex, bool turn, int bkt, const Transformer &transformer);
+        void removeOnInput(int subIndex, bool turn, int bkt, const Transformer &transformer);
+        void addAndRemoveOnInput(int subIndexAdd, int subIndexRemove, bool turn, int bkt, const Transformer &transformer);
     };
 
     // AccumulatorStack class: manages a vector of AccumulatorState nodes.
@@ -301,6 +365,24 @@ namespace NNUEU
         std::vector<AccumulatorState> stack;
         size_t m_current_idx;
         int nnueu_king_positions[2]; // For each color, store the last king positions.
+
+        // FINNY TABLES (FT_PHASE only): the most recent accumulator seen in each phase bucket,
+        // per perspective, together with the feature set it belongs to. A phase change rebuilds
+        // the child from the entry for its NEW bucket by applying the symmetric difference of the
+        // two feature sets -- typically ~4-5 toggles, against ~30 for a rebuild from the bias.
+        // Cold entries (never filled) fall back to the full rebuild.
+        struct FinnyEntry
+        {
+            int16_t acc[FIRST_OUT];
+            FeatureSet feats;
+            bool valid;
+        };
+        FinnyEntry m_finny[FT_BUCKETS][2];
+
+        // Rebuild `dst` for perspective `turn` in `bucket` from the finny entry (or from the bias
+        // if that entry is cold), then adopt it as the bucket's new entry.
+        void refreshFromFinny(AccumulatorState &node, bool turn, int bucket,
+                              const Transformer &transformer);
 
     public:
         static const int8_t *secondLayer1WeightsBlockWhiteTurn;
@@ -359,8 +441,10 @@ namespace NNUEU
             // For accumulating moves: add/removeOnInput use firstW/firstWInv directly.
             // (The old fused firstW2Indices[F_MAP][F_MAP][FIRST_OUT] table is gone — it was
             //  quadratic in F_MAP and ~838 MB at width 512; addAndRemove now does add+remove.)
-            alignas(64) int16_t firstW[F_MAP][FIRST_OUT] = {0};
-            alignas(64) int16_t firstWInv[F_MAP][FIRST_OUT] = {0};
+            // FT_ROWS == F_MAP without FT_PHASE, so the non-bucketed builds are byte-identical
+            // to what they were; with it, 8 stacked copies indexed through ftRow().
+            alignas(64) int16_t firstW[FT_ROWS][FIRST_OUT] = {0};
+            alignas(64) int16_t firstWInv[FT_ROWS][FIRST_OUT] = {0};
 
             // For king moves
             alignas(64) int8_t second1[64][SECOND_OUT] = {0};

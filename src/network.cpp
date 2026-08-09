@@ -234,17 +234,32 @@ namespace NNUEU
                 std::ifstream pf(modelDir + "psqt_weights.csv");
                 if (pf)
                 {
-                    std::string line; int r = 0;
+                    // TWO LAYOUTS, one destination. Classic psqt_sf writes 8 rows x F_MAP, one
+                    // per phase bucket. famF's FT_PHASE writes ONE row of 8*F_MAP: the psqt is a
+                    // single FT column there, and the bucket was already chosen on the input
+                    // side, so its values arrive in the same bucket-major order the accumulator
+                    // file uses. Both land in psqtW[bucket][feature], which is the layout
+                    // psqtRaw() already indexes -- so psqtRaw() itself needs no change.
+                    std::string line; int r = 0; int flat = 0;
                     while (std::getline(pf, line) && r < 8) {
                         if (line.find_first_not_of(" \t\r\n") == std::string::npos) continue;
                         std::stringstream ss(line); std::string v; int c = 0;
-                        while (std::getline(ss, v, ',') && c < F_MAP)
-                            weights.psqtW[r][c++] = std::stoi(v);
+                        while (std::getline(ss, v, ','))
+                        {
+                            if (r == 0 && flat < 8 * F_MAP)
+                                weights.psqtW[flat / F_MAP][flat % F_MAP] = std::stoi(v), ++flat;
+                            else if (c < F_MAP)
+                                weights.psqtW[r][c++] = std::stoi(v);
+                        }
+                        if (r == 0 && flat == 8 * F_MAP)
+                            break;          // famF single-row form, fully consumed
                         ++r;
                     }
-                    weights.hasPsqt = (r == 8);
-                    if (r != 0 && !weights.hasPsqt)
-                        std::cerr << "psqt_weights.csv: " << r << " rows, expected 8 -- IGNORED\n";
+                    weights.hasPsqt = (r == 8) || (r == 0 && flat == 8 * F_MAP);
+                    if (!weights.hasPsqt && (r != 0 || flat != 0))
+                        std::cerr << "psqt_weights.csv: " << r << " rows / " << flat
+                                  << " flat values, expected 8 rows of " << F_MAP << " or one row of "
+                                  << 8 * F_MAP << " -- IGNORED\n";
                 }
                 if (PSQT_L3 && !weights.hasPsqt)
                 {
