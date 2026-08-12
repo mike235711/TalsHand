@@ -24,7 +24,12 @@ endif()
 
 # Modern way to set config-specific options
 target_compile_options(talshand PRIVATE
-  $<$<CONFIG:Release>:-Ofast -mcpu=apple-m2>
+  # -mcpu=apple-m2 was unconditional, so this target simply did not compile anywhere else --
+  # gcc on x86 rejects the value outright. Kept as the default for the machine this engine is
+  # developed and benchmarked on, with a portable Release for everyone else.
+  $<$<CONFIG:Release>:-Ofast>
+  $<$<AND:$<CONFIG:Release>,$<BOOL:${TALSHAND_APPLE_SILICON}>>:-mcpu=apple-m2>
+  $<$<AND:$<CONFIG:Release>,$<NOT:$<BOOL:${TALSHAND_APPLE_SILICON}>>>:-march=native>
   $<$<CONFIG:Debug>:-g>
 )
 

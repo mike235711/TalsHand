@@ -61,6 +61,13 @@ endif()
 # =========================================================================================
 # Compiler and Linker Flags
 # =========================================================================================
+# One definition of "is this the Apple Silicon dev machine", read by src/CMakeLists.txt too.
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+    set(TALSHAND_APPLE_SILICON ON)
+else()
+    set(TALSHAND_APPLE_SILICON OFF)
+endif()
+
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     message(STATUS "Release build: applying -Ofast, -funroll-loops, architecture-specific march, and LTO")
     # Base optimization level
@@ -69,6 +76,12 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
         # Use armv8.2-a with dot product (benefits NNUE accumulation if using int8/int16 kernels)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=armv8.2-a+dotprod")
+    else()
+        # x86: -march=native is what turns on SSE4.1/AVX2, and the accumulator's vector path is
+        # guarded on those macros. Without it the build silently falls back to the scalar loop --
+        # correct, but several times slower, and the difference would look like "x86 is just slow"
+        # rather than "the flags never reached the compiler".
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
     endif()
     # Link-Time Optimization
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto")

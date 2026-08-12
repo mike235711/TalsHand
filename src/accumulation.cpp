@@ -245,6 +245,8 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
     computed[1] = true;
 }
 
+    // The vector loops below step 8 int16 at a time and have no tail: accumulation.h asserts
+    // FIRST_OUT is 8, 32, or a multiple of 16, so FIRST_OUT % 8 == 0 in every buildable config.
     // Functions to add/remove features from the accumulators
     inline void NNUEU::AccumulatorState::addAndRemoveOnInput(int subIndexAdd, int subIndexRemove, bool turn, int bkt, const Transformer &transformer)
     {
@@ -269,10 +271,15 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
         for (int k = 0; k < FIRST_OUT; k += 8)
             vst1q_s16(a + k, vaddq_s16(vld1q_s16(a + k), vld1q_s16(b + k)));
 #elif defined(__AVX2__) || defined(__SSE2__) || defined(__SSE4_1__)
-        __m128i v1 = _mm_loadu_si128((__m128i *)a);
-        __m128i v2 = _mm_loadu_si128((__m128i *)b);
-        __m128i sum = _mm_add_epi16(v1, v2);
-        _mm_storeu_si128((__m128i *)a, sum);
+        // THE LOOP IS THE POINT. This used to be a single 128-bit load/add/store with no loop at
+        // all: it updated the first EIGHT int16 of the accumulator and left the rest untouched.
+        // At FIRST_OUT=512 that is 8 lanes of 512, and nothing anywhere would say so -- no crash,
+        // no shape error, just an evaluation built from 1.5% of the features. It survived because
+        // every build of this engine has been on Apple Silicon, where only the NEON branch runs.
+        for (int k = 0; k < FIRST_OUT; k += 8)
+            _mm_storeu_si128((__m128i *)(a + k),
+                             _mm_add_epi16(_mm_loadu_si128((const __m128i *)(a + k)),
+                                           _mm_loadu_si128((const __m128i *)(b + k))));
 #else
         // Fallback scalar code
         for (int i = 0; i < FIRST_OUT; i++)
@@ -287,10 +294,11 @@ void NNUEU::AccumulatorState::initialize(const BitPosition &position, const Tran
             vst1q_s16(a + k, vsubq_s16(vld1q_s16(a + k), vld1q_s16(b + k)));
 
 #elif defined(__AVX2__) || defined(__SSE2__) || defined(__SSE4_1__)
-        __m128i v1 = _mm_loadu_si128((const __m128i *)a);
-        __m128i v2 = _mm_loadu_si128((const __m128i *)b);
-        __m128i v_sub = _mm_sub_epi16(v1, v2);
-        _mm_storeu_si128((__m128i *)a, v_sub);
+        // Same missing loop as add_8_int16 above, same silence. See the comment there.
+        for (int k = 0; k < FIRST_OUT; k += 8)
+            _mm_storeu_si128((__m128i *)(a + k),
+                             _mm_sub_epi16(_mm_loadu_si128((const __m128i *)(a + k)),
+                                           _mm_loadu_si128((const __m128i *)(b + k))));
 #else
         // Fallback scalar code
         for (int i = 0; i < FIRST_OUT; i++)
