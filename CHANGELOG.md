@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **v0.4.5 — nueva red de evaluacion (famG cross entropy), +61/+72 Elo sobre v0.4.4.**
+  `models/n512_h14x16_ce/`, entrenada en famG con **cross entropy** en vez de la MSE-2.5 que usaban
+  todas las redes anteriores. Geometria N512 / cabeza 14x16, primera capa bucketeada por fase
+  (`FT_PHASE`) y tercera capa en 8 stacks (`THIRD_PHASE`).
+
+  Medido contra v0.4.4 con la MISMA busqueda (`src/search.cpp` identico), 200 partidas por control:
+  **+61 +/- 29 Elo en bullet 1+1** y **+72 +/- 27 en blitz 3+2**. Los dos intervalos excluyen el
+  cero holgadamente. Es la primera vez que un cambio de este proyecto se decide con 200 partidas
+  por control en vez de 60.
+
+  Lo que lo produjo NO fue la arquitectura: famG entreno 13 brazos 300 epocas variando **solo la
+  funcion de perdida**, y los brazos de cross entropy ganaron 11 de 11 cruces contra los de MSE
+  (660 partidas, 60.4%, +73 Elo IC95 [+58, +88]). Las seis redes CE ocuparon los seis primeros
+  puestos de 24 en el ajuste Bradley-Terry sobre 2585 partidas.
+
+  **El orden offline predijo esto al reves.** Por pearson en banda |cp|<=50 -- la metrica que se
+  venia usando -- los brazos CE iban 4o y 7o de 10, y `mse25` primero. La metrica que si separa es
+  la pearson sobre el conjunto ENTERO (CE 0.83-0.86 contra 0.74-0.76), y sobre todo el salto
+  `pearson(all) - pearson(1000)`, que clasifica CE/no-CE sin un solo error en las 24 redes.
+  Mecanismo: la spearman en `all` esta plana para las doce recetas, asi que todas ordenan igual de
+  bien y la CE es la unica que acierta la ESCALA en el rango completo -- MSE-p castiga
+  `|t-pred|^p` con `t` en [0,1] y confina la salida a la caja, mientras el clamp de la CE le deja
+  gradiente cero fuera. Se ve en los pesos desplegados: psqt rms 470-703 en las CE contra 146-331
+  en las demas, separacion perfecta.
+
+  Pendiente y sin resolver: cuanto del efecto es la ESCALA chocando con los margenes de poda
+  cableados (`beta + 175*depth`, `75 + 75*depth`) en vez de una evaluacion mejor. Reescalar una
+  red mse por 2.27 para igualar el psqt de una CE dio **+26 +/- 30 Elo** combinando dos
+  estimaciones -- unos 40% del hueco, pero el intervalo roza el cero. Cerrarlo pide 400-800
+  partidas de la ablacion pareada.
+
+### Changed
+- `scripts/nnueu_versions.json` admite siete flags mas (`f_map`, `split_ft`, `ft_phase`,
+  `third_phase`, `psqt_l3`, `head_sum`, `head_skip`). v0.4.5 es la primera version cuya geometria
+  no se describe solo con los tres anchos, y construirla sin esos flags compila y carga sin
+  protestar produciendo otra arquitectura. Una clave ausente sigue significando "el default de
+  CMake", asi que las entradas anteriores no cambian.
+
 ### Fixed
 - **Building a tag no longer loads the wrong net.** `scripts/version_match.py` built a git ref
   with `cmake -DCMAKE_BUILD_TYPE=Release` and no `NNUEU_*` flags. CMake's defaults (width 32,

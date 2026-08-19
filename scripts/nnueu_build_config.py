@@ -41,6 +41,17 @@ OPTION_KEYS = {
     "NNUEU_SECOND_OUT": "second_out",
     "NNUEU_THIRD_OUT": "third_out",
     "NNUEU_DUAL_ACT": "dual_act",
+    # Desde v0.4.5. La red de famG es la primera cuya geometria NO se describe solo con los tres
+    # anchos: lleva primera capa bucketeada por fase, tercera capa en 8 stacks, FT partida y cabeza
+    # sumada. Construir v0.4.5 sin estos flags compila y carga sin protestar, pero produce otra
+    # arquitectura -- exactamente el fallo silencioso que este modulo existe para impedir.
+    "NNUEU_F_MAP": "f_map",
+    "NNUEU_SPLIT_FT": "split_ft",
+    "NNUEU_FT_PHASE": "ft_phase",
+    "NNUEU_THIRD_PHASE": "third_phase",
+    "NNUEU_PSQT_L3": "psqt_l3",
+    "NNUEU_HEAD_SUM": "head_sum",
+    "NNUEU_HEAD_SKIP": "head_skip",
 }
 
 

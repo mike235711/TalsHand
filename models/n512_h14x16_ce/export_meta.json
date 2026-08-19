@@ -1,0 +1,154 @@
+{
+ "source_ckpt": "/Users/miguel/Documents/GitHub/famG_run/A512/A512_H1x14_H2x16__ce/checkpoints/epoch=219.ckpt",
+ "features": "NnueuKingsIn",
+ "N": 256,
+ "H1": 14,
+ "H2": 16,
+ "acc_width": 513,
+ "split_ft": true,
+ "half_head": false,
+ "psqt_l3": false,
+ "dual_act": true,
+ "head_sum": true,
+ "head_skip": false,
+ "head_width": 28,
+ "third_in": 28,
+ "arch_source": "checkpoint hyper_parameters",
+ "third_phase": true,
+ "third_phase_stacks": 8,
+ "padded_split": false,
+ "engine_build_flags": "-DNNUEU_FIRST_OUT=512 -DNNUEU_SECOND_OUT=14 -DNNUEU_THIRD_OUT=16 -DNNUEU_F_MAP=768 -DNNUEU_FT_PHASE=1 -DNNUEU_SPLIT_FT=1 -DNNUEU_DUAL_ACT=1 -DNNUEU_THIRD_PHASE=1 -DNNUEU_PSQT_L3=0 -DNNUEU_HEAD_SUM=1 -DNNUEU_HEAD_SKIP=0",
+ "engine_cmake": "cmake -S . -B build -DNNUEU_FIRST_OUT=512 -DNNUEU_SECOND_OUT=14 -DNNUEU_THIRD_OUT=16 -DNNUEU_F_MAP=768 -DNNUEU_FT_PHASE=1 -DNNUEU_SPLIT_FT=1 -DNNUEU_DUAL_ACT=1 -DNNUEU_THIRD_PHASE=1 -DNNUEU_PSQT_L3=0 -DNNUEU_HEAD_SUM=1 -DNNUEU_HEAD_SKIP=0 -DCMAKE_BUILD_TYPE=Release",
+ "saturation": {
+  "first_linear_weights": {
+   "n": 3145728,
+   "n_saturated": 0,
+   "fraction_saturated": 0.0,
+   "grid": [
+    -32768,
+    32767
+   ],
+   "scale": 127.0,
+   "absmax_int": 326
+  },
+  "first_linear_biases": {
+   "n": 512,
+   "n_saturated": 0,
+   "fraction_saturated": 0.0,
+   "grid": [
+    -32768,
+    32767
+   ],
+   "scale": 127.0,
+   "absmax_int": 182
+  },
+  "psqt_weights": {
+   "n": 6144,
+   "n_saturated": 0,
+   "fraction_saturated": 0.0,
+   "grid": [
+    -1073741824,
+    1073741824
+   ],
+   "scale": 4096.0,
+   "absmax_int": 3354
+  },
+  "second_layer_turn_weights": {
+   "n": 229376,
+   "n_saturated": 0,
+   "fraction_saturated": 0.0,
+   "grid": [
+    -128,
+    127
+   ],
+   "scale": 64.0,
+   "absmax_int": 124
+  },
+  "second_layer_turn_biases": {
+   "n": 14,
+   "n_saturated": 0,
+   "fraction_saturated": 0.0,
+   "grid": [
+    -32768,
+    32767
+   ],
+   "scale": 8128.0,
+   "absmax_int": 10808
+  },
+  "second_layer_not_turn_weights": {
+   "n": 229376,
+   "n_saturated": 3,
+   "fraction_saturated": 1.3078962053571428e-05,
+   "grid": [
+    -128,
+    127
+   ],
+   "scale": 64.0,
+   "absmax_int": 127
+  },
+  "second_layer_not_turn_biases": {
+   "n": 14,
+   "n_saturated": 0,
+   "fraction_saturated": 0.0,
+   "grid": [
+    -32768,
+    32767
+   ],
+   "scale": 8128.0,
+   "absmax_int": 10754
+  },
+  "third_layer_weights": {
+   "n": 3584,
+   "n_saturated": 1,
+   "fraction_saturated": 0.00027901785714285713,
+   "grid": [
+    -128,
+    127
+   ],
+   "scale": 64.0,
+   "absmax_int": 127
+  },
+  "third_layer_biases": {
+   "n": 128,
+   "n_saturated": 0,
+   "fraction_saturated": 0.0,
+   "grid": [
+    -32768,
+    32767
+   ],
+   "scale": 8128.0,
+   "absmax_int": 7449
+  },
+  "final_layer_weights": {
+   "n": 16,
+   "n_saturated": 0,
+   "fraction_saturated": 0.0,
+   "grid": [
+    -128,
+    127
+   ],
+   "scale": 32.25196850393701,
+   "absmax_int": 15
+  },
+  "final_layer_biases": {
+   "n": 1,
+   "n_saturated": 0,
+   "fraction_saturated": 0.0,
+   "grid": [
+    -32768,
+    32767
+   ],
+   "scale": 4096.0,
+   "absmax_int": 2160
+  }
+ },
+ "scales": {
+  "ft": 127.0,
+  "hidden_w": 64.0,
+  "hidden_b": 8128.0,
+  "out_w": 32.25196850393701,
+  "out_b": 4096.0,
+  "out_offset": 2048.0
+ },
+ "note": "scales calibrated against the deployed champion via engine_forward.py (corr 0.999737, eval = 4096*p - 2048); see NNUEU_RESULTS 5b.0"
+}

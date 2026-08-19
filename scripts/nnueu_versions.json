@@ -8,16 +8,29 @@
     "verified after the build) and mirrors NNUEU::DefaultNetDir in src/accumulation.h.",
     "'current' describes the commit that carries this file, so a future tag/branch is",
     "self-describing even before someone adds it to 'versions'. On every release: add the tag",
-    "entry AND update 'current'."
+    "entry AND update 'current'.",
+    "Desde v0.4.5 una entrada puede llevar mas flags (f_map, split_ft, ft_phase, third_phase,",
+    "psqt_l3, head_sum, head_skip): la red de famG es la primera cuya geometria no se describe",
+    "solo con los tres anchos, y construirla sin ellos compila y carga sin protestar produciendo",
+    "otra arquitectura. Una clave AUSENTE significa el default de CMake, que es lo que usaron",
+    "todas las versiones anteriores, asi que sus entradas no hay que tocarlas."
   ],
   "current": {
-    "first_out": 256,
-    "second_out": 16,
+    "first_out": 512,
+    "second_out": 14,
     "third_out": 16,
     "dual_act": 1,
-    "model_dir": "models/n256_h16x16_sq/"
+    "f_map": 768,
+    "split_ft": 1,
+    "ft_phase": 1,
+    "third_phase": 1,
+    "psqt_l3": 0,
+    "head_sum": 1,
+    "head_skip": 0,
+    "model_dir": "models/n512_h14x16_ce/"
   },
   "versions": {
+    "v0.4.5": {"first_out": 512, "second_out": 14, "third_out": 16, "dual_act": 1, "f_map": 768, "split_ft": 1, "ft_phase": 1, "third_phase": 1, "psqt_l3": 0, "head_sum": 1, "head_skip": 0, "model_dir": "models/n512_h14x16_ce/"},
     "v0.4.4": {"first_out": 256, "second_out": 16, "third_out": 16, "dual_act": 1, "model_dir": "models/n256_h16x16_sq/"},
     "v0.4.3": {"first_out": 256, "second_out": 16, "third_out": 16, "dual_act": 1, "model_dir": "models/n256_h16x16_sq/"},
     "v0.4.2": {"first_out": 512, "second_out": 32, "third_out": 32, "dual_act": 0, "model_dir": "models/n512_h32/"},

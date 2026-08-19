@@ -264,8 +264,10 @@ namespace NNUEU
     // stay alive long enough to accept `setoption name EvalFile`. The load itself will now
     // refuse that net loudly rather than pretend, which is the intended outcome.
     static constexpr const char *DefaultNetDir =
-        (FIRST_OUT == 256 && SECOND_OUT_W == 16 && THIRD_OUT_W == 16)
-            ? "models/n256_h16x16_sq/"                    // v0.4.3+: dual-act N256, head 16/16
+        (FIRST_OUT == 512 && SECOND_OUT_W == 14 && THIRD_OUT_W == 16)
+            ? "models/n512_h14x16_ce/"                    // v0.4.5+: famG cross-entropy N512, head 14/16
+        : (FIRST_OUT == 256 && SECOND_OUT_W == 16 && THIRD_OUT_W == 16)
+            ? "models/n256_h16x16_sq/"                    // v0.4.3-v0.4.4: dual-act N256, head 16/16
         : (FIRST_OUT == 512 && SECOND_OUT_W == 32 && THIRD_OUT_W == 32)
             ? "models/n512_h32/"                          // v0.4.0-v0.4.2: N512, head 32/32
         : (FIRST_OUT == 32 && SECOND_OUT_W == 4 && THIRD_OUT_W == 4)
