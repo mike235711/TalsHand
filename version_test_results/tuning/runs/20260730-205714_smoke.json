@@ -1,0 +1,493 @@
+{
+  "meta": {
+    "tag": "smoke",
+    "status": "completed",
+    "started_at": "2026-07-30T20:57:14",
+    "movetime_ms": 400,
+    "n_positions": 2,
+    "positions_file": "/private/tmp/claude-504/-Users-miguel-Documents-GitHub-TalsHandThreaded/00e78db0-a73f-42f5-91f2-1b68152a80c8/scratchpad/smoke_positions.json",
+    "engine": {
+      "binary": "/Users/miguel/Documents/GitHub/TalsHandThreaded/bin_tune044/talshand_exe",
+      "net_dir": "/Users/miguel/Documents/GitHub/TalsHandThreaded/models/n256_h16x16_sq",
+      "net_name": "n256_h16x16_sq",
+      "net_sha256": "849499aee760",
+      "branch": "tune-uci-v044"
+    },
+    "defaults": {
+      "LMRK10": 230,
+      "LMRHistDiv": 8000,
+      "LMPBase": 3,
+      "LMPDiv": 2,
+      "LMPMaxDepth": 6,
+      "NMPBase": 2,
+      "NMPDepthDiv": 6,
+      "NMPMinDepth": 3,
+      "RFPMargin": 175,
+      "RFPMaxDepth": 3,
+      "FutBase": 75,
+      "FutSlope": 75,
+      "FutMaxDepth": 6,
+      "FutMinMoves": 2,
+      "SEEMargin": 75,
+      "SEEMaxDepth": 6,
+      "SEEQSMargin": 120
+    },
+    "n_configs": 2,
+    "score_formula": "solved ? 1 + (T - t*)/T : 0 ; t* = earliest held-to-end PV time",
+    "updated_at": "2026-07-30T20:57:16"
+  },
+  "results": [
+    {
+      "params": {},
+      "score": 2.0,
+      "solved": 1,
+      "n": 2,
+      "mean_t_star_ms": 0.0,
+      "mean_final_depth": 16.5,
+      "per_position": [
+        {
+          "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 2 3",
+          "bm": "f3f7",
+          "score": 2.0,
+          "t_star_ms": 0.0,
+          "final_depth": 20,
+          "bestmove": "f3f7",
+          "records": [
+            [
+              2,
+              0,
+              30001,
+              "f3f7"
+            ],
+            [
+              3,
+              0,
+              30002,
+              "f3f7"
+            ],
+            [
+              4,
+              1,
+              30003,
+              "f3f7"
+            ],
+            [
+              5,
+              1,
+              30004,
+              "f3f7"
+            ],
+            [
+              6,
+              2,
+              30005,
+              "f3f7"
+            ],
+            [
+              7,
+              2,
+              30006,
+              "f3f7"
+            ],
+            [
+              8,
+              2,
+              30007,
+              "f3f7"
+            ],
+            [
+              9,
+              3,
+              30008,
+              "f3f7"
+            ],
+            [
+              10,
+              4,
+              30009,
+              "f3f7"
+            ],
+            [
+              11,
+              6,
+              30010,
+              "f3f7"
+            ],
+            [
+              12,
+              16,
+              30011,
+              "f3f7"
+            ],
+            [
+              13,
+              16,
+              30012,
+              "f3f7"
+            ],
+            [
+              14,
+              22,
+              30013,
+              "f3f7"
+            ],
+            [
+              15,
+              39,
+              30014,
+              "f3f7"
+            ],
+            [
+              16,
+              68,
+              30015,
+              "f3f7"
+            ],
+            [
+              17,
+              94,
+              30016,
+              "f3f7"
+            ],
+            [
+              18,
+              146,
+              30017,
+              "f3f7"
+            ],
+            [
+              19,
+              166,
+              30018,
+              "f3f7"
+            ],
+            [
+              20,
+              268,
+              30019,
+              "f3f7"
+            ]
+          ]
+        },
+        {
+          "fen": "rnb1kbnr/pppp1ppp/8/4p3/4P2q/2N5/PPPP1PPP/R1BQKBNR w KQkq - 2 3",
+          "bm": "c3d5",
+          "score": 0.0,
+          "t_star_ms": null,
+          "final_depth": 13,
+          "bestmove": "g1f3",
+          "records": [
+            [
+              2,
+              0,
+              361,
+              "g1f3"
+            ],
+            [
+              3,
+              0,
+              446,
+              "g1f3"
+            ],
+            [
+              4,
+              1,
+              470,
+              "g1f3"
+            ],
+            [
+              5,
+              2,
+              490,
+              "g1f3"
+            ],
+            [
+              6,
+              7,
+              556,
+              "g1f3"
+            ],
+            [
+              7,
+              11,
+              504,
+              "g1f3"
+            ],
+            [
+              8,
+              14,
+              506,
+              "g1f3"
+            ],
+            [
+              9,
+              23,
+              515,
+              "g1f3"
+            ],
+            [
+              10,
+              31,
+              486,
+              "g1f3"
+            ],
+            [
+              11,
+              95,
+              546,
+              "g1f3"
+            ],
+            [
+              12,
+              241,
+              531,
+              "g1f3"
+            ],
+            [
+              13,
+              289,
+              471,
+              "g1f3"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "params": {
+        "LMRK10": 300
+      },
+      "score": 2.0,
+      "solved": 1,
+      "n": 2,
+      "mean_t_star_ms": 0.0,
+      "mean_final_depth": 18.0,
+      "per_position": [
+        {
+          "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 2 3",
+          "bm": "f3f7",
+          "score": 2.0,
+          "t_star_ms": 0.0,
+          "final_depth": 22,
+          "bestmove": "f3f7",
+          "records": [
+            [
+              2,
+              0,
+              30001,
+              "f3f7"
+            ],
+            [
+              3,
+              0,
+              30002,
+              "f3f7"
+            ],
+            [
+              4,
+              1,
+              30003,
+              "f3f7"
+            ],
+            [
+              5,
+              1,
+              30004,
+              "f3f7"
+            ],
+            [
+              6,
+              1,
+              30005,
+              "f3f7"
+            ],
+            [
+              7,
+              2,
+              30006,
+              "f3f7"
+            ],
+            [
+              8,
+              2,
+              30007,
+              "f3f7"
+            ],
+            [
+              9,
+              3,
+              30008,
+              "f3f7"
+            ],
+            [
+              10,
+              4,
+              30009,
+              "f3f7"
+            ],
+            [
+              11,
+              5,
+              30010,
+              "f3f7"
+            ],
+            [
+              12,
+              12,
+              30011,
+              "f3f7"
+            ],
+            [
+              13,
+              13,
+              30012,
+              "f3f7"
+            ],
+            [
+              14,
+              16,
+              30013,
+              "f3f7"
+            ],
+            [
+              15,
+              30,
+              30014,
+              "f3f7"
+            ],
+            [
+              16,
+              39,
+              30015,
+              "f3f7"
+            ],
+            [
+              17,
+              62,
+              30016,
+              "f3f7"
+            ],
+            [
+              18,
+              99,
+              30017,
+              "f3f7"
+            ],
+            [
+              19,
+              107,
+              30018,
+              "f3f7"
+            ],
+            [
+              20,
+              147,
+              30019,
+              "f3f7"
+            ],
+            [
+              21,
+              236,
+              30020,
+              "f3f7"
+            ],
+            [
+              22,
+              388,
+              30021,
+              "f3f7"
+            ]
+          ]
+        },
+        {
+          "fen": "rnb1kbnr/pppp1ppp/8/4p3/4P2q/2N5/PPPP1PPP/R1BQKBNR w KQkq - 2 3",
+          "bm": "c3d5",
+          "score": 0.0,
+          "t_star_ms": null,
+          "final_depth": 14,
+          "bestmove": "g1f3",
+          "records": [
+            [
+              2,
+              0,
+              361,
+              "g1f3"
+            ],
+            [
+              3,
+              0,
+              446,
+              "g1f3"
+            ],
+            [
+              4,
+              1,
+              470,
+              "g1f3"
+            ],
+            [
+              5,
+              2,
+              490,
+              "g1f3"
+            ],
+            [
+              6,
+              7,
+              424,
+              "g1f3"
+            ],
+            [
+              7,
+              11,
+              504,
+              "g1f3"
+            ],
+            [
+              8,
+              13,
+              462,
+              "g1f3"
+            ],
+            [
+              9,
+              25,
+              462,
+              "g1f3"
+            ],
+            [
+              10,
+              42,
+              462,
+              "g1f3"
+            ],
+            [
+              11,
+              55,
+              507,
+              "g1f3"
+            ],
+            [
+              12,
+              85,
+              548,
+              "g1f3"
+            ],
+            [
+              13,
+              120,
+              548,
+              "g1f3"
+            ],
+            [
+              14,
+              243,
+              550,
+              "g1f3"
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "meta": {
+    "tag": "smokebad",
+    "status": "stopped",
+    "started_at": "2026-07-30T21:20:46",
+    "movetime_ms": 300,
+    "repeats": 1,
+    "n_positions": 2,
+    "band": "hard",
+    "positions_file": "/private/tmp/claude-504/-Users-miguel-Documents-GitHub-TalsHandThreaded/00e78db0-a73f-42f5-91f2-1b68152a80c8/scratchpad/smoke_positions.json",
+    "positions_meta": {
+      "note": "smoke2"
+    },
+    "engine": {
+      "binary": "/Users/miguel/Documents/GitHub/TalsHandThreaded/bin_tune044/talshand_exe",
+      "net_dir": "/nonexistent_net",
+      "net_name": "nonexistent_net",
+      "net_sha256": null,
+      "branch": "tune-uci-v044"
+    },
+    "defaults": {
+      "LMRK10": 230,
+      "LMRHistDiv": 8000,
+      "LMPBase": 3,
+      "LMPDiv": 2,
+      "LMPMaxDepth": 6,
+      "NMPBase": 2,
+      "NMPDepthDiv": 6,
+      "NMPMinDepth": 3,
+      "RFPMargin": 175,
+      "RFPMaxDepth": 3,
+      "FutBase": 75,
+      "FutSlope": 75,
+      "FutMaxDepth": 6,
+      "FutMinMoves": 2,
+      "SEEMargin": 75,
+      "SEEMaxDepth": 6,
+      "SEEQSMargin": 120
+    },
+    "n_configs": 1,
+    "score_formula": "(bestmove==bm) + held_time_fraction; records=[depth,time_ms,nodes,cp,move]",
+    "updated_at": "2026-07-30T21:20:47"
+  },
+  "results": [
+    {
+      "params": {
+        "LMRK10": 300
+      },
+      "score": null,
+      "per_position": []
+    }
+  ]
+}
