@@ -37,6 +37,8 @@ import subprocess
 import sys
 import tempfile
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
@@ -68,6 +70,10 @@ DEFAULT_OPENINGS: list[str] = [
     "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",    # 1.e4 e5 2.Nf3 Nc6
     "rnbqkb1r/pppp1ppp/4pn2/8/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3",       # Indian
     "rnbqkbnr/ppp1pppp/8/8/3pP3/8/PPP2PPP/RNBQKBNR w KQkq - 0 3",          # Centre game-ish
+    "rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",       # French 1.e4 e6
+    "rnbqkbnr/pp1ppppp/2p5/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",       # Caro-Kann 1.e4 c6
+    "rnbqkb1r/pppppp1p/5np1/8/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3",      # King's Indian 1.d4 Nf6 2.c4 g6
+    "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",  # Ruy Lopez 1.e4 e5 2.Nf3 Nc6 3.Bb5
     "r1bqkbnr/1ppp1ppp/p1n5/4p3/B3P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4",   # Ruy Lopez, Morphy
     "rnbqkb1r/pp2pppp/3p1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 6",     # Sicilian Najdorf-ish
 ]
@@ -339,6 +345,49 @@ def elo_with_error(points: float, n: int, results: list[float]) -> tuple[float, 
     return (elo, 1.96 * d_elo * stderr)
 
 
+def sprt_llr(points: float, n: int, results: list[float],
+             elo0: float, elo1: float) -> float:
+    """Log-likelihood ratio of H1 (elo=elo1) against H0 (elo=elo0), normal approximation.
+
+    POR QUE SPRT Y NO "PARAR CUANDO EL INTERVALO EXCLUYA EL CERO". Mirar el resultado despues de
+    cada partida y parar en cuanto el intervalo del 95% se separa del cero NO da un test del 5%:
+    da uno con una tasa de falso positivo que crece con el numero de miradas y que, si se mira
+    indefinidamente, tiende a 1 (ley del logaritmo iterado -- un paseo aleatorio cruza cualquier
+    banda fija tarde o temprano). El SPRT es la construccion que si controla los dos errores
+    mirando continuamente, porque su umbral esta sobre la razon de verosimilitudes y no sobre el
+    estadistico.
+
+    Formulacion normal (la de Fishtest): con s = 1/(1+10^(-elo/400)) la puntuacion esperada bajo
+    cada hipotesis y sigma^2 la varianza EMPIRICA de la puntuacion por partida,
+
+        LLR = (s1 - s0) / sigma^2 * (S - n*(s0+s1)/2)
+
+    Se usa la varianza empirica y no la binomial a proposito: con 65% de tablas la varianza real
+    por partida ronda 0.09 contra el 0.25 de la binomial, asi que suponer binomial tiraria a la
+    basura casi dos tercios del poder del test y el early stop casi nunca dispararia.
+
+    EL SESGO QUE ESTO INTRODUCE, Y QUE HAY QUE RECORDAR AL ANALIZAR. Un match que se para al cruzar
+    la banda tiene un |Elo| SOBREESTIMADO: se corto justo porque la fluctuacion iba a favor. Para
+    decidir quien pasa de ronda da igual (la decision es la correcta con la probabilidad que fija
+    alpha), pero para AJUSTAR RATINGS o correlacionar metricas contra Elo el sesgo es real. Por eso
+    el bloque `sprt` del JSON registra si el match se paro y con que LLR: un analisis posterior
+    puede excluir los parados o modelarlos.
+    """
+    if n < 2:
+        return 0.0
+    s0 = 1.0 / (1.0 + 10.0 ** (-elo0 / 400.0))
+    s1 = 1.0 / (1.0 + 10.0 ** (-elo1 / 400.0))
+    mean = points / n
+    var = sum((r - mean) ** 2 for r in results) / n
+    var = max(var, 1e-3)          # todo tablas -> varianza 0; el suelo evita dividir por cero
+    return (s1 - s0) / var * (points - n * (s0 + s1) / 2.0)
+
+
+def sprt_bounds(alpha: float, beta: float) -> tuple[float, float]:
+    """Umbrales de Wald: cruzar el alto acepta H1, cruzar el bajo acepta H0."""
+    return (math.log(beta / (1.0 - alpha)), math.log((1.0 - beta) / alpha))
+
+
 def safe_quit(engine) -> None:
     """Quit an engine, tolerating one that has already crashed/terminated
     (quitting a dead engine otherwise raises EngineTerminatedError)."""
@@ -464,7 +513,9 @@ def build_report(new_ident: dict, old_ident: dict, meta: dict,
 
 def run_match(new_bin: Path, old_bin: Path, tc_map: dict[str, tuple[float, float]],
               openings: list[str], new_ident: dict, old_ident: dict,
-              output_path: str | None = None, pgn_path: str | None = None) -> dict:
+              output_path: str | None = None, pgn_path: str | None = None,
+              sprt: dict | None = None, resume: bool = False,
+              concurrency: int = 1) -> dict:
     print(f"[match] NEW={new_bin}\n[match] OLD={old_bin}", flush=True)
     for tag, ident in (("NEW", new_ident), ("OLD", old_ident)):
         if ident.get("net_name"):
@@ -487,6 +538,53 @@ def run_match(new_bin: Path, old_bin: Path, tc_map: dict[str, tuple[float, float
         # Recorded, not just printed: months later the JSON must still say whether this
         # match isolated the SEARCH (same eval both sides) or compared two evals.
         meta["same_net"] = same_net
+    if sprt:
+        # Se registra SIEMPRE, se pare o no. Un JSON sin este bloque es un match de n fijo; uno
+        # con `stopped: true` lleva un |Elo| sobreestimado y el analisis tiene que saberlo.
+        meta["sprt"] = dict(sprt, stopped=False, llr=0.0, decision=None)
+
+    # ---- reanudacion: las partidas ya jugadas estan en el propio JSON, con su apertura ----
+    # Existe para que reiniciar un torneo (p.ej. al activar el SPRT a mitad) no tire a la basura
+    # los matches a medias. Se reanuda por APERTURA COMPLETA, no por partida: media apertura
+    # jugada rompe el equilibrio de colores, asi que las dos partidas de esa apertura se repiten.
+    #
+    # LO QUE SI SE PIERDE AL REANUDAR: move_stats y clock_stats no se guardan por partida en el
+    # JSON (solo su resumen agregado en move_distributions), asi que un match reanudado tiene el
+    # bloque `move_distributions` calculado SOLO sobre las partidas jugadas despues de reanudar.
+    # El W/D/L y el Elo estan completos; los histogramas de tiempo y profundidad, no. Se marca en
+    # meta para que ningun analisis posterior los lea como si cubriesen el match entero.
+    jugadas: dict[str, set[int]] = {}
+    if resume and output_path and os.path.exists(output_path):
+        try:
+            prev = json.load(open(output_path))
+            for blob in prev.get("per_tc", []):
+                res0 = TCResult(tc=blob["tc"], base=blob["base"], inc=blob["inc"])
+                por_ap: dict[int, list[dict]] = {}
+                for g in blob.get("games", []):
+                    por_ap.setdefault(g["opening"], []).append(g)
+                completas = {op for op, gs in por_ap.items() if len(gs) >= 2}
+                for op in sorted(completas):
+                    for g in por_ap[op][:2]:
+                        res0.games.append(g)
+                        r = g["result_new_pov"]
+                        if r == "1-0":   res0.wins += 1
+                        elif r == "0-1": res0.losses += 1
+                        else:            res0.draws += 1
+                        if g.get("reason") == "time forfeit":
+                            if r == "0-1":  res0.new_time_losses += 1
+                            elif r == "1-0": res0.old_time_losses += 1
+                if completas:
+                    jugadas[blob["tc"]] = completas
+                    per_tc.append(res0)
+                    meta["games_played"] += res0.n
+            if jugadas:
+                meta["resumed"] = {"games_kept": meta["games_played"],
+                                   "move_distributions_partial": True}
+                print(f"[match] reanudando: {meta['games_played']} partidas ya en el fichero "
+                      f"({ {k: len(v) for k, v in jugadas.items()} } aperturas completas)", flush=True)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[match] no se pudo reanudar ({exc}); se juega desde cero", flush=True)
+            per_tc.clear(); jugadas = {}; meta["games_played"] = 0
 
     def flush(status: str) -> None:
         """Persist the current (partial) report atomically. This is what makes a
@@ -502,68 +600,157 @@ def run_match(new_bin: Path, old_bin: Path, tc_map: dict[str, tuple[float, float
     if output_path:
         print(f"[match] durable log -> {output_path}", flush=True)
 
+    lock = threading.Lock()
+
+    def jugar_apertura(tc, base, inc, op_idx, fen):
+        """Las DOS partidas de una apertura (nueva con blancas y con negras), en este hilo.
+
+        La unidad de paralelismo es la APERTURA, no la partida. Dos razones: el balance de colores
+        se mantiene atomico (nunca queda medio par contado) y el SPRT sigue evaluandose sobre
+        muestras equilibradas. Cada partida abre sus DOS procesos de motor y los cierra, asi que
+        no se comparte estado entre hilos -- lo unico compartido son los contadores, bajo `lock`.
+        """
+        salida = []
+        for new_is_white in (True, False):
+            new_eng = old_eng = None
+            bo: list = []
+            white_result = None
+            try:
+                # Same binary, different net: point each side at its own model dir via
+                # the NNUEU_NET environment override (v0.4.3+), set per engine process.
+                # NOT via configure({"EvalFile": ...}): the engine implements that
+                # setoption but does not ADVERTISE it in the uci handshake, and
+                # python-chess refuses to send unadvertised options (a full match once
+                # burned as 96 instant "harness error" draws this way). Trailing slash:
+                # the C++ side does plain string concatenation, no path-join.
+                def _popen(binary: Path, ident: dict):
+                    env = None
+                    if ident.get("net_dir"):
+                        env = dict(os.environ, NNUEU_NET=ident["net_dir"] + "/")
+                    return chess.engine.SimpleEngine.popen_uci(str(binary), env=env)
+                new_eng = _popen(new_bin, new_ident)
+                old_eng = _popen(old_bin, old_ident)
+                if new_is_white:
+                    white_result, reason = play_game(new_eng, old_eng, fen, base, inc, bo,
+                                                     new_engine=new_eng, move_stats=move_stats,
+                                                     clock_out=clock_stats, tc=tc)
+                    new_pov = white_result
+                else:
+                    white_result, reason = play_game(old_eng, new_eng, fen, base, inc, bo,
+                                                     new_engine=new_eng, move_stats=move_stats,
+                                                     clock_out=clock_stats, tc=tc)
+                    new_pov = {"1-0": "0-1", "0-1": "1-0", "1/2-1/2": "1/2-1/2"}[white_result]
+            except Exception as exc:  # noqa: BLE001
+                # Setup/teardown failure (e.g. an engine that crashed at startup). Don't kill
+                # the whole match; record a void game.
+                new_pov, reason = ("1/2-1/2", f"harness error: {exc}")
+            finally:
+                safe_quit(new_eng)
+                safe_quit(old_eng)
+            salida.append({"opening": op_idx, "new_white": new_is_white,
+                           "result_new_pov": new_pov, "reason": reason,
+                           "_board": bo[0] if bo else None, "_white_result": white_result})
+        return salida
+
     try:
         for tc, (base, inc) in tc_map.items():
-            res = TCResult(tc=tc, base=base, inc=inc)
-            per_tc.append(res)  # append the reference NOW so partial results are logged live
+            ya = jugadas.get(tc, set())
+            res = next((r for r in per_tc if r.tc == tc), None)
+            if res is None:
+                res = TCResult(tc=tc, base=base, inc=inc)
+                per_tc.append(res)  # append the reference NOW so partial results are logged live
             print(f"\n[match] === {tc} ({base}+{inc}) ===", flush=True)
-            for op_idx, fen in enumerate(openings):
-                # Two games: new as White, then new as Black.
-                for new_is_white in (True, False):
-                    new_eng = old_eng = None
-                    bo: list = []
-                    white_result = None
-                    try:
-                        new_eng = chess.engine.SimpleEngine.popen_uci(str(new_bin))
-                        old_eng = chess.engine.SimpleEngine.popen_uci(str(old_bin))
-                        if new_is_white:
-                            white_result, reason = play_game(new_eng, old_eng, fen, base, inc, bo,
-                                                             new_engine=new_eng, move_stats=move_stats,
-                                                             clock_out=clock_stats, tc=tc)
-                            new_pov = white_result
-                        else:
-                            white_result, reason = play_game(old_eng, new_eng, fen, base, inc, bo,
-                                                             new_engine=new_eng, move_stats=move_stats,
-                                                             clock_out=clock_stats, tc=tc)
-                            # flip to new engine's POV
-                            new_pov = {"1-0": "0-1", "0-1": "1-0", "1/2-1/2": "1/2-1/2"}[white_result]
-                    except Exception as exc:  # noqa: BLE001
-                        # Setup/teardown failure (e.g. an engine that crashed at
-                        # startup). Don't kill the whole match; record a void game.
-                        new_pov, reason = ("1/2-1/2", f"harness error: {exc}")
-                    finally:
-                        safe_quit(new_eng)
-                        safe_quit(old_eng)
+            pendientes = [(i, f) for i, f in enumerate(openings) if i not in ya]
+            parar = False
 
-                    if new_pov == "1-0":
-                        res.wins += 1
-                    elif new_pov == "0-1":
-                        res.losses += 1
-                    else:
-                        res.draws += 1
-                    if reason == "time forfeit":
-                        if new_pov == "0-1":
-                            res.new_time_losses += 1
-                        elif new_pov == "1-0":
-                            res.old_time_losses += 1
-                    res.games.append({"opening": op_idx, "new_white": new_is_white,
-                                      "result_new_pov": new_pov, "reason": reason})
+            def registrar(recs):
+                """Contabiliza una apertura terminada. Solo se llama con `lock` tomado."""
+                for g in recs:
+                    bo, wr = g.pop("_board"), g.pop("_white_result")
+                    npov = g["result_new_pov"]
+                    if npov == "1-0":   res.wins += 1
+                    elif npov == "0-1": res.losses += 1
+                    else:               res.draws += 1
+                    if g["reason"] == "time forfeit":
+                        if npov == "0-1":   res.new_time_losses += 1
+                        elif npov == "1-0": res.old_time_losses += 1
+                    res.games.append(g)
                     meta["games_played"] += 1
-                    print(f"  op{op_idx} new_{'W' if new_is_white else 'B'}: "
-                          f"{new_pov} ({reason})  running W-D-L={res.wins}-{res.draws}-{res.losses}",
+                    print(f"  op{g['opening']} new_{'W' if g['new_white'] else 'B'}: "
+                          f"{npov} ({g['reason']})  W-D-L={res.wins}-{res.draws}-{res.losses}",
                           flush=True)
-
-                    if pgn_path and bo and white_result is not None:
-                        g = chess.pgn.Game.from_board(bo[0])
-                        g.headers["Event"] = f"{tc} op{op_idx}"
-                        g.headers["White"] = new_label if new_is_white else old_label
-                        g.headers["Black"] = old_label if new_is_white else new_label
-                        g.headers["Result"] = white_result
-                        g.headers["Termination"] = reason
-                        g.headers["NewPOV"] = new_pov  # result from the NEW engine's POV
+                    if pgn_path and bo is not None and wr is not None:
+                        pg = chess.pgn.Game.from_board(bo)
+                        pg.headers["Event"] = f"{tc} op{g['opening']}"
+                        pg.headers["White"] = new_label if g["new_white"] else old_label
+                        pg.headers["Black"] = old_label if g["new_white"] else new_label
+                        pg.headers["Result"] = wr
+                        pg.headers["Termination"] = g["reason"]
+                        pg.headers["NewPOV"] = npov
                         with open(pgn_path, "a") as fh:
-                            print(g, file=fh, end="\n\n")
-                    flush("in_progress")  # persist after every finished game
+                            print(pg, file=fh, end="\n\n")
+
+            def revisa_sprt():
+                """SPRT sobre TODAS las partidas contadas. Solo con `lock` tomado.
+
+                Con paralelismo las aperturas terminan fuera de orden, asi que esto ya no es un
+                test secuencial puro sino de GRUPOS: se mira cada vez que cierra una apertura,
+                sea cual sea. Eso no rompe la garantia de Wald -- mirar MENOS veces solo hace el
+                test mas conservador -- pero si significa que el n de parada puede pasarse del
+                umbral por hasta `concurrency - 1` aperturas que ya estaban en vuelo. Se quedan
+                contadas: tirarlas seria sesgar por el resultado.
+                """
+                if not sprt:
+                    return False
+                todos = [1.0 if g["result_new_pov"] == "1-0" else
+                         0.0 if g["result_new_pov"] == "0-1" else 0.5
+                         for r in per_tc for g in r.games]
+                n_tot = len(todos)
+                if n_tot < sprt["min_games"]:
+                    return False
+                llr = sprt_llr(sum(todos), n_tot, todos, sprt["elo0"], sprt["elo1"])
+                lo, hi = sprt_bounds(sprt["alpha"], sprt["beta"])
+                meta["sprt"]["llr"] = llr
+                if llr >= hi or llr <= lo:
+                    meta["sprt"].update(stopped=True, decision="new" if llr >= hi else "old",
+                                        stopped_at=n_tot)
+                    print(f"\n[match] SPRT: LLR={llr:+.2f} cruza "
+                          f"{'H1 (gana NEW)' if llr >= hi else 'H0 (gana OLD)'} "
+                          f"tras {n_tot} partidas — parando", flush=True)
+                    return True
+                return False
+
+            if concurrency <= 1:
+                for op_idx, fen in pendientes:
+                    registrar(jugar_apertura(tc, base, inc, op_idx, fen))
+                    flush("in_progress")
+                    if revisa_sprt():
+                        parar = True
+                        break
+            else:
+                # Las partidas de un match son independientes entre si, asi que se juegan varias
+                # aperturas a la vez. Importa cuando el cuadro se estrecha: en la ultima ronda
+                # queda UN cruce y sin esto el proceso usa dos nucleos de ocho.
+                with ThreadPoolExecutor(max_workers=concurrency) as ex:
+                    futs = {ex.submit(jugar_apertura, tc, base, inc, i, f): i
+                            for i, f in pendientes}
+                    try:
+                        for fut in as_completed(futs):
+                            recs = fut.result()
+                            with lock:
+                                registrar(recs)
+                                flush("in_progress")
+                                if revisa_sprt():
+                                    parar = True
+                    finally:
+                        if parar:
+                            for f2 in futs:
+                                f2.cancel()
+            if parar:
+                res.games.sort(key=lambda g: (g["opening"], not g["new_white"]))
+                flush("completed")
+                return build_report(new_ident, old_ident, meta, per_tc, move_stats, clock_stats)
+            res.games.sort(key=lambda g: (g["opening"], not g["new_white"]))
     except KeyboardInterrupt:
         print("\n[match] interrupted — writing partial result and stopping", flush=True)
         flush("stopped")
@@ -655,7 +842,46 @@ def main() -> int:
                     "identity/hash (auto-detected from a wrapper's NNUEU_NET= or $NNUEU_NET if omitted)")
     ap.add_argument("--old-net", help="NNUEU net dir the OLD engine loads (see --new-net)")
     ap.add_argument("--pgn", help="write every game as PGN to this path (for inspecting losses)")
+    ap.add_argument("--sprt", metavar="ELO0,ELO1[,ALPHA,BETA]",
+                    help="parada temprana por SPRT. Contrasta H0 (elo=ELO0) contra H1 (elo=ELO1) "
+                         "y para en cuanto la razon de verosimilitudes cruza un umbral de Wald. "
+                         "Ej: '-30,30' para decidir el ganador de un cruce de cuadro; alpha y beta "
+                         "por defecto 0.05. NO usar en el match que fija el Elo de una version: "
+                         "un match parado sobreestima |Elo| (queda anotado en meta.sprt).")
+    ap.add_argument("--sprt-min-games", type=int, default=24,
+                    help="partidas minimas antes de permitir una parada (por defecto 24)")
+    # POR QUE 24 Y NO 16. El LLR divide por la varianza EMPIRICA, y con 85-90% de tablas esa
+    # varianza se estima a partir de un puñado de partidas decisivas: si sale baja por azar, el
+    # LLR se infla y el test se vuelve optimista justo cuando menos informacion hay. Medido en
+    # produccion: un cruce paro en 16 con 0W/14T/2D, varianza 0.0273 y LLR -3.15 contra el umbral
+    # de -2.94 -- dentro de las reglas, pero apoyado en dos partidas decisivas. Los cruces con
+    # diferencia real paran igual (los demas pararon entre 42 y 54), asi que subir el suelo no
+    # cuesta casi nada y quita los casos sostenidos por una varianza mal estimada.
+    ap.add_argument("--concurrency", type=int, default=1,
+                    help="aperturas jugadas EN PARALELO dentro de este match (cada una son 2 "
+                         "partidas = 2 procesos de motor vivos a la vez). Las partidas de un "
+                         "match son independientes, asi que esto no cambia el resultado esperado, "
+                         "solo el reloj de pared. Util cuando queda un unico cruce y el proceso "
+                         "usaria 2 nucleos de 8. Ojo: subirlo mas alla de los nucleos disponibles "
+                         "roba tiempo de reflexion a las dos partes por igual -- el Elo relativo "
+                         "aguanta, pero la profundidad alcanzada baja y no es comparable con "
+                         "matches corridos con otra carga.")
+    ap.add_argument("--resume", action="store_true",
+                    help="continuar un match a medias leyendo las partidas ya jugadas de --output "
+                         "(por apertura completa, para no romper el balance de colores)")
     args = ap.parse_args()
+
+    sprt_cfg = None
+    if args.sprt:
+        p = [float(x) for x in args.sprt.split(",")]
+        if len(p) not in (2, 4):
+            ap.error("--sprt espera ELO0,ELO1 o ELO0,ELO1,ALPHA,BETA")
+        if p[0] >= p[1]:
+            ap.error("--sprt: ELO0 debe ser menor que ELO1")
+        sprt_cfg = {"elo0": p[0], "elo1": p[1],
+                    "alpha": p[2] if len(p) == 4 else 0.05,
+                    "beta": p[3] if len(p) == 4 else 0.05,
+                    "min_games": args.sprt_min_games}
 
     if args.base is not None:
         tc_map = {f"custom-{args.base:g}+{args.inc:g}": (args.base, args.inc)}
@@ -687,7 +913,9 @@ def main() -> int:
             ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
             output_path = str(outdir / f"{ts}_{engine_label(new_ident)}_vs_{engine_label(old_ident)}.json")
         report = run_match(new_bin, old_bin, tc_map, openings, new_ident, old_ident,
-                           output_path=output_path, pgn_path=args.pgn)
+                           output_path=output_path, pgn_path=args.pgn,
+                           sprt=sprt_cfg, resume=args.resume,
+                           concurrency=max(1, args.concurrency))
     finally:
         # Clean up any worktrees we created.
         subprocess.run(["git", "worktree", "prune"], cwd=REPO, check=False)

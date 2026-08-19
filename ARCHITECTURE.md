@@ -99,37 +99,165 @@ The engine uses an alpha-beta search with iterative deepening as its main algori
 
 ### Current pruning & timing profile vs Stockfish
 
-After the search levers above, the engine is **eval-bound** (the N512 forward pass dominates) and its tree is lean but still missing the forward-pruning techniques that are Stockfish's largest. Two profiles (Apple Silicon, depth-13 basket) capture where the engines differ — *prunes per 1000 nodes*, and *self-time per node*:
+Two profiles (Apple Silicon) capture where the engines differ — *prunes per 1000 nodes*, and *self-time per node*. The timing column is measured **inline-aware** (xctrace / Instruments Time Profiler on the real `-Ofast -flto` Release build + dSYM — plain `sample` is useless here, it fuses everything into `alphaBetaSearch`), then scaled to absolute ns/node by the measured nps. Our columns: **v0.4.2** (single-act `N512_h32`), **v0.4.3** (dual-act `N256_h16x16`), **v0.4.4** (adds LMP — the current release).
 
 **Pruning techniques (events per 1000 nodes):**
 
-| technique | Stockfish | LaMano | note |
-|---|---|---|---|
-| ttcut | 55 | 11 | SF cuts ~5× more / node |
-| nullmove | 6 | 5 | ~equal |
-| lmr | 380 | 134 | SF reduces ~3× more / node |
-| futility | 1041 | 0 | ← we don't have it (SF's largest) |
-| lmp | 244 | 0 | ← we don't have it |
-| seeprune | 205 | 0 | ← ours is in-loop SEE, not counted here |
-| histprune | 14 | 0 | ← we don't have it |
-| razoring | 6 | 0 | ← we don't have it |
+| technique | Stockfish | v0.4.3 | v0.4.4 (LMP) | note |
+|---|---|---|---|---|
+| futility | 1041 | 640 | **48** | LMP cannibalizes it (both target late quiets; LMP's `break` fires first) |
+| lmp | 244 | 0 | **77\*** | \*`break` events — each skips *several* late quiets, not comparable to a per-move count |
+| lmr | 380 | 128 | **82** | LMP removes late quiets LMR would have reduced |
+| seeprune | 205 | 66 | 102 | rise is a per-1000-*nodes* normalization artifact (leaner tree) |
+| ttcut | 55 | 18 | 24 | SF still cuts ~2-3× more |
+| nullmove | 6 | 13 | 29 | normalization artifact; we null-move more than SF |
+| reverse-futility (RFP) | *(SF has it)* | 124 | 123 | depth ≤ 3, independent of LMP → unchanged (sanity check ✓) |
+| histprune / razoring | 14 / 6 | — | — | not implemented |
+
+*(6-position basket, depth 16, events per 1000 total nodes (AB+QS), via the `info string lmp/rfp/fut/see/seeqs` counters.* **Key finding: LMP does not ADD pruning, it REDISTRIBUTES it** — its `break` preempts forward-futility on late quiets (640→48) and removes quiets LMR would have reduced (128→82); the see/nmp rises are normalization (the tree shrank, so those prunes are a larger fraction). Because `cntLMP` counts break-events (each skipping a variable number of quiets), the per-1000 counter is **not** directly comparable to SF's lmp/1000 — *the clean outcome metric is the tree itself:* **EBF 2.878 → 2.728** and **−43% nodes to depth 13** (toward SF's 2.22). That −43% leaner tree is the +16.3 Elo of v0.4.4 (concentrated in blitz, where the extra ~1 ply converts).)*
 
 **Per-component self-time (% / ns per node):**
 
-| component | LaMano (% / ns) | Stockfish (% / ns) |
-|---|---|---|
-| eval: forward (head + activation) | 69% / 342n | 28% / 409n |
-| eval: accumulation | 18% / 89n | 45% / 668n |
-| move generation | 2% / 9n | — (fused into MovePicker) |
-| move ordering (score / sort) | 0% / 1n | 10% / 147n |
-| legality + selection | 3% / 14n | 0% / 7n |
-| check / pin info | 1% / 3n | 2% / 26n |
-| make / unmake | 2% / 9n | 2% / 23n |
-| SEE | 1% / 3n | 2% / 36n |
-| search control + TT | 5% / 23n | 10% / 151n |
-| **TOTAL** | **100% / 493n** | **100% / 1471n** |
+| component | v0.4.2 N512 (% / ns) | v0.4.3 N256 (% / ns) | Stockfish (% / ns) |
+|---|---|---|---|
+| eval: forward (head + activation) | 65.9% / 268n | 37.3% / 64n | 28% / 409n |
+| eval: accumulation | 14.5% / 59n | 18.5% / 32n | 45% / 668n |
+| move ordering (score / sort) | 5.1% / 21n | 13.1% / 22n | 10% / 147n |
+| move generation | 4.3% / 17n | 9.6% / 16n | — (fused into MovePicker) |
+| make / unmake | 2.9% / 12n | 7.0% / 12n | 2% / 23n |
+| search control + TT | 5.4% / 22n | 10.4% / 18n | 10% / 151n |
+| check / pin info | 0.9% / 4n | 2.0% / 3n | 2% / 26n |
+| SEE | 0.8% / 3n | 1.6% / 3n | 2% / 36n |
+| legality + selection | ~0% / 0n | ~0% / 0n | 0% / 7n |
+| **TOTAL** | **100% / 406n** | **100% / 171n** | **100% / 1471n** |
 
-Reading: LaMano is **~3× faster per node** (493 ns vs 1471 ns), but **69 %** of that goes to the N512 forward pass — the head is wide relative to the accumulator, the opposite balance to Stockfish, whose cost is the 3072-wide accumulation it amortises incrementally. The remaining strength gap is therefore **tree leanness, not node speed**: SF prunes futility (1041), lmp (244) and histprune (14) per 1000 nodes that we lack entirely, and reduces (lmr) ~3× more. Those forward-pruning techniques are the open roadmap — with the caveat that every prior *lossy* eval-margin prune (LMP v0.3.15, QS-delta, razoring trials) failed here because the small eval was too noisy; the bet is that the N512 net is now accurate enough to make them sound.
+Reading: the **N256 swap (v0.4.3) made a node 2.4× cheaper** (406 → 171 ns) — entirely on the eval side. The forward pass dropped **268 → 64 ns** (4.2×: narrower accumulator + smaller head, even with the dual activation) and accumulation **59 → 32 ns**; everything non-eval is byte-identical code and its absolute cost is unchanged (ordering 21→22, movegen 17→16, make/unmake 12→12, search+TT 22→18 ns — the spread is sampling noise). So the *balance* shifted hard: the engine went from **eval-bound (eval 80 % in v0.4.2)** to **balanced (eval 56 % in v0.4.3)**, and **move ordering is now the #3 cost (13 %, `sort_moves` + `ScoredMove`)** — previously buried under the N512 forward pass, now a real optimisation target. (Cross-check that validates the table: the eval-cost drop 327→96 ns matches the 235 ns/node the nps gap demands, and non-eval is 79 vs 76 ns/node across the two versions — it must be equal, same search code.)
+
+Versus Stockfish: we are now **~8.6× faster per node** (171 vs 1471 ns) — SF pays a huge 3072-wide accumulation (45 % / 668 ns) it amortises incrementally — but SF searches a far leaner tree (futility 1041, lmp 244, histprune 14 prunes/1000 we lack; lmr ~3× more). The remaining strength gap is **tree leanness, not node speed**: the open roadmap is the forward-pruning techniques (lmp, histprune, razoring) — with the caveat that every prior *lossy* eval-margin prune failed on the noisier nets; the bet is the dual-act net is accurate enough to make them sound, as forward futility already proved in v0.4.2.
+
+**v0.4.4 (LMP) shifts the component profile** (xctrace, same method; shares, since the leaner tree changes the node mix so a single ns/node total no longer applies cleanly): eval-forward 37→31 %, **move ordering 13 → 22 %**, make/unmake 7 → 3.6 %, eval-total 56 → 50 %. The per-node *code* is unchanged (eval-forward is still ~64 ns); the **shares** move because LMP prunes late quiets *after* the staged selector has already scored+sorted the whole quiet list, so we pay the full ordering cost for quiets we then `break` past without searching (their eval/make-unmake/subtree is saved → those shares drop; ordering's stays → its share rises). **Actionable: lazy quiet scoring** — only score/sort quiets up to the LMP move-count threshold (SF's `partial_insertion_sort` + lazy generation), which would reclaim much of that 22 %.
+
+## Tunable Search Parameters & Score-Based Optimization
+
+The 8 pruning/reduction technique groups of the search are parameterized by the constants
+below. On the **`tune-uci-v044`** branch (worktree off tag v0.4.4) they are exposed as **17
+UCI spin options** (`src/search_params.h`, applied in `src/worker.cpp`, advertised + parsed
+in `src/engine.cpp`), so a single binary (`bin_tune044/talshand_exe`) can run any
+configuration via `setoption` — no rebuild per config. **Identity guarantee (validated):
+with every option at its default, the tunable binary searches the exact same tree as stock
+v0.4.4** (bit-identical fixed-depth node counts + bestmove, Threads=1). The branch also adds
+`go movetime N`: think for *exactly* N ms (soft-budget/streak early-stops disabled, the hard
+abort is the only stop) — the apples-to-apples mode the tuner needs.
+
+### The tunable parameters
+
+| Group | UCI option(s) (default) | Formula / gate (defaults) | Source |
+|---|---|---|---|
+| **LMR** (late move reductions) | `LMRK10` (230), `LMRHistDiv` (8000) | `Reductions[i] = (LMRK10/10)·ln(i)`; `R = Red[depth]·Red[moves]/1024`, nudged `− history/LMRHistDiv` | `src/worker.cpp` (table + not-in-check loop) |
+| **LMP** (late move pruning) | `LMPBase` (3), `LMPDiv` (2), `LMPMaxDepth` (6) | at non-PV `depth ≤ max`, skip remaining quiets once `moves > (Base + d²)/Div` (→ 2,3,6,9,14,19) | `src/worker.cpp` (v0.4.4) |
+| **NMP** (null move pruning) | `NMPBase` (2), `NMPDepthDiv` (6), `NMPMinDepth` (3) | at `depth ≥ min`, null-search with `R = Base + depth/Div`, verified fail-high | `src/worker.cpp` |
+| **RFP** (reverse futility) | `RFPMargin` (175), `RFPMaxDepth` (3) | at `depth ≤ max`, return staticEval when `≥ beta + Margin·depth` | `src/worker.cpp` |
+| **Futility** (forward) | `FutBase` (75), `FutSlope` (75), `FutMaxDepth` (6), `FutMinMoves` (2) | at non-PV `depth ≤ max`, `moves ≥ min`, skip a quiet when `staticEval + Base + Slope·depth ≤ alpha` | `src/worker.cpp` |
+| **SEE prune (AB)** | `SEEMargin` (75), `SEEMaxDepth` (6) | at `depth ≤ max`, skip captures failing `see_ge(−Margin·depth)` | `src/worker.cpp` |
+| **SEE prune (QS)** | `SEEQSMargin` (120) | skip QS captures failing `see_ge(−Margin)` | `src/worker.cpp` (quiescence) |
+
+(Options are clamped engine-side — no division-by-zero or out-of-bounds values are
+representable. A malformed `setoption` value is ignored with an `info string`, never fatal.)
+
+Not (yet) exposed: killer count, history bonus/max, time-management constants, TT sizing —
+they either interact with clock behavior (which the position score cannot see) or are
+structural.
+
+### The solve score
+
+A configuration is evaluated on a set of **labeled positions** (see below) with a fixed
+per-position budget `T` (`go movetime`, default 2500 ms, Threads=1, fresh process per
+position). For each position with reference best move `bm`:
+
+```
+held  = fraction of T during which the engine's PV equals bm
+        (per completed-depth intervals; the final PV counts until the end of T)
+score = (final bestmove == bm ? 1 : 0) + held        ∈ [0, 2]
+```
+
+This rewards **finding** the best move, finding it **early**, and **holding** it — and it is
+continuous (a PV blip at the last depth costs only its interval, not the whole position).
+Config score = sum over positions. Raw per-depth records `[depth, time_ms, nodes, cp, move]`
+are stored in every run file, so alternative formulas (e.g. node-based earliness) can be
+recomputed offline without replaying. Deeper-searching configs win indirectly: more depth in
+the same T ⇒ more/earlier solves. **The score is a cheap proxy for Elo, not Elo** — the
+final arbiter is always a real match (same lesson as cp50 ≠ Elo for nets).
+
+### The position set
+
+`scripts/tune_positions.py` samples real game positions from the engine's own match PGNs
+(`version_test_results/*.pgn`), labels them with Stockfish, and keeps only positions whose
+best move is **unambiguous and stable**: `|eval| ≤ 400cp`, multipv-2 gap ≥ 25cp, and the
+same bm at label depths 15 and 22. Two bands: **hard** (gap ≥ 50cp, mostly sharp/tactical —
+the main tuning score) and **soft** (gap 25–50cp, quieter positional decisions — the
+**over-pruning canary**: LMP/futility/RFP regressions show up there first and barely on the
+hard band). Positions are deterministically split **TRAIN/HOLDOUT** (FEN-hash parity).
+Output: `version_test_results/tuning/positions.json` (self-describing, incremental).
+
+### The optimization procedure
+
+Runner: `scripts/tune_search.py` (`--sweep "Name=v1,v2,…"` one-at-a-time, `--grid` for
+cartesian products, `--repeats N` for noise control; durable incremental run JSONs under
+`version_test_results/tuning/runs/`, engine+net identity embedded, `--resume` refuses
+mismatched settings, an engine failure aborts the run rather than scoring 0). Timing
+hygiene: **one timed run at a time, nothing heavy in parallel**. Per parameter (group):
+
+1. **Calibrate** the baseline once at generous time (4× budget, e.g. `--movetime 10000`) —
+   classifies positions as instant / discriminating / unreachable for the tuning budget.
+2. **Sweep** the parameter over 4–6 values at the tuning budget on the hard band
+   (the baseline config always runs first as the paired reference).
+3. **Holdout must agree.** Rank on TRAIN; a candidate is only accepted when its Δ is also
+   positive on HOLDOUT (with 17 params swept repeatedly on one set, the argmax of a sweep
+   inflates by ~2–3 points of pure noise — the holdout is what kills that).
+4. **Soft-band canary**: the candidate must not lower the solved-rate on the soft band
+   (catches "prunes quiets too hard, still looks fine on tactics").
+5. **Confirm** baseline-vs-candidate with `--repeats 2` and fresh timing; both repeats
+   should independently favor the candidate.
+6. **Match gate**: a full `scripts/version_match.py` match (bake the winning value into a
+   clean binary off the release tag) — Elo with confidence intervals, time-management
+   control as always.
+
+### Score→match validation status (the meta-experiment)
+
+The per-parameter match gate (step 6) is itself under evaluation. **Hypothesis: if, across
+all parameter groups, every score-selected optimum is confirmed by its match, then the score
+is a trustworthy proxy and future passes can skip per-step matches** — optimize all
+parameters back-to-back on the score alone (steps 1–5) and play **one** final match for the
+combined configuration. Until then, every score winner gets its own match. Running record:
+
+| Parameter | Score verdict | Proxy stages (sweep Δtr/Δho · soft canary · confirm ×2) | Match gate |
+|---|---|---|---|
+| `LMRK10` | **300** (23.0→30.0), +2 plies depth | +3.7/+4.0 · +2.8 (no over-pruning) · +3.1/+5.9 both repeats + | **REJECTED** — 96 games vs v0.4.4: 9-70-17, 45.8%, **−29.0 ± 36.1** (time-clean, 0/0). Per-TC: bullet-1+1 **+58.5**, bullet-1+3 −43.7, blitz-3+2 **−104.4**, blitz-5+2 −29.0. The depth gain was real (+3.0/+5.9/+3.3 plies at the longer TCs, +0.1 at 1+1) but converted to Elo **only** under extreme time pressure; at longer controls both engines reach "enough" depth and the per-depth quality loss (over-reduced late quiets) dominates. **First meta-experiment data point: the solve score diverged from the match** — its blind spot is real-game move quality in balanced positions at long TC (exactly what the ≥25cp-gap labeler filters out, and what the soft canary — which also improved — failed to catch). |
+| `LMRHistDiv` | — | — | — |
+| LMP (`LMPBase`/`LMPDiv`) | — | — | — |
+| NMP (`NMPBase`/`NMPDepthDiv`) | — | — | — |
+| `RFPMargin` | — | — | — |
+| Futility (`FutBase`/`FutSlope`) | — | — | — |
+| SEE (`SEEMargin`) | — | — | — |
+| `SEEQSMargin` | — | — | — |
+
+Caveats for the no-per-step-match regime, if adopted: parameters interact (LMP cannibalizes
+futility — see the pruning-profile table above), so a combined-optimum final match can fail
+even if each step passed; in that case fall back to bisecting with matches. And the score
+cannot see clock effects — any change that alters *time usage* still needs its own match
+with the time-management control.
+
+**Status after round 1 (LMRK10): the hypothesis is NOT holding so far.** The score's first
+selected optimum was match-rejected despite passing every proxy stage (sweep, holdout, soft
+canary, repeated confirmation). Diagnosis: the score measures *solving curated
+unambiguous-best-move positions within a fixed budget*, which LMR-aggressiveness improves by
+buying depth — but match Elo at realistic time controls is dominated by *average move
+quality in the ambiguous, balanced positions the labeler explicitly drops*. Before trusting
+the score on further parameters, it needs a component sensitive to that (candidates:
+score by SF-measured **eval-loss of the played move** instead of exact-bm-match, include the
+dropped gap<25cp positions with graded credit, and/or run part of the set at a longer
+budget). Until a revised score is re-validated on a parameter with a *positive* match, the
+per-step match gate stays.
 
 ## User Interface (UCI)
 The engine communicates via the Universal Chess Interface (UCI) protocol. The UCI protocol integration is in `src/engine.cpp` and `src/main.cpp`, allowing the engine to integrate with any UCI-compatible chess GUI.
@@ -226,7 +354,7 @@ This project follows [Semantic Versioning](https://semver.org/). The release pro
 
 Before bumping the version (step 1 above), the new build must be shown to be **no weaker than the previous release**, and the result is recorded so improvement can be tracked across versions. The tooling lives in `scripts/` and uses `python-chess`:
 
-* **`scripts/version_match.py`** — plays a match between two builds (binary paths or git refs; a ref is built in a throw-away worktree). Each opening is played twice (one game with each engine as White) over bullet (1+1, 1+3) and blitz (3+2, 5+2) time controls, and reports the score and Elo ± error per time control and overall. Writes a JSON report with `--output`.
+* **`scripts/version_match.py`** — plays a match between two builds (binary paths or git refs; a ref is built in a throw-away worktree). Each opening is played twice (one game with each engine as White) over bullet (1+1, 1+3) and blitz (3+2, 5+2) time controls, and reports the score and Elo ± error per time control and overall. Alongside the score it also reports, per control and overall, the **per-move time distribution** (mean / median / p90, split by game phase) and the **% of base clock left at game end**, plus time-loss counts — the inputs the *time-management control* below needs. Run one control standalone with `--tc bullet-1+1` for a fast early check. Writes a JSON report with `--output`, per-game PGN with `--pgn`.
 * **`scripts/release_gate.py`** — runs `version_match.py` against the previous git tag (auto-detected) and **exits non-zero unless the Elo lower bound is ≥ 0** (i.e. the new build is at least as strong). Use `--min-elo N` to demand proven improvement. This is the gate to run before tagging.
 * **`scripts/collect_release_metrics.py`** — records objective per-version metrics (perft NPS, mate-puzzles solved, and optionally the match Elo via `--match <prev tag>`) into `version_test_results/<version>.json`.
 * **`scripts/generate_report.py`** — turns all `version_test_results/*.json` into `version_test_results/REPORT.md` plus PNG charts under `version_test_results/charts/` (perft speed, mates solved, Elo gain per version). The Markdown report renders directly on GitHub, so no notebook is needed.
@@ -243,6 +371,15 @@ git add version_test_results/ && git commit -m "chore: record vX.Y.Z metrics"
 
 # 3. Proceed with the Versioning steps above (changelog, tag, push, release)
 ```
+
+#### Interpreting a match — control for time management
+
+A match result only isolates the effect of *the change under test* if both builds spend their clocks the same way. `version_match.py` therefore reports the per-move time distribution (by phase) and the % of base clock left at game end for each side — and those numbers must be read **before** trusting the Elo:
+
+* **If the change is NOT about time management** (a search or eval change — move ordering, pruning, a new net): the time distributions and clock-left should come out **≈ equal** for the new and old builds. When they do, a win or loss is attributable to the change itself. When they **diverge**, the match is *confounded* and must not be used to accept or reject the change. Example: a leaner search (e.g. **futility**) reaches a stable best move sooner, so it trips the easy-move early-stop earlier and **banks more clock** — a "loss" can then really mean *"the search improved but now under-uses its time."* The fix is to **re-align the time management first** (bring the distributions back together), then re-run the match — only then does the result measure the change rather than its clock side-effect. *Cheap early check:* run `--tc bullet-1+1` alone first; it is the most time-pressured control, so a clock skew shows up there fastest, and you can catch it before spending hours on the other three controls.
+* **If the change IS about time management** (e.g. v0.4.1's mid-search hard-abort + larger budget): the distributions are the *dependent variable*. A win **accompanied by** a shifted distribution / different clock-left is exactly the expected, correct signal — the gain came from using the clock better, so the distributions *should* move.
+
+In short: for everything except time-management changes, **matched time distributions are a precondition for trusting the match**; for time-management changes, **a moved distribution is the point**. (Worked examples: the v0.4.2 continuation-history trial came back neutral *with* matched distributions — 0 time losses, 63.9 % vs 66.8 % clock left — so the neutrality was real, not a clock artifact; v0.4.1 won precisely *because* it shifted the distribution.)
 
 ## TODO
 
@@ -306,7 +443,7 @@ These come from a Stockfish-vs-LaManodeMiguelito code comparison and the profili
   - **⏳ Open (now actionable): add output buckets by piece count — the efficient form of "one net per game phase" (supersedes the "build three NNUEUs" idea).** The "do this after widening" precondition is now met (the N512 accumulator is wide enough to give the buckets something to specialise on). *Why:* specialising the eval by phase does help, but training three *separate* NNUEUs triplicates the expensive incrementally-updated accumulator and switches on a hand-drawn phase boundary. Stockfish instead keeps **one shared feature transformer** and replicates only the tiny head into 8 "layer stacks" (`LayerStacks = 8`, `Stockfish/src/nnue/nnue_architecture.h`) selected by piece count — `bucket = (popcount(all_pieces) - 1) / 4` ∈ 0..7 — so the costly part is computed once, only the cheap readout differs, and the phase boundary is smooth. *How for NNUEU:* keep the shared, king-free `640→N` accumulator; make the head **both** king-bucketed and piece-count-bucketed, i.e. `second1[bucket][kingSq]`, `thirdW[bucket]`, `finalW[bucket]`, indexed by piece count at evaluate time (`src/network.cpp`). The head is tiny, so ×8 storage is negligible. Train it as **one** network end-to-end: a single shared first layer (receives gradient from *all* positions → learns a common representation) plus 8 heads (each receives gradient only from its bucket's positions → each specialises), with a fixed, non-learned gate — mechanically identical to how your king blocks are already trained, just along a second axis. *Caveat:* with a narrow accumulator all heads read the same small summary, so do this **after** widening (task above), or the buckets have little to specialise on. *Verify:* version match.
 
 ### Other
-- Tune the quiescence SEE-pruning margin. QS currently prunes captures with `see_ge(capture, -120)` in `worker.cpp` (it only skips clearly-losing captures). Experiment with a tighter, position-aware threshold — e.g. `beta + 100`, which in a quick test made the depth-5 Tactic 2 study find the winning `c6c7` and netted +1 on the depth-5 tactics suite — and consider making it depth- or phase-dependent. Validate any change with a version match (Elo): aggressive QS pruning can help tactics in some positions while missing them in others (e.g. winning positions where `beta` is large).
+- Tune the quiescence SEE-pruning margin. QS currently prunes captures with `see_ge(capture, -120)` in `worker.cpp` (it only skips clearly-losing captures). Experiment with a tighter, position-aware threshold — e.g. `beta + 100`, which in a quick test made the depth-5 Tactic 2 study find the winning `c6c7` and netted +1 on the depth-5 tactics suite — and consider making it depth- or phase-dependent. Validate any change with a version match (Elo): aggressive QS pruning can help tactics in some positions while missing them in others (e.g. winning positions where `beta` is large). → **Now covered by the score-based tuning harness** (`SEEQSMargin` is one of the 17 UCI-tunable options; see *Tunable Search Parameters & Score-Based Optimization* above).
 - Create specific tests for Zobrist key generation (e.g., for transpositions and move/unmove symmetry).
 - Add a process for creating regression tests for any fixed bugs.
 - Try to see if including zobrist key updates and ttable lookup in quiesence is worth it.
