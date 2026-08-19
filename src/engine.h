@@ -50,6 +50,8 @@ public:
 
     // non blocking call to start searching
     void goSearch();
+    // "go movetime N": think for exactly N ms (no early stop; hard abort at N).
+    void goSearchMovetime(int ms);
     // fixed-depth search ("go depth N") for the search-tree / EBF comparison harness
     void goSearchDepth(int depth);
     // non blocking call to stop searching

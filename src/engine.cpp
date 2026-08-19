@@ -438,6 +438,7 @@ void THEngine::readUci()
             int ourTime = 0;    // milliseconds left on our clock
             int ourInc = 0;     // increment per move
             int goDepth = 0;    // "go depth N": fixed-depth search for the introspection harness
+            int goMovetime = 0; // "go movetime N": exact per-move budget (python-chess Limit(time=..))
 
             std::string rest;
             std::getline(std::cin >> std::ws, rest); // read the rest of the line
@@ -466,9 +467,27 @@ void THEngine::readUci()
                 {
                     iss >> goDepth;
                 }
+                else if (kw == "movetime")
+                {
+                    iss >> goMovetime;
+                }
             }
             if (goDepth > 0)
                 goSearchDepth(goDepth); // fixed-depth, prints per-depth info (harness)
+            else if (goMovetime > 0)
+                goSearchMovetime(goMovetime);
+            else if (ourTime == 0)
+            {
+                // No recognized limit ("go infinite", bare "go", or an unsupported
+                // token). The old behavior was catastrophic: a zero soft budget made
+                // the engine answer with its depth-2 move instantly (e.g. 1.a3 from
+                // the start position). True "infinite" needs an async search (stop
+                // can't interrupt the synchronous startThinking), so approximate
+                // with a bounded think instead of ever instamoving.
+                std::cout << "info string no time limit given: approximating with movetime 5000\n"
+                          << std::flush;
+                goSearchMovetime(5000);
+            }
             else
             {
                 settimeLeft(ourTime, ourInc);
@@ -638,6 +657,18 @@ void THEngine::goSearch()
                           ? std::max(10, ourClock - std::max(50, ourClock / 20))
                           : 2147483647;
     threadpool.startThinking(pos, stateInfos, timeLeft, ponder, 99, maxMs);
+}
+
+void THEngine::goSearchMovetime(int ms)
+{
+    // Think for exactly `ms` milliseconds: the soft-budget / streak early stops are
+    // disabled (noEarlyStop), so the mid-search hard abort at `ms` is the only stop.
+    // This is what python-chess sends for Limit(time=..) ("go movetime N") — before
+    // this existed the token was ignored and the engine instamoved at depth 2.
+    resizeThreads();
+    threadpool.setMainNoEarlyStop(true);
+    threadpool.startThinking(pos, stateInfos, ms, ponder, 99, ms);
+    threadpool.setMainNoEarlyStop(false);
 }
 
 void THEngine::goSearchDepth(int depth)

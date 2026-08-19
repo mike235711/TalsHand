@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`go movetime` was silently ignored — the engine instamoved its depth-2 move.** The UCI
+  `go` parser only knew `wtime/btime/winc/binc/depth`; any other limit (python-chess
+  `Limit(time=..)` sends `go movetime`, GUIs send `go infinite`) left the soft budget at 0,
+  so iterative deepening stopped after its first iteration and played the depth-2 move
+  (from the start position: **1.a3**). `go movetime N` now thinks for exactly N ms (no
+  early stop, hard abort at N), and an unrecognized/absent limit falls back to a bounded
+  5s think with an `info string` warning instead of ever instamoving. Clock-based search
+  (`wtime/btime`) is bit-identical to before (validated: fixed-depth node identity).
+
 ### Added
 - **v0.4.5 — nueva red de evaluacion (famG cross entropy), +61/+72 Elo sobre v0.4.4.**
   `models/n512_h14x16_ce/`, entrenada en famG con **cross entropy** en vez de la MSE-2.5 que usaban
